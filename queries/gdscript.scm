@@ -16,6 +16,7 @@
 (string) @leaf
 (string_name) @leaf
 (node_path) @leaf
+(region) @leaf
 
 ; TYPE ANNOTATION SPACING
 (typed_parameter ":" @append_space)
