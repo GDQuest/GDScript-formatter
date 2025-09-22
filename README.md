@@ -85,27 +85,23 @@ As a reminder: **don't leave this on when working on an important project withou
 
 ### JetBrains Rider
 
-1. Follow the [instructions](https://www.gdquest.com/library/gdscript_formatter/) carefully on installing the formatter.
-
-2. Open your IDE settings/preferences and go to `Tools > File Watchers`.
-
-3. Click the `+` button to add a new file watcher and select `<custom>` from the list.
-
-4. Fill in the fields as follows:
+1. First, install the formatter on your computer.
+2. Open Rider and go to your IDE settings. You can find them under `Tools > File Watchers`.
+3. Click the `+` button to add a new file watcher and pick `<custom>` from the dropdown list.
+4. Now fill in these fields:
    - **Name**: GDScript Formatter
    - **File Type**: GDScript
    - **Scope**: Current File
-   - **Program**: `gdscript-format` (or the path to the binary if it's not in your **PATH**)
+   - **Program**: `gdscript-format` (or write the full path to the binary if it's not in your **PATH**)
    - **Arguments**: `$FilePath$` or `$FilePath$ --reorder-code`
    - **Output Paths to refresh**: `$FilePath$`
    - **Working Directory**: `$ModuleFilePath$`
-   - Optionally check and of the boxes related to auto-save and triggering the watcher on external changes.
-   - Leave the box for `Create output file from stdout` unchecked.
+   - You can optionally check any of the checkboxes for auto-save and triggering the watcher when files change outside the editor.
+   - Keep the box for `Create output file from stdout` unchecked.
 
-As a reminder: **don't leave this on when working on an important project without using a VCS!**.
+As a reminder: **don't turn this on when working on an important project without using a VCS like Git!**.
 
-If you happen to lose work because of the formatter, a simple "undo" (Cmd/Ctrl + Z) should bring your code back with the "undo reload from disk" modal.
-You can also check the local history: right-click on the file in the project explorer and select `Local History > Show History`.
+If you lose work because of the formatter, you can usually get it back with a simple "undo" (Cmd/Ctrl + Z). This will show you the "undo reload from disk" popup. You can also check the local history by right-clicking on the file in the project explorer and selecting `Local History > Show History`.
 
 ## Status
 
