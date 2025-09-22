@@ -83,6 +83,30 @@ auto-format = true
 
 As a reminder: **don't leave this on when working on an important project without using a VCS!**.
 
+### JetBrains Rider
+
+1. Follow the [instructions](https://www.gdquest.com/library/gdscript_formatter/) carefully on installing the formatter.
+
+2. Open your IDE settings/preferences and go to `Tools > File Watchers`.
+
+3. Click the `+` button to add a new file watcher and select `<custom>` from the list.
+
+4. Fill in the fields as follows:
+   - **Name**: GDScript Formatter
+   - **File Type**: GDScript
+   - **Scope**: Current File
+   - **Program**: `gdscript-format` (or the path to the binary if it's not in your **PATH**)
+   - **Arguments**: `$FilePath$` or `$FilePath$ --reorder-code`
+   - **Output Paths to refresh**: `$FilePath$`
+   - **Working Directory**: `$ModuleFilePath$`
+   - Optionally check and of the boxes related to auto-save and triggering the watcher on external changes.
+   - Leave the box for `Create output file from stdout` unchecked.
+
+As a reminder: **don't leave this on when working on an important project without using a VCS!**.
+
+If you happen to lose work because of the formatter, a simple "undo" (Cmd/Ctrl + Z) should bring your code back with the "undo reload from disk" modal.
+You can also check the local history: right-click on the file in the project explorer and select `Local History > Show History`.
+
 ## Status
 
 09/18/2025 - The formatter now has many formatting rules implemented and is ready to test. It includes:
