@@ -20,6 +20,12 @@ use tree_sitter::{Parser, Point, Query, QueryCursor, StreamingIterator, Tree};
 
 use crate::FormatterConfig;
 
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+enum SpacingType {
+    Single,
+    Double,
+}
+
 static QUERY: &str = include_str!("../queries/gdscript.scm");
 
 pub fn format_gdscript(content: &str) -> Result<String, Box<dyn std::error::Error>> {
@@ -315,7 +321,7 @@ impl Formatter {
         ];
 
         let process_query =
-            |query_str: &str, new_lines_at: &mut Vec<(usize, tree_sitter::Point)>| {
+            |query_str: &str, new_lines_at: &mut Vec<(usize, tree_sitter::Point, SpacingType)>| {
                 let query = match Query::new(
                     &tree_sitter::Language::new(tree_sitter_gdscript::LANGUAGE),
                     query_str,
@@ -333,6 +339,14 @@ impl Formatter {
                     if m.captures.len() == 3 {
                         let comment_node = m.captures[1].node;
                         let second_node = m.captures[2].node;
+                        
+                        // Check if the comment immediately follows the first node on the next line
+                        // (indicating it's a trailing comment belonging to the first node)
+                        let first_end_row = first_node.end_position().row;
+                        let comment_start_row = comment_node.start_position().row;
+                        let is_next_line_trailing_comment = comment_node.kind() == "comment" && 
+                                                           comment_start_row == first_end_row + 1;
+                        
                         // If the @comment is on the same line as the first node,
                         // we'll add a blank line before the @second node
                         if comment_node.start_position().row == first_node.start_position().row {
@@ -343,14 +357,18 @@ impl Formatter {
                             while self.content.as_bytes()[byte_idx] != b'\n' {
                                 byte_idx -= 1;
                             }
-                            new_lines_at.push((byte_idx, position));
+                            new_lines_at.push((byte_idx, position, SpacingType::Double));
+                        } else if is_next_line_trailing_comment {
+                            // If the comment is on the line immediately after the first node,
+                            // treat it as a trailing comment and only add one blank line
+                            new_lines_at.push((comment_node.end_byte(), comment_node.end_position(), SpacingType::Single));
                         } else {
                             // Otherwise, add a blank line after the first node
-                            new_lines_at.push((first_node.end_byte(), first_node.end_position()));
+                            new_lines_at.push((first_node.end_byte(), first_node.end_position(), SpacingType::Double));
                         }
                     } else {
                         // If there's no comment between the nodes, add a blank line after the first node
-                        new_lines_at.push((first_node.end_byte(), first_node.end_position()));
+                        new_lines_at.push((first_node.end_byte(), first_node.end_position(), SpacingType::Double));
                     }
                 }
             };
@@ -368,14 +386,22 @@ impl Formatter {
         // we don't mess up the positions of the other insertions we need to make.
         new_lines_at.sort_by(|a, b| b.cmp(a));
 
-        for (byte_idx, position) in new_lines_at {
+        for (byte_idx, position, spacing_type) in new_lines_at {
             let mut new_end_position = position;
             let mut new_end_byte_idx = byte_idx;
-            // Only add a second blank line if there isn't already one
-            if self.content.as_bytes()[byte_idx + 1] != b'\n' {
-                new_end_position.row += 1;
-                new_end_byte_idx += 1;
-                self.content.insert(byte_idx, '\n');
+            
+            match spacing_type {
+                SpacingType::Double => {
+                    // Only add a second blank line if there isn't already one
+                    if self.content.as_bytes()[byte_idx + 1] != b'\n' {
+                        new_end_position.row += 1;
+                        new_end_byte_idx += 1;
+                        self.content.insert(byte_idx, '\n');
+                    }
+                }
+                SpacingType::Single => {
+                    // For single spacing, we only add one blank line
+                }
             }
             // Add the first blank line
             new_end_position.row += 1;
