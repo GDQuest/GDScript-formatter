@@ -20,7 +20,33 @@ use crate::linter::{LintIssue, LinterConfig};
 use tree_sitter::Node;
 
 pub trait Rule {
-    fn check(&mut self, source_code: &str, root_node: &Node) -> Result<Vec<LintIssue>, String>;
+    /// Returns the list of node kinds this rule is runs on/is interested in.
+    /// This is used to only call this rule on specific nodes. Return an empty
+    /// list if the rule doesn't work with individual AST nodes.
+    fn get_target_ast_nodes(&self) -> &[&str] {
+        &[]
+    }
+
+    /// This is called once before traversing the AST node tree for rules that
+    /// work on source text directly, like checking line length.
+    fn check_source(&mut self, _source_code: &str) -> Vec<LintIssue> {
+        Vec::new()
+    }
+
+    /// The linter calls this function for each node matching the nodes in
+    /// get_target_ast_nodes when traversing the AST. This is the main method
+    /// rules should use if possible to check for issue.
+    fn check_node(&mut self, _node: &Node, _source_code: &str) -> Vec<LintIssue> {
+        Vec::new()
+    }
+
+    /// This is called after traversing the AST for rules that collect data
+    /// during traversal and need to process it afterwards. For example,
+    /// detecting duplicated loads by collecting all load paths first, then
+    /// reporting which ones are duplicated.
+    fn finalize(&mut self, _source_code: &str) -> Vec<LintIssue> {
+        Vec::new()
+    }
 }
 
 use class_name::ClassNameRule;
@@ -46,11 +72,16 @@ pub struct RuleDefinition {
     pub create: fn(&LinterConfig) -> Box<dyn Rule>,
 }
 
-/// List of all available rules
+/// List of all the rules available in the linter. The linter will only run
+/// these plus the ones that have not been disabled in the config.
 pub const ALL_RULES: &[RuleDefinition] = &[
     RuleDefinition {
         name: "duplicated-load",
-        create: |_config| Box::new(DuplicatedLoadRule),
+        create: |_config| {
+            Box::new(DuplicatedLoadRule {
+                load_paths: std::collections::HashMap::new(),
+            })
+        },
     },
     RuleDefinition {
         name: "standalone-expression",

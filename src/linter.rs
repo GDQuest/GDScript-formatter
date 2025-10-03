@@ -1,7 +1,7 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::{fs, io::IsTerminal};
-use tree_sitter::Parser;
+use tree_sitter::{Node, Parser};
 
 pub mod ignore_patterns;
 pub mod lib;
@@ -98,23 +98,57 @@ impl GDScriptLinter {
         let root_node = tree.root_node();
         let mut issues = Vec::new();
 
-        // Parse ignore patterns from the source code
         let ignore_map = parse_ignore_patterns(source_code);
 
-        // Run all individual rule checkers
         let mut checkers: Vec<Box<dyn Rule>> = Vec::new();
-
-        // Use the static rule list to create enabled checkers
-        for rule_def in ALL_RULES {
-            if !self.config.disabled_rules.contains(rule_def.name) {
-                checkers.push((rule_def.create)(&self.config));
+        for current_rule in ALL_RULES {
+            if !self.config.disabled_rules.contains(current_rule.name) {
+                checkers.push((current_rule.create)(&self.config));
             }
         }
 
-        for checker in &mut checkers {
-            let rule_issues = checker.check(source_code, &root_node)?;
+        // Here we build a map from node kinds to the rules that care about
+        // them. That allows us to use the visitor pattern to go through the
+        // tree only once. We call each rule only when we encounter an AST node
+        // it cares about.
+        let mut node_kind_map: HashMap<String, Vec<usize>> = HashMap::new();
+        let mut source_only_rules = Vec::new();
+        for (current_index, checker) in checkers.iter().enumerate() {
+            let kinds = checker.get_target_ast_nodes();
+            if kinds.is_empty() {
+                source_only_rules.push(current_index);
+            } else {
+                for &kind in kinds {
+                    node_kind_map
+                        .entry(kind.to_string())
+                        .or_default()
+                        .push(current_index);
+                }
+            }
+        }
 
-            // Filter out issues that should be ignored based on ignore patterns
+        // First we run the rules that only care about the source code. Then we
+        // visit each node in the AST, calling the relevant rules. Finally we
+        // call the finalize method on each rule in case a rule needs to collect
+        // state while visiting nodes and report issues at the end.
+        for &current_index in &source_only_rules {
+            let rule_issues = checkers[current_index].check_source(source_code);
+            for issue in rule_issues {
+                if !should_ignore_rule(&ignore_map, issue.line, &issue.rule) {
+                    issues.push(issue);
+                }
+            }
+        }
+        visit_each_node(
+            &root_node,
+            source_code,
+            &mut checkers,
+            &node_kind_map,
+            &mut issues,
+            &ignore_map,
+        );
+        for checker in checkers.iter_mut() {
+            let rule_issues = checker.finalize(source_code);
             for issue in rule_issues {
                 if !should_ignore_rule(&ignore_map, issue.line, &issue.rule) {
                     issues.push(issue);
@@ -122,7 +156,8 @@ impl GDScriptLinter {
             }
         }
 
-        // Sort issues by line number
+        // Sort issues by line number. Rules that run on the source code like
+        // line length check will otherwise appear at the end.
         issues.sort_by(|a, b| a.line.cmp(&b.line).then(a.column.cmp(&b.column)));
 
         Ok(issues)
@@ -251,6 +286,45 @@ impl GDScriptLinter {
         }
 
         Ok(has_issues)
+    }
+}
+
+/// This uses the visitor pattern to walk the parsed tree sitter AST only once.
+/// We call each rule only when we encounter an AST node it cares about.
+fn visit_each_node(
+    node: &Node,
+    source_code: &str,
+    checkers: &mut [Box<dyn Rule>],
+    node_kind_map: &HashMap<String, Vec<usize>>,
+    issues: &mut Vec<LintIssue>,
+    ignore_map: &HashMap<usize, HashSet<String>>,
+) {
+    if let Some(matching_rules) = node_kind_map.get(node.kind()) {
+        for &rule_idx in matching_rules {
+            let rule_issues = checkers[rule_idx].check_node(node, source_code);
+            for issue in rule_issues {
+                if !should_ignore_rule(ignore_map, issue.line, &issue.rule) {
+                    issues.push(issue);
+                }
+            }
+        }
+    }
+
+    let mut cursor = node.walk();
+    if cursor.goto_first_child() {
+        loop {
+            visit_each_node(
+                &cursor.node(),
+                source_code,
+                checkers,
+                node_kind_map,
+                issues,
+                ignore_map,
+            );
+            if !cursor.goto_next_sibling() {
+                break;
+            }
+        }
     }
 }
 
