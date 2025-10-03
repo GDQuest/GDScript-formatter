@@ -1,0 +1,6 @@
+tests/lint/input/function_argument_name.gd:13:function-argument-name:error: Function argument 'badArg' should be in snake_case or _private_snake_case format
+tests/lint/input/function_argument_name.gd:13:function-argument-name:error: Function argument 'BadArg' should be in snake_case or _private_snake_case format
+tests/lint/input/function_argument_name.gd:13:function-argument-name:error: Function argument '_BadUnusedArg' should be in snake_case or _private_snake_case format
+tests/lint/input/function_argument_name.gd:16:function-argument-name:error: Function argument 'badArg' should be in snake_case or _private_snake_case format
+tests/lint/input/function_argument_name.gd:16:function-argument-name:error: Function argument 'BadArg' should be in snake_case or _private_snake_case format
+tests/lint/input/function_argument_name.gd:16:function-argument-name:error: Function argument '_BadUnusedArg' should be in snake_case or _private_snake_case format

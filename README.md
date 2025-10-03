@@ -4,11 +4,14 @@ A fast code formatter for Godot's GDScript programming language built with [Tree
 
 The goal of this project is to provide a simple and really fast GDScript code formatter that's easy to contribute to, and easy to maintain. It also benefits GDScript support in code editors like Zed, Neovim, and Emacs as we use the project to improve the Tree Sitter GDScript parser.
 
+This project aims to conform to the official [GDScript style guide](https://docs.godotengine.org/en/stable/tutorials/scripting/gdscript/gdscript_styleguide.html)
+
 **Use a version control system:** Please consider using a version control system like Git to track changes to your code before running the formatter. Even though we already use the formatter ourselves at work, GDScript is a complex language and a formatter needs testing on all possible syntax combinations in the language to ensure the output is rock solid. There can always be edge cases or less common syntax that may not be handled correctly yet.
 
 ## Features
 
 - Format GDScript files nearly instantly (less than 100ms for a 1000-line file on a mid-range laptop, less than 30ms for most files)
+- Lint GDScript files for style and convention issues
 - Reorder GDScript code to match the official GDScript style guide (variables at the top, then functions, etc.)
 - Format code in place (overwrite the file) or print to the standard output
 - Check if a file is formatted (for CI/build systems)
@@ -39,6 +42,117 @@ gdscript-format --check path/to/file.gd
 ```
 
 To see other possible options, run `gdscript-format` without any arguments.
+
+## Linting GDScript files
+
+The formatter also includes a linter that checks for style and convention issues according to the official GDScript style guide.
+
+### Basic linting
+
+To lint a file, run:
+
+```bash
+gdscript-format lint path/to/file.gd
+```
+
+This will output issues in the format:
+
+```
+filepath:line:rule:severity: description
+```
+
+### Listing available rules
+
+To see all available linting rules:
+
+```bash
+gdscript-format lint --list-rules
+```
+
+### Configuring the linter
+
+#### Disabling specific rules
+
+You can disable specific rules using the `--disable` flag:
+
+```bash
+gdscript-format lint --disable class-name,signal-name path/to/file.gd
+```
+
+#### Setting line length
+
+The linter provides several configurable options:
+
+```bash
+gdscript-format lint --max-line-length 120 path/to/file.gd
+```
+
+#### Pretty printing
+
+By default, the linter outputs one line for each warning/error.
+
+For more human readable output, use the `--pretty` flag:
+
+```bash
+gdscript-format lint --pretty path/to/file.gd
+```
+
+#### Ignoring lines
+
+The linter can be instructed to ignore specific rules for specific lines using special comments.
+
+Ignore a specific rule for the next line:
+
+```gdscript
+# gdlint-ignore-next-line private-access
+obj._private_method()
+```
+
+Ignore a specific rule inline:
+
+```gdscript
+obj._private_method() # gdlint-ignore private-access
+```
+
+Multiple rules can be ignored with a comma-separated list:
+
+```gdscript
+# gdlint-ignore-next-line constant-name,max-line-length
+const anotherBadConstName = "this line is also very long but it will be ignored by the comment above this"
+```
+
+Ignore ALL rules for the next line:
+
+```gdscript
+# gdlint-ignore-next-line
+obj._private_method()
+```
+
+Ignore ALL rules for the current line inline:
+
+```gdscript
+obj._private_method() # gdlint-ignore
+```
+
+### List of linter rules
+
+- `function-name` - validates function names (`snake_case`, `\_private_snake_case`)
+- `class-name` - validates class names (`PascalCase`)
+- `signal-name` - validates signal names (`snake_case`)
+- `variable-name` - validates class variable names (`snake_case` or `\_private_snake_case`)
+- `function-argument-name` - validates function argument names (`snake_case` or `\_private_snake_case`)
+- `loop-variable-name` - validates loop variable names (`snake_case` or `\_private_snake_case`)
+- `enum-name` - validates enum names (`PascalCase`)
+- `enum-member-name` - validates enum element names (`CONSTANT_CASE`)
+- `constant-name` - validates constant names (`CONSTANT_CASE`)
+- `duplicated-load` - detects copy-pasted load() calls for the same path
+- `standalone-expression` - detects standalone expressions that aren't used
+- `unnecessary-pass` - detects pass statements when other statements are present
+- `unused-argument` - detects unused function arguments
+- `comparison-with-itself` - detects redundant comparisons like `x == x`
+- `private-access` - detects calls to private methods or variable references (prefixed with `_`)
+- `max-line-length` - validates maximum line length
+- `no-else-return` - detects unnecessary else after `if`/`elif` blocks that end with `return`
 
 ## Using the formatter in code editors
 

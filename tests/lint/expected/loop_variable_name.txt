@@ -1,0 +1,5 @@
+tests/lint/input/loop_variable_name.gd:17:loop-variable-name:error: Loop variable 'A' should be in snake_case format
+tests/lint/input/loop_variable_name.gd:20:loop-variable-name:error: Loop variable 'Something' should be in snake_case format
+tests/lint/input/loop_variable_name.gd:23:loop-variable-name:error: Loop variable '_B' should be in snake_case format
+tests/lint/input/loop_variable_name.gd:26:loop-variable-name:error: Loop variable 'someValue' should be in snake_case format
+tests/lint/input/loop_variable_name.gd:29:loop-variable-name:error: Loop variable '_some_value' should be in snake_case format

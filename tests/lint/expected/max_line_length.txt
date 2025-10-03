@@ -1,0 +1,3 @@
+tests/lint/input/max_line_length.gd:9:max-line-length:warning: Line is too long. Found 128 characters, maximum allowed is 100
+tests/lint/input/max_line_length.gd:13:max-line-length:warning: Line is too long. Found 103 characters, maximum allowed is 100
+tests/lint/input/max_line_length.gd:20:max-line-length:warning: Line is too long. Found 110 characters, maximum allowed is 100

@@ -1,0 +1,3 @@
+tests/lint/input/signal_name.gd:9:signal-name:error: Signal name 'BadSignal' should be in snake_case format
+tests/lint/input/signal_name.gd:10:signal-name:error: Signal name '_bad_signal' should be in snake_case format
+tests/lint/input/signal_name.gd:11:signal-name:error: Signal name 'badSignal' should be in snake_case format

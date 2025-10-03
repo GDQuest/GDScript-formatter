@@ -1,0 +1,4 @@
+tests/lint/input/function_name.gd:13:function-name:error: Function name 'BadFunc' should be in snake_case, _private_snake_case format
+tests/lint/input/function_name.gd:16:function-name:error: Function name '_PrivateBadFunc' should be in snake_case, _private_snake_case format
+tests/lint/input/function_name.gd:19:function-name:error: Function name 'Bad_Func' should be in snake_case, _private_snake_case format
+tests/lint/input/function_name.gd:22:function-name:error: Function name 'bad_Func' should be in snake_case, _private_snake_case format

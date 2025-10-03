@@ -1,0 +1,1 @@
+tests/lint/input/unused_argument.gd:15:unused-argument:warning: Function argument 'unused_arg' is unused. Consider removing it or prefixing with '_'

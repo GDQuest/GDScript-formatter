@@ -1,0 +1,2 @@
+tests/lint/input/no_else_return.gd:22:no-else-return:warning: Unnecessary 'elif' after 'if' block that ends with 'return'. Use 'if' instead
+tests/lint/input/no_else_return.gd:25:no-else-return:warning: Unnecessary 'else' after 'if'/'elif' blocks that end with 'return'

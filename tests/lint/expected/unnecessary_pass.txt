@@ -1,0 +1,1 @@
+tests/lint/input/unnecessary_pass.gd:12:unnecessary-pass:warning: Unnecessary 'pass' statement when other statements are present

@@ -1,0 +1,4 @@
+tests/lint/input/enum_member_name.gd:15:enum-member-name:error: Enum element name 'Earth' should be in CONSTANT_CASE format
+tests/lint/input/enum_member_name.gd:16:enum-member-name:error: Enum element name 'water' should be in CONSTANT_CASE format
+tests/lint/input/enum_member_name.gd:17:enum-member-name:error: Enum element name 'cold_air' should be in CONSTANT_CASE format
+tests/lint/input/enum_member_name.gd:18:enum-member-name:error: Enum element name '_fire' should be in CONSTANT_CASE format

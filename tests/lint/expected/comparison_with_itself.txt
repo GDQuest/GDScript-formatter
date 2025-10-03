@@ -1,0 +1,1 @@
+tests/lint/input/comparison_with_itself.gd:16:comparison-with-itself:warning: Redundant comparison 'x == x' - comparing expression with itself

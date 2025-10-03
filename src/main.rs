@@ -7,7 +7,13 @@ use std::{
 use clap::{CommandFactory, Parser};
 use rayon::prelude::*;
 
-use gdscript_formatter::{FormatterConfig, formatter::format_gdscript_with_config};
+use gdscript_formatter::linter::rule_config::{
+    get_all_rule_names, parse_disabled_rules, validate_rule_names,
+};
+use gdscript_formatter::{
+    FormatterConfig, formatter::format_gdscript_with_config, linter::LinterConfig,
+};
+use std::collections::HashSet;
 
 /// This struct is used to hold all the information about the result when
 /// formatting a single file. Now that we use parallel processing, we need to
@@ -36,6 +42,8 @@ struct Args {
         value_name = "FILES"
     )]
     input: Vec<PathBuf>,
+    #[command(subcommand)]
+    command: Option<Commands>,
     #[arg(
         long,
         help = "Output formatted code to stdout instead of overwriting the input file. \
@@ -84,6 +92,27 @@ struct Args {
     safe: bool,
 }
 
+#[derive(clap::Subcommand)]
+enum Commands {
+    /// Lint GDScript files for style and convention issues
+    Lint {
+        #[arg(help = "Input GDScript file(s) to lint", value_name = "FILES")]
+        input: Vec<PathBuf>,
+        #[arg(
+            long,
+            help = "Disable specific linting rules (comma-separated)",
+            value_name = "RULES"
+        )]
+        disable: Option<String>,
+        #[arg(long, help = "Maximum line length allowed", default_value = "100")]
+        max_line_length: usize,
+        #[arg(long, help = "List all available linting rules")]
+        list_rules: bool,
+        #[arg(long, help = "Use pretty formatting for lint output")]
+        pretty: bool,
+    },
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // If there are no arguments and nothing piped from stdin, print the help message
     if env::args().len() == 1 && io::stdin().is_terminal() {
@@ -93,6 +122,43 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let args = Args::parse();
+
+    // Handle lint subcommand
+    if let Some(Commands::Lint {
+        input,
+        disable,
+        max_line_length,
+        list_rules,
+        pretty,
+    }) = args.command
+    {
+        if list_rules {
+            println!("Available linting rules:");
+            for rule in get_all_rule_names() {
+                println!("  {}", rule);
+            }
+            return Ok(());
+        }
+
+        let disabled_rules = if let Some(disable_str) = disable {
+            let rules = parse_disabled_rules(&disable_str);
+            if let Err(invalid_rules) = validate_rule_names(&rules) {
+                eprintln!("Error: Invalid rule names: {}", invalid_rules.join(", "));
+                eprintln!("Use --list-rules to see all available rules");
+                std::process::exit(1);
+            }
+            rules
+        } else {
+            HashSet::new()
+        };
+
+        let linter_config = LinterConfig {
+            disabled_rules,
+            max_line_length,
+        };
+
+        return run_linter(input, linter_config, pretty);
+    }
 
     let config = FormatterConfig {
         indent_size: args.indent_size,
@@ -230,16 +296,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else if !args.stdout {
         terminal_clear_line();
         if total_files == 1 {
-            eprintln!(
-                "\rFormatted {}",
-                input_gdscript_files[0].display()
-            );
+            eprintln!("\rFormatted {}", input_gdscript_files[0].display());
         } else {
-            eprintln!(
-                "\rFormatted {} files",
-                total_files
-            );
+            eprintln!("\rFormatted {} files", total_files);
         }
+    }
+
+    Ok(())
+}
+
+fn run_linter(
+    input_files: Vec<PathBuf>,
+    config: LinterConfig,
+    pretty: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut linter = gdscript_formatter::linter::GDScriptLinter::new(config)?;
+    let has_issues = linter.lint_files(input_files, pretty)?;
+
+    if has_issues {
+        std::process::exit(1);
     }
 
     Ok(())

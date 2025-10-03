@@ -1,0 +1,3 @@
+tests/lint/input/class_name.gd:6:class-name:error: Class name 'badClassName' should be in PascalCase format
+tests/lint/input/class_name.gd:7:class-name:error: Class name 'BAD_CLASS_NAME' should be in PascalCase format
+tests/lint/input/class_name.gd:8:class-name:error: Class name 'Bad_Class_Name' should be in PascalCase format

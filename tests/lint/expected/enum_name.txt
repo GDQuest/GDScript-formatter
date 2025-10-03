@@ -1,0 +1,5 @@
+tests/lint/input/enum_name.gd:9:enum-name:error: Enum name 'badEnum' should be in PascalCase format
+tests/lint/input/enum_name.gd:10:enum-name:error: Enum name 'bad_enum' should be in PascalCase format
+tests/lint/input/enum_name.gd:11:enum-name:error: Enum name 'BAD_ENUM' should be in PascalCase format
+tests/lint/input/enum_name.gd:12:enum-name:error: Enum name 'Bad_Enum' should be in PascalCase format
+tests/lint/input/enum_name.gd:13:enum-name:error: Enum name '_bad_enum' should be in PascalCase format

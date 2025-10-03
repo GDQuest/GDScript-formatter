@@ -1,5 +1,6 @@
 pub mod formatter;
 pub mod reorder;
+pub mod linter;
 
 #[derive(Clone)]
 pub struct FormatterConfig {

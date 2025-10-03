@@ -1,0 +1,3 @@
+tests/lint/input/variable_name.gd:13:variable-name:error: Variable name 'badVariableName' should be in snake_case or _private_snake_case format
+tests/lint/input/variable_name.gd:14:variable-name:error: Variable name 'BAD_VARIABLE_NAME' should be in snake_case or _private_snake_case format
+tests/lint/input/variable_name.gd:15:variable-name:error: Variable name 'Bad_Variable_Name' should be in snake_case or _private_snake_case format

@@ -1,0 +1,6 @@
+tests/lint/input/standalone_expression.gd:20:standalone-expression:warning: Standalone expression '"I am not assigned"' is not assigned or used, the line may have no effect
+tests/lint/input/standalone_expression.gd:23:standalone-expression:warning: Standalone expression '"I am not assigned"' is not assigned or used, the line may have no effect
+tests/lint/input/standalone_expression.gd:24:standalone-expression:warning: Standalone expression '42' is not assigned or used, the line may have no effect
+tests/lint/input/standalone_expression.gd:25:standalone-expression:warning: Standalone expression 'true' is not assigned or used, the line may have no effect
+tests/lint/input/standalone_expression.gd:26:standalone-expression:warning: Standalone expression 'false' is not assigned or used, the line may have no effect
+tests/lint/input/standalone_expression.gd:27:standalone-expression:warning: Standalone expression 'null' is not assigned or used, the line may have no effect

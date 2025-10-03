@@ -1,0 +1,2 @@
+tests/lint/input/private_access.gd:33:private-access:error: Private method '_private_method' should not be called from outside its class
+tests/lint/input/private_access.gd:35:private-access:error: Private variable '_private_var' should not be accessed from outside its class

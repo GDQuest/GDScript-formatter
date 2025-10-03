@@ -1,0 +1,4 @@
+tests/lint/input/constant_name.gd:14:constant-name:error: Constant name 'bad_name' should be in CONSTANT_CASE format
+tests/lint/input/constant_name.gd:15:constant-name:error: Constant name '_private_bad_name' should be in CONSTANT_CASE format
+tests/lint/input/constant_name.gd:16:constant-name:error: Constant name 'AnotherBadName' should be in CONSTANT_CASE format
+tests/lint/input/constant_name.gd:18:constant-name:error: Preload constant name 'bad_preload' should be in PascalCase or CONSTANT_CASE format
