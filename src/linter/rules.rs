@@ -50,7 +50,7 @@ pub struct RuleDefinition {
 pub const ALL_RULES: &[RuleDefinition] = &[
     RuleDefinition {
         name: "duplicated-load",
-        create: |_config| Box::new(DuplicatedLoadRule::new()),
+        create: |_config| Box::new(DuplicatedLoadRule),
     },
     RuleDefinition {
         name: "standalone-expression",

@@ -5,7 +5,6 @@ use tree_sitter::Parser;
 
 pub mod ignore_patterns;
 pub mod lib;
-pub mod query_rule;
 pub mod regex_patterns;
 pub mod rule_config;
 pub mod rules;

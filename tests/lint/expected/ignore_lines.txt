@@ -1,4 +1,4 @@
 tests/lint/input/ignore_lines.gd:1:constant-name:error: Constant name 'bad_const' should be in CONSTANT_CASE format
-tests/lint/input/ignore_lines.gd:16:private-access:error: Private method '_private_method' should not be called from outside its class
+tests/lint/input/ignore_lines.gd:16:private-access:error: Private method '_private_method' should not be called from outside the class
 tests/lint/input/ignore_lines.gd:18:constant-name:error: Constant name 'badConstName' should be in CONSTANT_CASE format
 tests/lint/input/ignore_lines.gd:18:max-line-length:warning: Line is too long. Found 104 characters, maximum allowed is 100

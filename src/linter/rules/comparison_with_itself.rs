@@ -1,52 +1,69 @@
-use crate::linter::query_rule::{get_capture_position, get_capture_text, QueryRule};
+use crate::linter::lib::{get_line_column, get_node_text};
 use crate::linter::rules::Rule;
 use crate::linter::{LintIssue, LintSeverity};
-use tree_sitter::{Node, Query};
+use tree_sitter::Node;
 
 pub struct ComparisonWithItselfRule;
 
-impl QueryRule for ComparisonWithItselfRule {
-    fn query_pattern(&self) -> &'static str {
-        r#"(binary_operator
-           left: (_) @left
-           op: ["==" "!=" "<" ">" "<=" ">="] @op
-           right: (_) @right)"#
-    }
-
-    fn process_match(
-        &self,
-        query_match: &tree_sitter::QueryMatch,
-        source_code: &str,
-        _query: &Query,
-    ) -> Vec<LintIssue> {
+impl ComparisonWithItselfRule {
+    fn check_comparison_with_itself(&self, node: &Node, source_code: &str) -> Vec<LintIssue> {
         let mut issues = Vec::new();
 
-        if let (Some(left_text), Some(op_text), Some(right_text), Some((line, column))) = (
-            get_capture_text(query_match, 0, source_code), // @left
-            get_capture_text(query_match, 1, source_code), // @op
-            get_capture_text(query_match, 2, source_code), // @right
-            get_capture_position(query_match, 0), // position of left expression
+        let mut cursor = node.walk();
+        fn traverse(
+            cursor: &mut tree_sitter::TreeCursor,
+            rule: &ComparisonWithItselfRule,
+            source_code: &str,
+            issues: &mut Vec<LintIssue>,
         ) {
-            if left_text == right_text {
-                issues.push(LintIssue::new(
-                    line,
-                    column,
-                    "comparison-with-itself".to_string(),
-                    LintSeverity::Warning,
-                    format!(
-                        "Redundant comparison '{}' - comparing expression with itself",
-                        format!("{} {} {}", left_text, op_text, right_text)
-                    ),
-                ));
+            let node = cursor.node();
+
+            if node.kind() == "binary_operator" {
+                if let (Some(left_node), Some(op_node), Some(right_node)) = (
+                    node.child_by_field_name("left"),
+                    node.child_by_field_name("op"),
+                    node.child_by_field_name("right"),
+                ) {
+                    let op = get_node_text(&op_node, source_code);
+                    if matches!(op, "==" | "!=" | "<" | ">" | "<=" | ">=") {
+                        let left_text = get_node_text(&left_node, source_code);
+                        let right_text = get_node_text(&right_node, source_code);
+
+                        if left_text == right_text {
+                            let (line, column) = get_line_column(&node);
+                            issues.push(LintIssue::new(
+                                line,
+                                column,
+                                "comparison-with-itself".to_string(),
+                                LintSeverity::Warning,
+                                format!(
+                                    "Redundant comparison '{}' - comparing expression with itself",
+                                    get_node_text(&node, source_code)
+                                ),
+                            ));
+                        }
+                    }
+                }
+            }
+
+            if cursor.goto_first_child() {
+                loop {
+                    traverse(cursor, rule, source_code, issues);
+                    if !cursor.goto_next_sibling() {
+                        break;
+                    }
+                }
+                cursor.goto_parent();
             }
         }
 
+        traverse(&mut cursor, self, source_code, &mut issues);
         issues
     }
 }
 
 impl Rule for ComparisonWithItselfRule {
     fn check(&mut self, source_code: &str, root_node: &Node) -> Result<Vec<LintIssue>, String> {
-        QueryRule::check(self, source_code, root_node, tree_sitter_gdscript::LANGUAGE.into())
+        Ok(self.check_comparison_with_itself(root_node, source_code))
     }
 }
