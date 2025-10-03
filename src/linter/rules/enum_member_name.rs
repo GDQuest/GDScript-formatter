@@ -1,82 +1,58 @@
-use crate::linter::lib::{get_line_column, get_node_text};
-use crate::linter::regex_patterns::CONSTANT_CASE;
+use crate::linter::lib::{get_node_from_match, get_node_text};
+use crate::linter::query_rule::QueryRule;
 use crate::linter::rules::Rule;
 use crate::linter::{LintIssue, LintSeverity};
-use tree_sitter::Node;
+use tree_sitter::{Node, Query};
+
 pub struct EnumMemberNameRule;
 
-impl EnumMemberNameRule {
-    fn is_valid_enum_member_name(&self, name: &str) -> bool {
-        CONSTANT_CASE.is_match(name)
+impl QueryRule for EnumMemberNameRule {
+    fn query_pattern(&self) -> &'static str {
+        r#"(enum_definition (enumerator_list (enumerator left: (identifier) @enum_member_name
+          (#not-match? @enum_member_name "^[A-Z][A-Z0-9_]*$"))))"#
     }
 
-    fn check_enum_member_names(&self, node: &Node, source_code: &str) -> Vec<LintIssue> {
+    fn process_match(
+        &self,
+        query_match: &tree_sitter::QueryMatch,
+        source_code: &str,
+        _query: &Query,
+    ) -> Vec<LintIssue> {
         let mut issues = Vec::new();
 
-        let mut cursor = node.walk();
+        if let Some(name_node) = get_node_from_match(query_match) {
+            let name_text = get_node_text(&name_node, source_code);
 
-        fn traverse(
-            cursor: &mut tree_sitter::TreeCursor,
-            rule: &EnumMemberNameRule,
-            source_code: &str,
-            issues: &mut Vec<LintIssue>,
-        ) {
-            let node = cursor.node();
+            // Skip empty enum member names (happens with empty enums)
+            if !name_text.is_empty() {
+                let start_position = name_node.start_position();
+                let line = start_position.row + 1;
+                let column = start_position.column + 1;
 
-            if node.kind() == "enum_definition" {
-                // Check enum element names
-                if let Some(body_node) = node.child_by_field_name("body") {
-                    let mut enum_cursor = body_node.walk();
-                    if enum_cursor.goto_first_child() {
-                        loop {
-                            let enum_member = enum_cursor.node();
-                            if enum_member.kind() == "enumerator" {
-                                if let Some(element_name_node) =
-                                    enum_member.child_by_field_name("left")
-                                {
-                                    let element_name =
-                                        get_node_text(&element_name_node, source_code);
-                                    // Skip empty enum member names (happens with empty enums)
-                                    if !element_name.is_empty()
-                                        && !rule.is_valid_enum_member_name(element_name)
-                                    {
-                                        let (line, column) = get_line_column(&element_name_node);
-                                        issues.push(LintIssue::new(
-                                            line,
-                                            column,
-                                            "enum-member-name".to_string(),
-                                            LintSeverity::Error,
-                                            format!("Enum element name '{}' should be in CONSTANT_CASE format", element_name),
-                                        ));
-                                    }
-                                }
-                            }
-                            if !enum_cursor.goto_next_sibling() {
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-
-            if cursor.goto_first_child() {
-                loop {
-                    traverse(cursor, rule, source_code, issues);
-                    if !cursor.goto_next_sibling() {
-                        break;
-                    }
-                }
-                cursor.goto_parent();
+                issues.push(LintIssue::new(
+                    line,
+                    column,
+                    "enum-member-name".to_string(),
+                    LintSeverity::Error,
+                    format!(
+                        "Enum element name '{}' should be in CONSTANT_CASE format",
+                        name_text
+                    ),
+                ));
             }
         }
 
-        traverse(&mut cursor, self, source_code, &mut issues);
         issues
     }
 }
 
 impl Rule for EnumMemberNameRule {
     fn check(&mut self, source_code: &str, root_node: &Node) -> Result<Vec<LintIssue>, String> {
-        Ok(self.check_enum_member_names(root_node, source_code))
+        QueryRule::check(
+            self,
+            source_code,
+            root_node,
+            tree_sitter_gdscript::LANGUAGE.into(),
+        )
     }
 }

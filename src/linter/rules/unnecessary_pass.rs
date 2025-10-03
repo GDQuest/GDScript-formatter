@@ -1,77 +1,71 @@
-use crate::linter::lib::get_line_column;
+use crate::linter::lib::get_node_from_match;
+use crate::linter::query_rule::{QueryRule, get_capture_position};
 use crate::linter::rules::Rule;
 use crate::linter::{LintIssue, LintSeverity};
-use tree_sitter::Node;
+use tree_sitter::{Node, Query};
+
 pub struct UnnecessaryPassRule;
 
-impl UnnecessaryPassRule {
-    fn check_unnecessary_pass(&self, node: &Node, _source_code: &str) -> Vec<LintIssue> {
+impl QueryRule for UnnecessaryPassRule {
+    fn query_pattern(&self) -> &'static str {
+        r#"(body (pass_statement) @pass_stmt)"#
+    }
+
+    fn process_match(
+        &self,
+        query_match: &tree_sitter::QueryMatch,
+        _source_code: &str,
+        _query: &Query,
+    ) -> Vec<LintIssue> {
         let mut issues = Vec::new();
 
-        let mut cursor = node.walk();
-        fn traverse(
-            cursor: &mut tree_sitter::TreeCursor,
-            rule: &UnnecessaryPassRule,
-            issues: &mut Vec<LintIssue>,
-        ) {
-            let node = cursor.node();
+        if let Some(pass_node) = get_node_from_match(query_match) {
+            let parent_body = pass_node.parent().unwrap();
 
-            if node.kind() == "body" || node.kind() == "class_body" {
-                let mut has_other_statements = false;
-                let mut pass_nodes = Vec::new();
-
-                let mut body_cursor = node.walk();
-                if body_cursor.goto_first_child() {
-                    loop {
-                        let stmt_node = body_cursor.node();
-                        if stmt_node.kind() == "pass_statement" {
-                            pass_nodes.push(stmt_node);
-                        } else if !matches!(
-                            stmt_node.kind(),
-                            "_newline" | "_indent" | "_dedent" | "comment"
-                        ) {
-                            has_other_statements = true;
-                        }
-                        if !body_cursor.goto_next_sibling() {
-                            break;
-                        }
-                    }
-                }
-
-                // If there are other statements besides pass, mark pass as unnecessary
-                if has_other_statements {
-                    for pass_node in pass_nodes {
-                        let (line, column) = get_line_column(&pass_node);
-                        issues.push(LintIssue::new(
-                            line,
-                            column,
-                            "unnecessary-pass".to_string(),
-                            LintSeverity::Warning,
-                            "Unnecessary 'pass' statement when other statements are present"
-                                .to_string(),
-                        ));
-                    }
-                }
-            }
+            // Check if there are other statements in the body
+            let mut has_other_statements = false;
+            let mut cursor = parent_body.walk();
 
             if cursor.goto_first_child() {
                 loop {
-                    traverse(cursor, rule, issues);
+                    let child = cursor.node();
+                    if child.kind() != "pass_statement"
+                        && !matches!(child.kind(), "_newline" | "_indent" | "_dedent" | "comment")
+                    {
+                        has_other_statements = true;
+                        break;
+                    }
                     if !cursor.goto_next_sibling() {
                         break;
                     }
                 }
-                cursor.goto_parent();
+            }
+
+            if has_other_statements {
+                if let Some((line, column)) = get_capture_position(query_match, 0) {
+                    issues.push(LintIssue::new(
+                        line,
+                        column,
+                        "unnecessary-pass".to_string(),
+                        LintSeverity::Warning,
+                        "Unnecessary 'pass' statement when other statements are present"
+                            .to_string(),
+                    ));
+                }
             }
         }
 
-        traverse(&mut cursor, self, &mut issues);
         issues
     }
 }
 
 impl Rule for UnnecessaryPassRule {
     fn check(&mut self, source_code: &str, root_node: &Node) -> Result<Vec<LintIssue>, String> {
-        Ok(self.check_unnecessary_pass(root_node, source_code))
+        QueryRule::check(
+            self,
+            source_code,
+            root_node,
+            tree_sitter_gdscript::LANGUAGE.into(),
+        )
     }
 }

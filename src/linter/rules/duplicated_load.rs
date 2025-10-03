@@ -1,70 +1,79 @@
-use crate::linter::lib::{get_line_column, get_node_text};
+use crate::linter::query_rule::{QueryRule, get_capture_position, get_capture_text};
 use crate::linter::rules::Rule;
 use crate::linter::{LintIssue, LintSeverity};
 use std::collections::HashMap;
-use tree_sitter::Node;
-pub struct DuplicatedLoadRule;
+use tree_sitter::{Node, Query, StreamingIterator};
+
+pub struct DuplicatedLoadRule {
+    load_paths: HashMap<String, Vec<(usize, usize)>>,
+}
 
 impl DuplicatedLoadRule {
-    fn check_duplicated_load(&self, node: &Node, source_code: &str) -> Vec<LintIssue> {
-        let mut issues = Vec::new();
+    pub fn new() -> Self {
+        Self {
+            load_paths: HashMap::new(),
+        }
+    }
+}
 
-        let mut load_paths: HashMap<String, Vec<(usize, usize)>> = HashMap::new();
-        let mut cursor = node.walk();
+impl Default for DuplicatedLoadRule {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
-        fn traverse(
-            cursor: &mut tree_sitter::TreeCursor,
-            rule: &DuplicatedLoadRule,
-            source_code: &str,
-            load_paths: &mut HashMap<String, Vec<(usize, usize)>>,
-        ) {
-            let node = cursor.node();
+impl QueryRule for DuplicatedLoadRule {
+    fn query_pattern(&self) -> &'static str {
+        r#"(call (identifier) @function_name (arguments (string) @path))"#
+    }
 
-            if node.kind() == "call" {
-                if let Some(function_node) = node.child(0) {
-                    let function_name = get_node_text(&function_node, source_code);
-                    if function_name == "load" || function_name == "preload" {
-                        // Get the arguments
-                        if let Some(args_node) = node.child_by_field_name("arguments") {
-                            let mut args_cursor = args_node.walk();
-                            if args_cursor.goto_first_child() {
-                                loop {
-                                    let arg_node = args_cursor.node();
-                                    if arg_node.kind() == "string" {
-                                        let path = get_node_text(&arg_node, source_code);
-                                        let (line, column) = get_line_column(&arg_node);
-                                        load_paths
-                                            .entry(path.to_string())
-                                            .or_insert_with(Vec::new)
-                                            .push((line, column));
-                                    }
-                                    if !args_cursor.goto_next_sibling() {
-                                        break;
-                                    }
-                                }
-                            }
-                        }
+    fn process_match(
+        &self,
+        _query_match: &tree_sitter::QueryMatch,
+        _source_code: &str,
+        _query: &Query,
+    ) -> Vec<LintIssue> {
+        // We'll collect all matches first, then process duplicates in the Rule implementation
+        Vec::new()
+    }
+}
+
+impl Rule for DuplicatedLoadRule {
+    fn check(&mut self, source_code: &str, root_node: &Node) -> Result<Vec<LintIssue>, String> {
+        // Reset the load_paths for this check
+        self.load_paths.clear();
+
+        // Use tree-sitter queries to find all load/preload calls
+        let language = tree_sitter_gdscript::LANGUAGE.into();
+        let query = tree_sitter::Query::new(&language, self.query_pattern())
+            .map_err(|e| format!("Failed to create query: {:?}", e))?;
+
+        let mut cursor = tree_sitter::QueryCursor::new();
+        let mut matches = cursor.matches(&query, *root_node, source_code.as_bytes());
+
+        // Collect all load paths and their positions
+        while let Some(query_match) = matches.next() {
+            // Check if this is a load or preload function call
+            if let Some(function_name) = get_capture_text(&query_match, 0, source_code) {
+                if function_name == "load" || function_name == "preload" {
+                    if let (Some(path), Some((line, column))) = (
+                        get_capture_text(&query_match, 1, source_code), // @path is capture index 1
+                        get_capture_position(&query_match, 1),
+                    ) {
+                        self.load_paths
+                            .entry(path.to_string())
+                            .or_insert_with(Vec::new)
+                            .push((line, column));
                     }
                 }
-            }
-
-            if cursor.goto_first_child() {
-                loop {
-                    traverse(cursor, rule, source_code, load_paths);
-                    if !cursor.goto_next_sibling() {
-                        break;
-                    }
-                }
-                cursor.goto_parent();
             }
         }
 
-        traverse(&mut cursor, self, source_code, &mut load_paths);
-
-        // Check for duplicates
-        for (path, locations) in load_paths {
+        // Generate issues for duplicated paths
+        let mut issues = Vec::new();
+        for (path, locations) in &self.load_paths {
             if locations.len() > 1 {
-                for (line, column) in locations {
+                for &(line, column) in locations {
                     issues.push(LintIssue::new(
                         line,
                         column,
@@ -79,12 +88,6 @@ impl DuplicatedLoadRule {
             }
         }
 
-        issues
-    }
-}
-
-impl Rule for DuplicatedLoadRule {
-    fn check(&mut self, source_code: &str, root_node: &Node) -> Result<Vec<LintIssue>, String> {
-        Ok(self.check_duplicated_load(root_node, source_code))
+        Ok(issues)
     }
 }

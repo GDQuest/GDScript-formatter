@@ -1,63 +1,52 @@
-use crate::linter::lib::{get_line_column, get_node_text};
-use crate::linter::regex_patterns::PASCAL_CASE;
+use crate::linter::lib::{get_node_from_match, get_node_text};
+use crate::linter::query_rule::QueryRule;
 use crate::linter::rules::Rule;
 use crate::linter::{LintIssue, LintSeverity};
-use tree_sitter::Node;
+use tree_sitter::{Node, Query};
 
 pub struct ClassNameRule;
 
-impl ClassNameRule {
-    fn is_valid_class_name(&self, name: &str) -> bool {
-        PASCAL_CASE.is_match(name)
+impl QueryRule for ClassNameRule {
+    fn query_pattern(&self) -> &'static str {
+        r#"(class_name_statement (name) @class_name
+          (#not-match? @class_name "^[A-Z][a-zA-Z0-9]*$"))"#
     }
 
-    fn check_class_names(&self, node: &Node, source_code: &str) -> Vec<LintIssue> {
+    fn process_match(
+        &self,
+        query_match: &tree_sitter::QueryMatch,
+        source_code: &str,
+        _query: &Query,
+    ) -> Vec<LintIssue> {
         let mut issues = Vec::new();
 
-        let mut cursor = node.walk();
+        // Get the class name node that failed the regex match
+        if let Some(name_node) = get_node_from_match(query_match) {
+            let name_text = get_node_text(&name_node, source_code);
+            let start_position = name_node.start_position();
+            let line = start_position.row + 1;
+            let column = start_position.column + 1;
 
-        fn traverse(
-            cursor: &mut tree_sitter::TreeCursor,
-            rule: &ClassNameRule,
-            source_code: &str,
-            issues: &mut Vec<LintIssue>,
-        ) {
-            let node = cursor.node();
-
-            if node.kind() == "class_name_statement" {
-                if let Some(name_node) = node.child_by_field_name("name") {
-                    let name = get_node_text(&name_node, source_code);
-                    if !rule.is_valid_class_name(name) {
-                        let (line, column) = get_line_column(&name_node);
-                        issues.push(LintIssue::new(
-                            line,
-                            column,
-                            "class-name".to_string(),
-                            LintSeverity::Error,
-                            format!("Class name '{}' should be in PascalCase format", name),
-                        ));
-                    }
-                }
-            }
-
-            if cursor.goto_first_child() {
-                loop {
-                    traverse(cursor, rule, source_code, issues);
-                    if !cursor.goto_next_sibling() {
-                        break;
-                    }
-                }
-                cursor.goto_parent();
-            }
+            issues.push(LintIssue::new(
+                line,
+                column,
+                "class-name".to_string(),
+                LintSeverity::Error,
+                format!("Class name '{}' should be in PascalCase format", name_text),
+            ));
         }
 
-        traverse(&mut cursor, self, source_code, &mut issues);
         issues
     }
 }
 
 impl Rule for ClassNameRule {
     fn check(&mut self, source_code: &str, root_node: &Node) -> Result<Vec<LintIssue>, String> {
-        Ok(self.check_class_names(root_node, source_code))
+        QueryRule::check(
+            self,
+            source_code,
+            root_node,
+            tree_sitter_gdscript::LANGUAGE.into(),
+        )
     }
 }
