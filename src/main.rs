@@ -41,7 +41,7 @@ struct FormatterOutput {
 #[clap(
     // Use the version number directly from Cargo.toml at compile time
     version = env!("CARGO_PKG_VERSION"),
-    max_term_width = 80
+    max_term_width = 120
 )]
 struct Args {
     /// The GDScript file(s) to format. If no file paths are provided, the
