@@ -61,7 +61,7 @@ struct Args {
     #[arg(long)]
     stdout: bool,
 
-    /// Check if FILES are formatted making no changes.
+    /// Check if FILES are formatted, making no changes.
     ///
     /// Exits with code 0 if the file is already formatted and 1 if it's not
     /// formatted.
@@ -80,13 +80,13 @@ struct Args {
     #[arg(long, default_value = "4", value_name = "NUM")]
     indent_size: usize,
 
-    /// Reorder code to follow the style guide.
+    /// Reorder code to follow the official GDScript style guide.
     ///
     /// Reorder source-level declarations (signals, properties, methods, etc.)
-    /// according to the official GDScript style guide. This is optional
-    /// according to the GDScript style guide.No matches found
+    /// in this order: signals, enums, constants, properties, static and built-in
+    /// virtual methods, public methods, pseudo-private methods, and sub-classes.
     ///
-    /// Applied after the main formatting pass.
+    /// If enabled, reordering happens after formatting the code.
     #[arg(long)]
     reorder_code: bool,
 
