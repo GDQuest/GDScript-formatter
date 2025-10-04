@@ -28,68 +28,82 @@ struct FormatterOutput {
 }
 
 #[derive(Parser)]
+/// A GDScript formatter following the official style guide.
+///
+/// This program formats GDScript files with a consistent style and indentation
+/// using Topiary and Tree-sitter.
+///
+/// By default, the formatter overwrites input files with the formatted code.
+/// Use the --stdout flag to output to standard output instead.
+///
+/// The latest version of the GDScript style guide can be found at:
+/// https://docs.godotengine.org/en/stable/tutorials/scripting/gdscript/gdscript_styleguide.html
 #[clap(
-    about = "A GDScript code formatter using Topiary and Tree-sitter",
     // Use the version number directly from Cargo.toml at compile time
     version = env!("CARGO_PKG_VERSION"),
-    long_about = "Format GDScript files with consistent style and indentation. \
-    By default, the formatter overwrites input files with the formatted code. \
-    Use --stdout to output to standard output instead.",
     max_term_width = 80
 )]
 struct Args {
-    #[arg(
-        help = "Input GDScript file(s) to format. If no file path is provided, the program reads from standard input and outputs to standard output.",
-        value_name = "FILES"
-    )]
+    /// The GDScript file(s) to format. If no file paths are provided, the
+    /// program reads from standard input and outputs to standard output.
+    #[arg(value_name = "FILES")]
     input: Vec<PathBuf>,
+
     #[command(subcommand)]
     command: Option<Commands>,
-    #[arg(
-        long,
-        help = "Output formatted code to stdout instead of overwriting the input file. \
-        If multiple input files are provided, each file's content is preceded by a comment indicating the file name, with the form \
-        #--file:<file_path> \
-        This flag is ignored when reading from stdin (stdout is always used)."
-    )]
+
+    /// Output formatted code to stdout without changing FILES.
+    ///
+    /// If multiple input files are provided, each file's content is preceded
+    /// by the line "#--file:<file_path>".
+    ///
+    /// This flag is ignored when reading from stdin since stdout is always
+    /// used.
+    #[arg(long)]
     stdout: bool,
-    #[arg(
-        short,
-        long,
-        help = "Check if the file is already formatted without making changes. \
-        Exits with code 0 if the file is already formatted and 1 if it's not formatted"
-    )]
+
+    /// Check if FILES are formatted, making no changes.
+    ///
+    /// Exits with code 0 if the file is already formatted and 1 if it's not
+    /// formatted.
+    #[arg(short, long)]
     check: bool,
-    #[arg(
-        long,
-        help = "Use spaces for indentation instead of tabs. \
-        The number of spaces is controlled by --indent-size"
-    )]
+
+    /// Use spaces for indentation instead of tabs.
+    ///
+    /// Use --indent-size to set the number of spaces to use as indentation.
+    #[arg(long)]
     use_spaces: bool,
-    #[arg(
-        long,
-        help = "Number of spaces to use for each indentation level when --use-spaces is enabled. \
-        Has no effect without the --use-spaces flag.",
-        default_value = "4",
-        value_name = "NUM"
-    )]
+
+    /// Set how many spaces to use for indentation.
+    ///
+    /// Has no effect without the --use-spaces flag.
+    #[arg(long, default_value = "4", value_name = "NUM")]
     indent_size: usize,
-    #[arg(
-        long,
-        help = "Reorder source-level declarations (signals, properties, methods, etc.) according to the official GDScript style guide. \
-        This is optional and applies after the main formatting pass."
-    )]
+
+    /// Reorder code to follow the official GDScript style guide.
+    ///
+    /// Reorder source-level declarations (signals, properties, methods, etc.)
+    /// in this order: signals, enums, constants, properties, static and built-in
+    /// virtual methods, public methods, pseudo-private methods, and sub-classes.
+    ///
+    /// If enabled, reordering happens after formatting the code.
+    #[arg(long)]
     reorder_code: bool,
-    #[arg(
-        short,
-        long,
-        help = "Enable safe mode. This mode ensures that after formatting, the code still has the same syntax and structure \
-        as when initially parsed. If not, formatting is canceled.\n \
-        But this offers a good amount protection against the formatter failing on new syntax \
-        at the cost of a small little extra running time. Currently incompatible with --reorder-code.\n \
-        WARNING: this is not a perfect solution. Some rare edge cases may still lead to syntax changes.",
-        conflicts_with = "reorder_code"
-    )]
+
+    /// Enable safe mode.
+    ///
+    /// This mode ensures that after formatting, the code still has the same
+    /// syntax and structure as when initially parsed. If not, formatting is
+    /// canceled.
+    ///
+    /// This offers a good amount protection against the formatter failing
+    /// on new syntax at the cost of a small little extra running time.
+    /// Currently incompatible with --reorder-code.
+    ///
+    /// WARNING: this is not a perfect solution. Some rare edge cases may still
+    /// lead to syntax changes.
+    #[arg(short, long, conflicts_with = "reorder_code")]
     safe: bool,
 }
 
