@@ -34,7 +34,8 @@ struct FormatterOutput {
     version = env!("CARGO_PKG_VERSION"),
     long_about = "Format GDScript files with consistent style and indentation. \
     By default, the formatter overwrites input files with the formatted code. \
-    Use --stdout to output to standard output instead."
+    Use --stdout to output to standard output instead.",
+    max_term_width = 80
 )]
 struct Args {
     #[arg(
