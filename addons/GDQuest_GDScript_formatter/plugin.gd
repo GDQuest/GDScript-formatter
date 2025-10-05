@@ -19,9 +19,13 @@ const SETTING_INDENT_SIZE = "indent_size"
 const SETTING_REORDER_CODE = "reorder_code"
 const SETTING_SAFE_MODE = "safe_mode"
 const SETTING_FORMATTER_PATH = "formatter_path"
+const SETTING_LINT_ON_SAVE = "lint_on_save"
+const SETTING_LINT_LINE_LENGTH = "lint_line_length"
+const SETTING_LINT_IGNORED_RULES = "lint_ignored_rules"
 
 const COMMAND_PALETTE_CATEGORY = "gdquest gdscript formatter/"
 const COMMAND_PALETTE_FORMAT_SCRIPT = "Format GDScript"
+const COMMAND_PALETTE_LINT_SCRIPT = "Lint GDScript"
 const COMMAND_PALETTE_INSTALL_UPDATE = "Install or Update Formatter"
 const COMMAND_PALETTE_UNINSTALL = "Uninstall Formatter"
 const COMMAND_PALETTE_REPORT_ISSUE = "Report Issue"
@@ -32,8 +36,15 @@ const DEFAULT_SETTINGS = {
 	SETTING_INDENT_SIZE: 4,
 	SETTING_REORDER_CODE: false,
 	SETTING_SAFE_MODE: false,
-	SETTING_FORMATTER_PATH: "gdscript-formatter",
+	SETTING_FORMATTER_PATH: "",
+	SETTING_LINT_ON_SAVE: false,
+	SETTING_LINT_LINE_LENGTH: 100,
+	SETTING_LINT_IGNORED_RULES: "",
 }
+
+## Which gutter lint icons are shown in.
+## By default, gutter 0 is for breakpoints and 1 is for things like overrides.
+const LINT_ICON_GUTTER := 2
 
 var connection_list: Array[Resource] = []
 var installer: FormatterInstaller = null
@@ -81,6 +92,7 @@ func _enter_tree() -> void:
 	)
 
 	add_format_command()
+	add_lint_command()
 	add_install_update_command()
 	add_uninstall_command()
 	add_report_issue_command()
@@ -98,6 +110,7 @@ func _exit_tree() -> void:
 	resource_saved.disconnect(_on_resource_saved)
 
 	remove_format_command()
+	remove_lint_command()
 	remove_install_update_command()
 	remove_uninstall_command()
 	remove_report_issue_command()
@@ -139,6 +152,28 @@ func format_current_script() -> bool:
 	return true
 
 
+func lint_current_script() -> bool:
+	if not EditorInterface.get_script_editor().is_visible_in_tree():
+		return false
+
+	var current_script := EditorInterface.get_script_editor().get_current_script()
+	if not is_instance_valid(current_script) or not current_script is GDScript:
+		return false
+
+	var code_edit: CodeEdit = EditorInterface.get_script_editor().get_current_editor().get_base_editor()
+
+	var lint_issues := lint_code(current_script)
+	if lint_issues.is_empty():
+		print("No linting issues found.")
+		clear_lint_highlights(code_edit)
+		return true
+
+	apply_lint_highlights(code_edit, lint_issues)
+	print_lint_summary(lint_issues, current_script.resource_path)
+
+	return true
+
+
 func update_shortcut() -> void:
 	for obj: Resource in connection_list:
 		obj.changed.disconnect(update_shortcut)
@@ -159,7 +194,11 @@ func update_shortcut() -> void:
 func _on_resource_saved(saved_resource: Resource) -> void:
 	if saved_resource is not GDScript:
 		return
-	if not get_editor_setting(SETTING_FORMAT_ON_SAVE):
+
+	var format_on_save := get_editor_setting(SETTING_FORMAT_ON_SAVE) as bool
+	var lint_on_save := get_editor_setting(SETTING_LINT_ON_SAVE) as bool
+
+	if not format_on_save and not lint_on_save:
 		return
 
 	var script := saved_resource as GDScript
@@ -167,30 +206,40 @@ func _on_resource_saved(saved_resource: Resource) -> void:
 	if not has_command(get_editor_setting(SETTING_FORMATTER_PATH)) or not is_instance_valid(script):
 		return
 
-	var formatted_code := format_code(script, false)
-	if formatted_code.is_empty():
-		return
+	if format_on_save:
+		var formatted_code := format_code(script, false)
+		if formatted_code.is_empty():
+			return
 
-	script.source_code = formatted_code
-	ResourceSaver.save(script)
-	script.reload()
+		script.source_code = formatted_code
+		ResourceSaver.save(script)
+		script.reload()
 
-	var script_editor := EditorInterface.get_script_editor()
-	var open_script_editors := script_editor.get_open_script_editors()
-	var open_scripts := script_editor.get_open_scripts()
+		var script_editor := EditorInterface.get_script_editor()
+		var open_script_editors := script_editor.get_open_script_editors()
+		var open_scripts := script_editor.get_open_scripts()
 
-	if not open_scripts.has(script):
-		return
+		if not open_scripts.has(script):
+			return
 
-	if script_editor.get_current_script() == script:
-		reload_code_edit(script_editor.get_current_editor().get_base_editor(), formatted_code, true)
-	elif open_scripts.size() == open_script_editors.size():
-		for i: int in range(open_scripts.size()):
-			if open_scripts[i] == script:
-				reload_code_edit(open_script_editors[i].get_base_editor(), formatted_code, true)
-				return
-	else:
-		push_error("GDScript Formatter error: Unknown situation, can't reload code editor in Editor. Please report this issue.")
+		if script_editor.get_current_script() == script:
+			reload_code_edit(script_editor.get_current_editor().get_base_editor(), formatted_code, true)
+		elif open_scripts.size() == open_script_editors.size():
+			for i: int in range(open_scripts.size()):
+				if open_scripts[i] == script:
+					reload_code_edit(open_script_editors[i].get_base_editor(), formatted_code, true)
+					return
+		else:
+			push_error("GDScript Formatter error: Unknown situation, can't reload code editor in Editor. Please report this issue.")
+
+	if lint_on_save:
+		var code_edit: CodeEdit = EditorInterface.get_script_editor().get_current_editor().get_base_editor()
+		var lint_issues := lint_code(script)
+		if lint_issues.is_empty():
+			clear_lint_highlights(code_edit)
+		else:
+			apply_lint_highlights(code_edit, lint_issues)
+			print_lint_summary(lint_issues, script.resource_path)
 
 
 func add_format_command() -> void:
@@ -212,6 +261,23 @@ func add_format_command() -> void:
 
 func remove_format_command() -> void:
 	EditorInterface.get_command_palette().remove_command(COMMAND_PALETTE_CATEGORY + COMMAND_PALETTE_FORMAT_SCRIPT)
+
+
+func add_lint_command() -> void:
+	if not has_command(get_editor_setting(SETTING_FORMATTER_PATH)):
+		return
+
+	EditorInterface.get_command_palette().add_command(
+		COMMAND_PALETTE_LINT_SCRIPT,
+		COMMAND_PALETTE_CATEGORY + COMMAND_PALETTE_LINT_SCRIPT,
+		lint_current_script,
+	)
+
+
+func remove_lint_command() -> void:
+	EditorInterface.get_command_palette().remove_command(
+		COMMAND_PALETTE_CATEGORY + COMMAND_PALETTE_LINT_SCRIPT,
+	)
 
 
 func add_install_update_command() -> void:
@@ -308,6 +374,8 @@ func _on_menu_item_selected(command: String) -> void:
 	match command:
 		"format_script":
 			format_current_script()
+		"lint_script":
+			lint_current_script()
 		"reorder_code":
 			reorder_code()
 		"install_update":
@@ -401,6 +469,105 @@ func format_code(script: GDScript, force_reorder := false) -> String:
 		push_error("\tExit code: " + str(exit_code) + " Output: " + (output.front().strip_edges() if output.size() > 0 else "No output"))
 		push_error('\tIf your script does not have any syntax errors, this might be a formatter bug.')
 		return ""
+
+
+## Lints a GDScript file using the GDScript Formatter's linter,
+## and returns an array of lint issues.
+func lint_code(script: GDScript) -> Array:
+	var script_path := script.resource_path
+	var output: Array = []
+	var formatter_arguments: Array = ["lint", ProjectSettings.globalize_path(script_path)]
+
+	var exit_code := OS.execute(get_editor_setting(SETTING_FORMATTER_PATH), formatter_arguments, output)
+	if exit_code == OK:
+		return [] # No issues found
+
+	if exit_code == 1:
+		# Parse lint output - the output is a single string with multiple lines
+		var issues = []
+		for output_item in output:
+			var lines = output_item.split("\n")
+			for line in lines:
+				var trimmed_line = line.strip_edges()
+				if trimmed_line.is_empty():
+					continue
+				var issue = parse_lint_issue(trimmed_line)
+				if issue != null and not issue.is_empty():
+					issues.push_back(issue)
+		return issues
+
+	push_error("Lint GDScript failed: " + script_path)
+	push_error("\tExit code: " + str(exit_code) + " Output: " + (output.front().strip_edges() if output.size() > 0 else "No output"))
+	return []
+
+
+## Parses a lint issue line and returns a dictionary with issue information
+func parse_lint_issue(line: String) -> Dictionary:
+	# Expected format: filename:line:rule:severity: message
+	var parts = line.split(":", 4)
+	if parts.size() < 5:
+		return { }
+
+	return {
+		"line": int(parts[1]) - 1, # Convert to 0-based indexing
+		"rule": parts[2],
+		"severity": parts[3],
+		"message": parts[4].strip_edges(),
+	}
+
+
+## Applies lint highlighting to the code editor
+func apply_lint_highlights(code_edit: CodeEdit, issues: Array) -> void:
+	clear_lint_highlights(code_edit)
+
+	for issue in issues:
+		var line_number: int = issue.line
+		var severity: String = issue.severity
+		var message: String = issue.message
+
+		# Set line background color based on severity
+		var color: Color
+		if severity == "error":
+			color = Color(1, 0, 0, 0.1)
+		else: # warning
+			color = Color(1, 1, 0, 0.1)
+
+		code_edit.set_line_background_color(line_number, color)
+
+		# Add gutter icon for severity
+		var gutter_index = LINT_ICON_GUTTER
+		var icon_name = "StatusError" if severity == "error" else "StatusWarning"
+		var icon = EditorInterface.get_editor_theme().get_icon(icon_name, "EditorIcons")
+		code_edit.set_gutter_type(LINT_ICON_GUTTER, CodeEdit.GutterType.GUTTER_TYPE_ICON)
+		code_edit.set_line_gutter_icon(line_number, LINT_ICON_GUTTER, icon)
+
+
+## Prints a detailed summary of lint issues to the output
+func print_lint_summary(issues: Array, script_path: String) -> void:
+	print_rich("\n[b]=== Linting Results for %s ===[/b]\n" % script_path)
+	print_rich("[b]Found [i]%s[/i] issue(s)\n[/b]" % issues.size())
+
+	for issue in issues:
+		var line_display = str(issue.line + 1) # Convert back to 1-based for display
+		var severity_label = issue.severity.to_upper()
+		print_rich(
+			"[color=%s]%s[/color] on line [color=cyan]%s[/color] ([i]%s[/i])" % [
+				"red" if severity_label == "ERROR" else "yellow",
+				severity_label,
+				line_display,
+				issue.rule,
+			],
+		)
+		print_rich("[i]%s[/i]\n" % [issue.message])
+
+	print_rich("[b]=== End Linting Results ===[/b]\n")
+
+
+## Clears all lint highlighting from the code editor
+func clear_lint_highlights(code_edit: CodeEdit) -> void:
+	for line in range(code_edit.get_line_count()):
+		code_edit.set_line_background_color(line, Color(0, 0, 0, 0))
+		code_edit.set_line_gutter_icon(line, LINT_ICON_GUTTER, null)
 
 
 ## Data structure to hold code editor state information

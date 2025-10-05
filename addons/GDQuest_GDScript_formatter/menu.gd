@@ -8,6 +8,7 @@ signal menu_item_selected(command: String)
 const MENU_TEXT = "Format"
 const MENU_ITEMS = {
 	"format_script": "Format Current Script",
+	"lint_script": "Lint Current Script",
 	"reorder_code": "Reorder Code",
 	"install_update": "Install or Update Formatter",
 	"uninstall": "Uninstall Formatter",
@@ -99,6 +100,11 @@ func _populate_menu(show_uninstall: bool = true) -> void:
 	popup_menu.add_item(MENU_ITEMS["format_script"], current_item_index)
 	popup_menu.set_item_metadata(current_item_index, "format_script")
 	popup_menu.set_item_tooltip(current_item_index, "Run the GDScript Formatter over the current script")
+	current_item_index += 1
+
+	popup_menu.add_item(MENU_ITEMS["lint_script"], current_item_index)
+	popup_menu.set_item_metadata(current_item_index, "lint_script")
+	popup_menu.set_item_tooltip(current_item_index, "Check the current script for linting issues")
 	current_item_index += 1
 
 	popup_menu.add_item(MENU_ITEMS["reorder_code"], current_item_index)
