@@ -575,40 +575,7 @@ impl GdTree {
                     continue;
                 }
 
-                // Function annotations are always placed on a new line after formatting
-                if child_grammar_name == "function_definition" {
-                    let function = &self.nodes[child_id];
-
-                    if function.children.is_empty() {
-                        continue;
-                    }
-
-                    let Some(annotations_id) = function.children.get(0).cloned() else {
-                        continue;
-                    };
-                    let annotations = &mut self.nodes[annotations_id];
-
-                    // We check if this function has any annotations as first child
-                    if annotations.grammar_name != "annotations" {
-                        // If the first child is not annotations, then this function doesn't have any
-                        continue;
-                    }
-
-                    // Annotations are children of the (annotations) node, so we need to flatten them
-                    let flatten_annotations = annotations.children.drain(..).collect::<Vec<_>>();
-
-                    // Annotations node is now an orphan
-                    // We could remove it from nodes, but it's too much trouble, just pretend it's not there
-                    self.nodes[child_id].children.remove(0);
-
-                    let new_parent = &mut self.nodes[parent_id];
-                    // Insert annotations before the function
-                    // Iterating in reverse because nodes will push other nodes down in the tree,
-                    // so the first annotation needs to be inserted last
-                    for annotation_id in flatten_annotations.into_iter().rev() {
-                        new_parent.children.insert(index, annotation_id);
-                    }
-                } else if child_grammar_name == "variable_statement" {
+                if child_grammar_name == "variable_statement" {
                     // We move @onready and @export annotations on the same line as the variable after formatting,
                     // that means we need to move these annotations to be children of the variable_statement node
                     // We move from the current index back to 0, searching for any annotations
