@@ -523,7 +523,6 @@ func apply_lint_highlights(code_edit: CodeEdit, issues: Array) -> void:
 	for issue in issues:
 		var line_number: int = issue.line
 		var severity: String = issue.severity
-		var message: String = issue.message
 
 		# Set line background color based on severity
 		var color: Color
@@ -535,7 +534,6 @@ func apply_lint_highlights(code_edit: CodeEdit, issues: Array) -> void:
 		code_edit.set_line_background_color(line_number, color)
 
 		# Add gutter icon for severity
-		var gutter_index = LINT_ICON_GUTTER
 		var icon_name = "StatusError" if severity == "error" else "StatusWarning"
 		var icon = EditorInterface.get_editor_theme().get_icon(icon_name, "EditorIcons")
 		code_edit.set_gutter_type(LINT_ICON_GUTTER, CodeEdit.GutterType.GUTTER_TYPE_ICON)
