@@ -10,3 +10,11 @@ var my_dictionary_2 = {
 	key = "value"}
 
 var dict: Dictionary[int,int] = {}
+
+const EXCEPTIONS: Dictionary[String, Dictionary] = {
+	# UI scene
+	"UI": {
+		# Required to allow typing in the console
+		"ConsoleInput": Control.FOCUS_ALL,
+	},
+}

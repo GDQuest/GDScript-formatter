@@ -13,7 +13,7 @@ default-run = "gdscript-formatter"
 [dependencies]
 clap = { version = "4.0", features = ["derive", "wrap_help"] }
 topiary-core = { git = "https://github.com/tweag/topiary", rev = "5081ccef9245fe56c2b3e2a7ced52277eda45825" }
-tree-sitter-gdscript  = { git = "https://github.com/PrestonKnopp/tree-sitter-gdscript.git", rev = "839cd921c8aa8b79c9afe2eb71a6a7bfa809e995" }
+tree-sitter-gdscript  = { git = "https://github.com/PrestonKnopp/tree-sitter-gdscript.git", rev = "faf0de3f715a62f2c2716c86904a3f3e11c63ed8" }
 regex = "1.11"
 tree-sitter = "0.25.10"
 rayon = "1.11.0"
