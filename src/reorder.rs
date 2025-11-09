@@ -15,11 +15,19 @@ pub fn reorder_gdscript_elements(
     tree: &Tree,
     content: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    let tokens = extract_tokens_to_reorder(tree, content)?;
+    let tokens = collect_top_level_tokens(tree, content)?;
     let ordered_elements = sort_gdscript_tokens(tokens);
     let reordered_content = build_reordered_code(ordered_elements, content);
 
     Ok(reordered_content)
+}
+
+/// Collects all top-level tokens (direct children of the `source` node) without reordering them.
+pub fn collect_top_level_tokens(
+    tree: &Tree,
+    content: &str,
+) -> Result<Vec<GDScriptTokensWithComments>, Box<dyn std::error::Error>> {
+    extract_tokens_to_reorder(tree, content)
 }
 
 /// This struct is used to hold an element along with its associated comments
@@ -35,7 +43,7 @@ pub struct GDScriptTokensWithComments {
     pub end_byte: usize,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GDScriptTokenKind {
     ClassAnnotation(String), // Annotations that go at the top of the file like @tool and @icon
     ClassName(String),       // This is the class_name declaration
@@ -226,7 +234,7 @@ fn extract_tokens_to_reorder(
     content: &str,
 ) -> Result<Vec<GDScriptTokensWithComments>, Box<dyn std::error::Error>> {
     let root = tree.root_node();
-    let mut elements = Vec::new();
+    let mut elements: Vec<GDScriptTokensWithComments> = Vec::new();
 
     // This query covers all top-level elements (direct children of source)
     // We need to capture everything so nothing gets lost
@@ -345,7 +353,33 @@ fn extract_tokens_to_reorder(
                 // This may look inefficient but in practice it should not have much impact
                 if class_docstring_comments_rows.contains(&node.start_position().row) {
                     continue;
-                } else {
+                }
+
+                // Here we look for inline comments after declarations, and if
+                // so, we attach them as inline to the declaration.  For
+                // example:
+                // 
+                // var test = 1 # inline comment
+                //
+                // Without this code, the comment would wrap to the next line.
+                let mut handled_inline = false;
+                if let Some(last_element) = elements.last_mut() {
+                    let last_end = last_element.end_byte;
+                    let comment_start = node.start_byte();
+                    if last_end <= comment_start && comment_start <= content.len() {
+                        if let Some(spacing) = content.get(last_end..comment_start) {
+                            let has_newline = spacing.contains('\n') || spacing.contains('\r');
+                            if !has_newline {
+                                last_element.original_text.push_str(spacing);
+                                last_element.original_text.push_str(&text);
+                                last_element.end_byte = node.end_byte();
+                                handled_inline = true;
+                            }
+                        }
+                    }
+                }
+
+                if !handled_inline {
                     pending_comments.push(PendingAttachment {
                         start_byte: node.start_byte(),
                         text: text.clone(),
