@@ -15,11 +15,19 @@ pub fn reorder_gdscript_elements(
     tree: &Tree,
     content: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    let tokens = extract_tokens_to_reorder(tree, content)?;
+    let tokens = collect_top_level_tokens(tree, content)?;
     let ordered_elements = sort_gdscript_tokens(tokens);
     let reordered_content = build_reordered_code(ordered_elements, content);
 
     Ok(reordered_content)
+}
+
+/// Collects all top-level tokens (direct children of the `source` node) without reordering them.
+pub fn collect_top_level_tokens(
+    tree: &Tree,
+    content: &str,
+) -> Result<Vec<GDScriptTokensWithComments>, Box<dyn std::error::Error>> {
+    extract_tokens_to_reorder(tree, content)
 }
 
 /// This struct is used to hold an element along with its associated comments
@@ -35,7 +43,7 @@ pub struct GDScriptTokensWithComments {
     pub end_byte: usize,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GDScriptTokenKind {
     ClassAnnotation(String), // Annotations that go at the top of the file like @tool and @icon
     ClassName(String),       // This is the class_name declaration

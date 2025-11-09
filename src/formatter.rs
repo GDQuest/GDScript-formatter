@@ -18,7 +18,12 @@ use regex::{Regex, RegexBuilder, Replacer};
 use topiary_core::{Language, Operation, TopiaryQuery, formatter_tree};
 use tree_sitter::{Parser, Point, Query, QueryCursor, StreamingIterator, Tree};
 
-use crate::FormatterConfig;
+use crate::{
+    FormatterConfig,
+    reorder::{
+        GDScriptTokenKind, GDScriptTokensWithComments, MethodType, collect_top_level_tokens,
+    },
+};
 
 static QUERY: &str = include_str!("../queries/gdscript.scm");
 
@@ -32,7 +37,12 @@ pub fn format_gdscript_with_config(
 ) -> Result<String, Box<dyn std::error::Error>> {
     let mut formatter = Formatter::new(content.to_owned(), config.clone());
 
-    formatter.preprocess().format()?.postprocess().reorder();
+    formatter
+        .preprocess()
+        .format()?
+        .postprocess()
+        .validate_formatting()?
+        .reorder()?;
     formatter.finish()
 }
 
@@ -42,6 +52,7 @@ struct Formatter {
     parser: Parser,
     input_tree: GdTree,
     tree: Tree,
+    original_source: Option<String>,
 }
 
 impl Formatter {
@@ -53,8 +64,17 @@ impl Formatter {
             .unwrap();
         let tree = parser.parse(&content, None).unwrap();
         let input_tree = GdTree::from_ts_tree(&tree, content.as_bytes());
+        let original_source = if config.safe && config.reorder_code {
+            // When both safe mode and reordering are enabled we keep an
+            // untouched copy of the original source code so we can later verify
+            // that the top-level declarations all survive the formatting pass.
+            Some(content.clone())
+        } else {
+            None
+        };
 
         Self {
+            original_source,
             content,
             config,
             tree,
@@ -102,9 +122,9 @@ impl Formatter {
     }
 
     #[inline(always)]
-    fn reorder(&mut self) -> &mut Self {
+    fn reorder(&mut self) -> Result<&mut Self, Box<dyn std::error::Error>> {
         if !self.config.reorder_code {
-            return self;
+            return Ok(self);
         }
 
         self.tree = self.parser.parse(&self.content, Some(&self.tree)).unwrap();
@@ -116,9 +136,15 @@ impl Formatter {
                 eprintln!(
                     "Warning: Code reordering failed: {e}. Returning formatted code without reordering."
                 );
+                return Ok(self);
             }
         };
-        self
+
+        if self.config.safe {
+            self.ensure_safe_reorder()?;
+        }
+
+        Ok(self)
     }
 
     /// This function runs over the content before going through topiary.
@@ -141,19 +167,41 @@ impl Formatter {
             .postprocess_tree_sitter()
     }
 
-    /// Finishes formatting and returns the resulting file content.
     #[inline(always)]
-    fn finish(mut self) -> Result<String, Box<dyn std::error::Error>> {
-        if self.config.safe {
-            self.input_tree.postprocess();
-            self.tree = self.parser.parse(&self.content, None).unwrap();
-
-            let output_tree = GdTree::from_ts_tree(&self.tree, self.content.as_bytes());
-            if self.input_tree != output_tree {
-                return Err("Code structure has changed after formatting".into());
-            }
+    fn validate_formatting(&mut self) -> Result<&mut Self, Box<dyn std::error::Error>> {
+        if !self.config.safe {
+            return Ok(self);
         }
 
+        self.input_tree.postprocess();
+        self.tree = self.parser.parse(&self.content, None).unwrap();
+
+        let formatted_tree = GdTree::from_ts_tree(&self.tree, self.content.as_bytes());
+        if self.input_tree != formatted_tree {
+            return Err("Code structure has changed after formatting".into());
+        }
+
+        Ok(self)
+    }
+
+    #[inline(always)]
+    fn ensure_safe_reorder(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        let original_source = self
+            .original_source
+            .as_deref()
+            .ok_or_else(|| {
+                "Safe mode requires the original source to verify reordered code".to_string()
+            })?;
+
+        self.tree = self.parser.parse(&self.content, None).unwrap();
+        ensure_top_level_tokens_match(original_source, &self.tree, &self.content)?;
+
+        Ok(())
+    }
+
+    /// Finishes formatting and returns the resulting file content.
+    #[inline(always)]
+    fn finish(self) -> Result<String, Box<dyn std::error::Error>> {
         Ok(self.content)
     }
 
@@ -453,6 +501,167 @@ impl Formatter {
             });
         }
         self
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+struct TopLevelTokenSignature {
+    kind: String,
+    attached_comments: Vec<String>,
+    trailing_comments: Vec<String>,
+}
+
+/// Ensures that the top-level tokens (child nodes of (source) in the
+/// tree-sitter AST) in the original source match those in the current tree
+/// after formatting and reordering. We compare their structural “signatures”
+/// (kind, relevant identifiers, and attached comments). This checks that we did
+/// not lose any top-level declaration.
+fn ensure_top_level_tokens_match(
+    original_source: &str,
+    current_tree: &Tree,
+    current_source: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Safe mode only cares that we did not lose or duplicate any top-level declaration.
+    // We accumulate signed counts per signature; a non-zero delta means something changed.
+    let mut diff = std::collections::HashMap::<TopLevelTokenSignature, i32>::new();
+
+    for signature in parse_top_level_token_signatures(original_source)? {
+        *diff.entry(signature).or_insert(0) += 1;
+    }
+
+    for signature in top_level_token_signatures_from_tree(current_tree, current_source)? {
+        *diff.entry(signature).or_insert(0) -= 1;
+    }
+
+    let mismatched: Vec<_> = diff.iter().filter(|(_, count)| **count != 0).collect();
+
+    if !mismatched.is_empty() {
+        eprintln!("Safe mode mismatch detected at top level:");
+        for (signature, count) in mismatched {
+            eprintln!("  {:?}: delta={}", signature, count);
+        }
+        return Err("Safe mode detected mismatched top-level declarations after reordering".into());
+    }
+
+    Ok(())
+}
+
+fn parse_top_level_token_signatures(
+    source: &str,
+) -> Result<Vec<TopLevelTokenSignature>, Box<dyn std::error::Error>> {
+    // We re-parse the original content with tree-sitter instead of reusing `input_tree`
+    // because the reorder module already knows how to classify the raw syntax tree into
+    // the token structures we want to compare. I'm not 100% sure it's needed
+    // but it's not very costly.
+    let mut parser = Parser::new();
+    parser
+        .set_language(&tree_sitter_gdscript::LANGUAGE.into())
+        .unwrap();
+    let tree = parser
+        .parse(source, None)
+        .ok_or_else(|| "Failed to parse GDScript source in safe mode")?;
+
+    top_level_token_signatures_from_tree(&tree, source)
+}
+
+fn top_level_token_signatures_from_tree(
+    tree: &Tree,
+    content: &str,
+) -> Result<Vec<TopLevelTokenSignature>, Box<dyn std::error::Error>> {
+    let tokens = collect_top_level_tokens(tree, content)?;
+    let mut signatures = Vec::with_capacity(tokens.len());
+
+    for token in tokens {
+        let GDScriptTokensWithComments {
+            token_kind,
+            attached_comments,
+            trailing_comments,
+            start_byte: _,
+            end_byte: _,
+            original_text,
+        } = token;
+
+        signatures.push(TopLevelTokenSignature {
+            kind: token_kind_key(&token_kind),
+            attached_comments,
+            trailing_comments,
+        });
+
+        if let Some(extends_key) = inline_extends_signature(&token_kind, original_text.as_str()) {
+            signatures.push(TopLevelTokenSignature {
+                kind: extends_key,
+                attached_comments: Vec::new(),
+                trailing_comments: Vec::new(),
+            });
+        }
+    }
+
+    Ok(signatures)
+}
+
+fn token_kind_key(kind: &GDScriptTokenKind) -> String {
+    match kind {
+        GDScriptTokenKind::ClassAnnotation(text) => format!("ClassAnnotation::{text}"),
+        GDScriptTokenKind::ClassName(text) => format!("ClassName::{text}"),
+        GDScriptTokenKind::Extends(text) => format!("Extends::{text}"),
+        GDScriptTokenKind::Docstring(text) => format!("Docstring::{text}"),
+        GDScriptTokenKind::Signal(name, is_private) => {
+            format!("Signal::{name}::{is_private}")
+        }
+        GDScriptTokenKind::Enum(name, is_private) => format!("Enum::{name}::{is_private}"),
+        GDScriptTokenKind::Constant(name, is_private) => {
+            format!("Constant::{name}::{is_private}")
+        }
+        GDScriptTokenKind::StaticVariable(name, is_private) => {
+            format!("StaticVariable::{name}::{is_private}")
+        }
+        GDScriptTokenKind::ExportVariable(name, is_private) => {
+            format!("ExportVariable::{name}::{is_private}")
+        }
+        GDScriptTokenKind::RegularVariable(name, is_private) => {
+            format!("RegularVariable::{name}::{is_private}")
+        }
+        GDScriptTokenKind::OnReadyVariable(name, is_private) => {
+            format!("OnReadyVariable::{name}::{is_private}")
+        }
+        GDScriptTokenKind::Method(name, method_type, is_private) => format!(
+            "Method::{name}::{}::{is_private}",
+            method_type_key(method_type)
+        ),
+        GDScriptTokenKind::InnerClass(name, is_private) => {
+            format!("InnerClass::{name}::{is_private}")
+        }
+        GDScriptTokenKind::Unknown(text) => format!("Unknown::{text}"),
+    }
+}
+
+fn method_type_key(method_type: &MethodType) -> String {
+    match method_type {
+        MethodType::StaticInit => "StaticInit".to_string(),
+        MethodType::StaticFunction => "StaticFunction".to_string(),
+        MethodType::BuiltinVirtual(priority) => format!("BuiltinVirtual({priority})"),
+        MethodType::Custom => "Custom".to_string(),
+    }
+}
+
+fn inline_extends_signature(token_kind: &GDScriptTokenKind, original_text: &str) -> Option<String> {
+    match token_kind {
+        GDScriptTokenKind::ClassName(_) => {
+            let extends_part = extract_inline_extends(original_text)?;
+            Some(format!("Extends::{extends_part}"))
+        }
+        _ => None,
+    }
+}
+
+fn extract_inline_extends(original_text: &str) -> Option<String> {
+    let extends_index = original_text.find("extends")?;
+    let extends_slice = &original_text[extends_index..];
+    let trimmed = extends_slice.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
     }
 }
 

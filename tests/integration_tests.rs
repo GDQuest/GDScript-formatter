@@ -51,6 +51,7 @@ fn test_reorder_file(file_path: &Path) {
         file_path,
         &FormatterConfig {
             reorder_code: true,
+            safe: true,
             ..Default::default()
         },
         true,

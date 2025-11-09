@@ -99,11 +99,10 @@ struct Args {
     ///
     /// This offers a good amount protection against the formatter failing
     /// on new syntax at the cost of a small little extra running time.
-    /// Currently incompatible with --reorder-code.
     ///
     /// WARNING: this is not a perfect solution. Some rare edge cases may still
     /// lead to syntax changes.
-    #[arg(short, long, conflicts_with = "reorder_code")]
+    #[arg(short, long)]
     safe: bool,
 }
 

@@ -13,7 +13,7 @@
 //! cargo run --bin benchmark --release >> benchmark_results.txt
 //! git checkout -
 //! ```
-use gdscript_formatter::{formatter::format_gdscript_with_config, FormatterConfig};
+use gdscript_formatter::{FormatterConfig, formatter::format_gdscript_with_config};
 use std::{fs, time::Instant};
 
 const ITERATIONS: u16 = 40;
