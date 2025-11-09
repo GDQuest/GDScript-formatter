@@ -88,6 +88,17 @@ struct ClassifiedElement<'a> {
     reorderable_element: Option<GDScriptTokenKind>,
 }
 
+/// We use this little container to remember comments or annotations that appear
+/// before a declaration while we scan the syntax tree from top to bottom.
+///
+/// The `start_byte` helps us preserve the original order when we later rebuild
+/// and attach the snippets to the declaration that follows.
+#[derive(Debug, Clone)]
+struct PendingAttachment {
+    start_byte: usize,
+    text: String,
+}
+
 /// This constant lists built-in virtual methods in the order they should appear.
 /// The higher the method is in the list, the higher the priority (i.e. _init comes before _ready).
 const BUILTIN_VIRTUAL_METHODS: &[&str] = &[
@@ -189,6 +200,24 @@ fn get_token_kind(token_kind: &GDScriptTokenKind) -> TokenKind {
         GDScriptTokenKind::InnerClass(_, _) => TokenKind::InnerClass,
         GDScriptTokenKind::Unknown(_) => TokenKind::Method,
     }
+}
+
+/// This function combines annotations and comments that were collected while
+/// scanning the syntax tree, sorts them by their original position in the
+/// source code, and returns them as a list of strings in the original source
+/// code order.
+fn merge_pending_texts(
+    pending_annotations: &[PendingAttachment],
+    pending_comments: &[PendingAttachment],
+) -> Vec<String> {
+    let mut merged: Vec<&PendingAttachment> = pending_annotations.iter().collect();
+    merged.extend(pending_comments.iter());
+    merged.sort_by_key(|attachment| attachment.start_byte);
+
+    merged
+        .into_iter()
+        .map(|attachment| attachment.text.clone())
+        .collect()
 }
 
 /// Extracts all top-level elements from the parsed tree.
@@ -317,11 +346,17 @@ fn extract_tokens_to_reorder(
                 if class_docstring_comments_rows.contains(&node.start_position().row) {
                     continue;
                 } else {
-                    pending_comments.push(text);
+                    pending_comments.push(PendingAttachment {
+                        start_byte: node.start_byte(),
+                        text: text.clone(),
+                    });
                 }
             }
             "region_start" => {
-                pending_comments.push(text);
+                pending_comments.push(PendingAttachment {
+                    start_byte: node.start_byte(),
+                    text: text.clone(),
+                });
             }
             "region_end" => {
                 region_end_comment = Some(text.clone());
@@ -340,22 +375,36 @@ fn extract_tokens_to_reorder(
                             });
                         }
                         _ => {
-                            pending_annotations.push(text);
+                            pending_annotations.push(PendingAttachment {
+                                start_byte: node.start_byte(),
+                                text: text.clone(),
+                            });
                         }
                     }
                 } else {
-                    pending_annotations.push(text);
+                    pending_annotations.push(PendingAttachment {
+                        start_byte: node.start_byte(),
+                        text: text.clone(),
+                    });
                 }
             }
             "class_name_statement" => {
                 if let Some(element) = reorderable_element {
                     // Don't attach class docstring to class_name, save it for extends
-                    let mut non_docstring_comments = Vec::new();
-                    for comment in &pending_comments {
-                        if !class_docstring_comments.contains(comment) {
-                            non_docstring_comments.push(comment.clone());
-                        }
-                    }
+                    let mut attachments: Vec<&PendingAttachment> =
+                        pending_annotations.iter().collect();
+                    attachments.extend(pending_comments.iter());
+                    attachments.sort_by_key(|attachment| attachment.start_byte);
+                    let non_docstring_comments: Vec<String> = attachments
+                        .into_iter()
+                        .filter_map(|attachment| {
+                            if !class_docstring_comments.contains(&attachment.text) {
+                                Some(attachment.text.clone())
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
                     elements.push(GDScriptTokensWithComments {
                         token_kind: element,
                         attached_comments: non_docstring_comments,
@@ -371,9 +420,11 @@ fn extract_tokens_to_reorder(
             "extends_statement" => {
                 found_extends_declaration = true;
                 if let Some(element) = reorderable_element {
+                    let combined_comments =
+                        merge_pending_texts(&pending_annotations, &pending_comments);
                     elements.push(GDScriptTokensWithComments {
                         token_kind: element,
-                        attached_comments: pending_comments.clone(),
+                        attached_comments: combined_comments,
                         trailing_comments: Vec::new(),
                         original_text: text,
                         start_byte: node.start_byte(),
@@ -417,8 +468,8 @@ fn extract_tokens_to_reorder(
                         class_docstring_attached = true;
                     }
 
-                    let mut combined_comments = pending_annotations.clone();
-                    combined_comments.extend(pending_comments.clone());
+                    let combined_comments =
+                        merge_pending_texts(&pending_annotations, &pending_comments);
 
                     // We store trailing #endregion comments to attach them to
                     // the most recent function that has a #region comment at
@@ -454,9 +505,11 @@ fn extract_tokens_to_reorder(
                     // We create unknown element for unhandled nodes to preserve
                     // them. Given how the module works, if we don't do that the
                     // nodes will be dropped.
+                    let combined_comments =
+                        merge_pending_texts(&pending_annotations, &pending_comments);
                     elements.push(GDScriptTokensWithComments {
                         token_kind: GDScriptTokenKind::Unknown(text.clone()),
-                        attached_comments: pending_comments.clone(),
+                        attached_comments: combined_comments,
                         trailing_comments: Vec::new(),
                         original_text: text,
                         start_byte: node.start_byte(),
@@ -466,6 +519,58 @@ fn extract_tokens_to_reorder(
                     pending_annotations.clear();
                 }
             }
+        }
+    }
+
+    // `region_end_comment` stores a trailing `#endregion` that should follow
+    // the most recent function with a matching `#region`. If we found no
+    // matching function, we fall back to attaching it to the last element (or
+    // create a standalone element at the end). This avoids the formatter
+    // deleting or losing the directive when we reorder code blocks.
+    if let Some(region_end) = region_end_comment.take() {
+        if let Some(target_element) = elements.iter_mut().rev().find(|element| {
+            matches!(element.token_kind, GDScriptTokenKind::Method(_, _, _))
+                && element
+                    .attached_comments
+                    .iter()
+                    .any(|c| c.trim().starts_with("#region"))
+        }) {
+            target_element.trailing_comments.push(region_end);
+        } else if let Some(last_element) = elements.last_mut() {
+            last_element.trailing_comments.push(region_end);
+        } else {
+            elements.push(GDScriptTokensWithComments {
+                token_kind: GDScriptTokenKind::Unknown(region_end.clone()),
+                attached_comments: Vec::new(),
+                trailing_comments: Vec::new(),
+                original_text: region_end,
+                start_byte: 0,
+                end_byte: 0,
+            });
+        }
+    }
+
+    // Comments and annotations that we have not yet attached go at the end of
+    // the file. They are either trailing comments, stray `#region` markers, or
+    // unknown statements that appear after the last declaration (like new
+    // syntax in a dev version of Godot). We merge them in source order with
+    // `merge_pending_texts` and append them either to the last reordered
+    // element or to a dedicated "Unknown" token so the text remains in the
+    // output.
+    if !pending_annotations.is_empty() || !pending_comments.is_empty() {
+        let trailing_texts = merge_pending_texts(&pending_annotations, &pending_comments);
+        if let Some(last_element) = elements.last_mut() {
+            last_element.trailing_comments.extend(trailing_texts);
+        } else if !trailing_texts.is_empty() {
+            let combined_text = trailing_texts.join("\n");
+            elements.push(GDScriptTokensWithComments {
+                token_kind: GDScriptTokenKind::Unknown(combined_text.clone()),
+                attached_comments: Vec::new(),
+                trailing_comments: Vec::new(),
+                original_text: combined_text,
+                start_byte: 0,
+                end_byte: 0,
+            });
         }
     }
 
