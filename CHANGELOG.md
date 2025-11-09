@@ -2,6 +2,22 @@
 
 This file documents the changes made to the formatter with each release. This project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## Release 0.16.0 (2025-11-09)
+
+### Added
+
+- Safe mode support for reorder code to verify syntax tree integrity after reordering
+
+### Changed
+
+- Godot addon: safe mode is now enabled by default
+- Improved handling of lists with leading commas and inline comments
+
+### Fixed
+
+- Reorder code: fixed inline comments wrapping to separate lines
+- Added test case for comma after lambda function argument
+
 ## Release 0.15.0 (2025-11-09)
 
 ### Added
