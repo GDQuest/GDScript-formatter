@@ -234,7 +234,7 @@ fn extract_tokens_to_reorder(
     content: &str,
 ) -> Result<Vec<GDScriptTokensWithComments>, Box<dyn std::error::Error>> {
     let root = tree.root_node();
-    let mut elements = Vec::new();
+    let mut elements: Vec<GDScriptTokensWithComments> = Vec::new();
 
     // This query covers all top-level elements (direct children of source)
     // We need to capture everything so nothing gets lost
@@ -353,7 +353,33 @@ fn extract_tokens_to_reorder(
                 // This may look inefficient but in practice it should not have much impact
                 if class_docstring_comments_rows.contains(&node.start_position().row) {
                     continue;
-                } else {
+                }
+
+                // Here we look for inline comments after declarations, and if
+                // so, we attach them as inline to the declaration.  For
+                // example:
+                // 
+                // var test = 1 # inline comment
+                //
+                // Without this code, the comment would wrap to the next line.
+                let mut handled_inline = false;
+                if let Some(last_element) = elements.last_mut() {
+                    let last_end = last_element.end_byte;
+                    let comment_start = node.start_byte();
+                    if last_end <= comment_start && comment_start <= content.len() {
+                        if let Some(spacing) = content.get(last_end..comment_start) {
+                            let has_newline = spacing.contains('\n') || spacing.contains('\r');
+                            if !has_newline {
+                                last_element.original_text.push_str(spacing);
+                                last_element.original_text.push_str(&text);
+                                last_element.end_byte = node.end_byte();
+                                handled_inline = true;
+                            }
+                        }
+                    }
+                }
+
+                if !handled_inline {
                     pending_comments.push(PendingAttachment {
                         start_byte: node.start_byte(),
                         text: text.clone(),
