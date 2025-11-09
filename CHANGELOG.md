@@ -2,6 +2,29 @@
 
 This file documents the changes made to the formatter with each release. This project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## Release 0.15.0 (2025-11-09)
+
+### Added
+
+- Icon for the program and the Godot addon
+
+### Changed
+
+- Updated `topiary-core` to v0.7.0
+- Updated GDScript parser; added test for comments inside dictionaries
+
+### Fixed
+
+- Safe mode: fixed panic when annotation doesn't have a name
+- Fixed reorder mode dropping class-level `@abstract` annotation
+- Fixed reorder mode dropping trailing comments and reordering comments in exported declarations
+- Godot addon: fixed shortcut not working
+- Added test case for indented comment at the end of a function body
+
+### Meta
+
+- Applied clippy fixes
+
 ## Release 0.14.0 (2025-10-10)
 
 ### Added

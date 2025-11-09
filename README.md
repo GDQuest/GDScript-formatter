@@ -8,6 +8,14 @@ This project aims to conform to the official [GDScript style guide](https://docs
 
 **Use a version control system:** Please consider using a version control system like Git to track changes to your code before running the formatter. Even though we already use the formatter ourselves at work, GDScript is a complex language and a formatter needs testing on all possible syntax combinations in the language to ensure the output is rock solid. There can always be edge cases or less common syntax that may not be handled correctly yet.
 
+## Learn how to use
+
+For detailed documentation and guides, check out these pages:
+
+- **[GDScript Formatter docs](https://www.gdquest.com/library/gdscript_formatter/):** Learn how to install the formatter, use it from the command line, and integrate it with your code editor.
+
+- **[Godot 4 addon manual](https://www.gdquest.com/library/gdscript_formatter_godot_addon/):** If you want to use the formatter directly from the Godot editor, this page will tell you how to install, configure, and use the official Godot 4 addon (it works with the latest version of Godot 4).
+
 ## Features
 
 - Format GDScript files nearly instantly (less than 100ms for a 1000-line file on a mid-range laptop, less than 30ms for most files)
