@@ -259,6 +259,26 @@ impl Formatter {
     /// with lambdas in data structures like arrays or function arguments.
     #[inline(always)]
     fn fix_dangling_commas(&mut self) -> &mut Self {
+        // This is for cases where a team uses commas at the start of lines to
+        // separate arguments or elements in arrays and use inline comments to
+        // describe the elements
+        // This is done in the Godot Nakama repository for example.
+        let comment_re = RegexBuilder::new(r"(?m)(?P<before>[^\n\r]*?)(?P<comment>#[^\n\r]*)\n\s+,")
+            .build()
+            .expect("dangling comma with comment regex should compile");
+
+        self.regex_replace_all_outside_strings(comment_re, |caps: &regex::Captures| {
+            let before = caps.name("before").unwrap().as_str();
+            let comment = caps.name("comment").unwrap().as_str();
+
+            let before_trimmed = before.trim_end();
+            if before_trimmed.trim().is_empty() || before_trimmed.ends_with(',') {
+                return caps.get(0).unwrap().as_str().to_string();
+            }
+
+            format!("{}, {}", before_trimmed, comment.trim_start())
+        });
+
         // This targets cases where a comma is on its own line with only
         // whitespace before it instead of being at the end of the previous
         // line
@@ -268,7 +288,13 @@ impl Formatter {
             .build()
             .expect("dangling comma regex should compile");
 
-        self.regex_replace_all_outside_strings(re, "$1,");
+        self.regex_replace_all_outside_strings(re, |caps: &regex::Captures| {
+            let first_part = caps.get(1).unwrap().as_str();
+            let mut replacement = String::with_capacity(first_part.len() + 1);
+            replacement.push_str(first_part);
+            replacement.push(',');
+            replacement
+        });
         self
     }
 
