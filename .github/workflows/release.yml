@@ -16,22 +16,22 @@ jobs:
         include:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
-            name: gdscript-formatter-linux-x86_64
+            name: gdscript-formatter-${{ github.ref_name }}-linux-x86_64
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
-            name: gdscript-formatter-linux-aarch64
+            name: gdscript-formatter-${{ github.ref_name }}-linux-aarch64
           - target: x86_64-apple-darwin
             os: macos-latest
-            name: gdscript-formatter-macos-x86_64
+            name: gdscript-formatter-${{ github.ref_name }}-macos-x86_64
           - target: aarch64-apple-darwin
             os: macos-latest
-            name: gdscript-formatter-macos-aarch64
+            name: gdscript-formatter-${{ github.ref_name }}-macos-aarch64
           - target: x86_64-pc-windows-msvc
             os: windows-latest
-            name: gdscript-formatter-windows-x86_64.exe
+            name: gdscript-formatter-${{ github.ref_name }}-windows-x86_64.exe
           - target: aarch64-pc-windows-msvc
             os: windows-latest
-            name: gdscript-formatter-windows-aarch64.exe
+            name: gdscript-formatter-${{ github.ref_name }}-windows-aarch64.exe
 
     runs-on: ${{ matrix.os }}
     permissions:
@@ -97,14 +97,14 @@ jobs:
 
       - name: Create godot-addon.zip
         run: |
-          zip -r godot-addon.zip addons/
+          zip -r godot-addon-${{ github.ref_name }}.zip addons/
         shell: bash
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: godot-addon
-          path: godot-addon.zip
+          name: godot-addon-${{ github.ref_name }}
+          path: godot-addon-${{ github.ref_name }}.zip
           if-no-files-found: error
 
   publish-release:
