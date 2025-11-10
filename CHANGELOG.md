@@ -2,6 +2,16 @@
 
 This file documents the changes made to the formatter with each release. This project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## Release 0.17.0 (2025-11-10)
+
+### Added
+
+- Version number now included in release artifacts
+
+### Changed
+
+- CI: updated the release workflow to ensure the build completes before creating a release
+
 ## Release 0.16.1 (2025-11-10)
 
 ### Fixed
