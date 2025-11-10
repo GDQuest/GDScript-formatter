@@ -2,6 +2,16 @@
 
 This file documents the changes made to the formatter with each release. This project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## Release 0.16.1 (2025-11-10)
+
+### Fixed
+
+- Godot addon: Use standard output mode to avoid overwriting the file on disk
+
+### Changed
+
+- Moved make_release and benchmark scripts to src/bin folder to avoid build errors
+
 ## Release 0.16.0 (2025-11-09)
 
 ### Added
