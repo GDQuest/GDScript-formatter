@@ -69,7 +69,8 @@ func _process_response_latest_release(body: PackedByteArray) -> void:
 	print("GDScript Formatter release information loaded successfully")
 
 	var assets = json["assets"]
-	var download_url := _find_matching_asset(assets)
+	var tag = json["tag_name"]
+	var download_url := _find_matching_asset(assets, tag)
 
 	if download_url.is_empty():
 		var error_message := "No matching binary found for current platform"
@@ -148,15 +149,18 @@ func _get_platform_info() -> Dictionary:
 	return platform_info
 
 
-func _find_matching_asset(assets: Array) -> String:
+func _find_matching_asset(assets: Array, tag: String) -> String:
+	print(tag)
 	var platform_info := _get_platform_info()
 	if platform_info.is_empty():
 		return ""
 
-	var expected_pattern := "gdscript-formatter-%s-%s" % [platform_info["os"], platform_info["architecture"]]
+	var expected_pattern := "gdscript-formatter-%s-%s-%s" % [tag, platform_info["os"], platform_info["architecture"]]
 	if platform_info["os"] == "windows":
 		expected_pattern += ".exe"
 	expected_pattern += ".zip"
+
+	print(expected_pattern)
 
 	for asset in assets:
 		var asset_name: String = asset["name"]
