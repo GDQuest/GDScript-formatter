@@ -150,7 +150,6 @@ func _get_platform_info() -> Dictionary:
 
 
 func _find_matching_asset(assets: Array, tag: String) -> String:
-	print(tag)
 	var platform_info := _get_platform_info()
 	if platform_info.is_empty():
 		return ""
@@ -159,8 +158,6 @@ func _find_matching_asset(assets: Array, tag: String) -> String:
 	if platform_info["os"] == "windows":
 		expected_pattern += ".exe"
 	expected_pattern += ".zip"
-
-	print(expected_pattern)
 
 	for asset in assets:
 		var asset_name: String = asset["name"]
