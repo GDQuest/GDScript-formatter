@@ -34,10 +34,6 @@ path = "src/main.rs"
 name = "benchmark"
 path = "src/scripts/benchmark.rs"
 
-[[bin]]
-name = "make_release"
-path = "src/scripts/make_release.rs"
-
 [profile.release]
 strip = true
 lto = true
