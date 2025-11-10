@@ -8,8 +8,8 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build-and-release:
-    name: Build and release
+  build-binaries:
+    name: Build binaries
     strategy:
       fail-fast: false
       matrix:
@@ -79,22 +79,12 @@ jobs:
           fi
         shell: bash
 
-      - name: Create/Update Release
-        uses: softprops/action-gh-release@v2
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: GDScript formatter ${{ github.ref_name }}
-          body: |
-            A fast code formatter for GDScript in Godot 4.
-
-            You can learn how to install, use, configure, and integrate the formatter into your workflow on this page:
-
-            https://www.gdquest.com/library/gdscript_formatter/
-          files: |
-            *.zip
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: ${{ matrix.name }}
+          path: ${{ matrix.name }}.zip
+          if-no-files-found: error
 
   package-godot-addon:
     name: Package the Godot add-on
@@ -110,6 +100,27 @@ jobs:
           zip -r godot-addon.zip addons/
         shell: bash
 
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-addon
+          path: godot-addon.zip
+          if-no-files-found: error
+
+  publish-release:
+    name: Publish release
+    needs:
+      - build-binaries
+      - package-godot-addon
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    if: ${{ success() }}
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
       - name: Create/Update Release
         uses: softprops/action-gh-release@v2
         with:
@@ -121,7 +132,7 @@ jobs:
 
             https://www.gdquest.com/library/gdscript_formatter/
           files: |
-            godot-addon.zip
+            artifacts/**/*.zip
           draft: false
           prerelease: false
         env:
