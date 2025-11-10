@@ -436,8 +436,13 @@ func has_editor_setting(setting_name: String) -> bool:
 ## and returns the formatted code as a string. Optionally reorders the code.
 func format_code(script: GDScript, force_reorder := false) -> String:
 	var script_path := script.resource_path
+	if script_path.is_empty():
+		push_error("GDScript Formatter Error: Can't format an unsaved script.")
+		return ""
+
 	var output: Array = []
-	var formatter_arguments: Array = [ProjectSettings.globalize_path(script_path)]
+	var error_output: Array = []
+	var formatter_arguments := PackedStringArray(["--stdout"])
 
 	if get_editor_setting(SETTING_USE_SPACES):
 		formatter_arguments.push_back("--use-spaces")
@@ -455,18 +460,26 @@ func format_code(script: GDScript, force_reorder := false) -> String:
 	if not force_reorder and get_editor_setting(SETTING_SAFE_MODE):
 		formatter_arguments.push_back("--safe")
 
-	var exit_code := OS.execute(get_editor_setting(SETTING_FORMATTER_PATH), formatter_arguments, output)
+	formatter_arguments.push_back(ProjectSettings.globalize_path(script_path))
+
+	var exit_code := OS.execute(
+		get_editor_setting(SETTING_FORMATTER_PATH),
+		formatter_arguments,
+		output,
+	)
 	if exit_code == OK:
-		var formatted_file := FileAccess.open(script_path, FileAccess.READ)
-		if not is_instance_valid(formatted_file):
-			push_error("GDScript Formatter Error: Can't read formatted file.")
+		if output.is_empty():
+			push_error("Format GDScript returned no output for: " + script_path)
 			return ""
-		var formatted_code := formatted_file.get_as_text()
-		formatted_file.close()
-		return formatted_code
+		return output.front()
 	else:
 		push_error("Format GDScript failed: " + script_path)
-		push_error("\tExit code: " + str(exit_code) + " Output: " + (output.front().strip_edges() if output.size() > 0 else "No output"))
+		push_error(
+			"\tExit code: " + str(exit_code) + " Stdout: " +
+			(output.front().strip_edges() if output.size() > 0 else "No output"),
+		)
+		if error_output.size() > 0:
+			push_error("\tStderr: " + error_output.front().strip_edges())
 		push_error('\tIf your script does not have any syntax errors, this might be a formatter bug.')
 		return ""
 
