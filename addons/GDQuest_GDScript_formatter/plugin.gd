@@ -449,15 +449,11 @@ func format_code(script: GDScript, force_reorder := false) -> String:
 		formatter_arguments.push_back("--indent-size=%d" % get_editor_setting(SETTING_INDENT_SIZE))
 
 	var should_reorder := force_reorder or get_editor_setting(SETTING_REORDER_CODE) as bool
-	# TODO: remove this safety check once we have safe mode support for reorder_code
-	if should_reorder and get_editor_setting(SETTING_SAFE_MODE):
-		push_error("GDScript Formatter: Settings 'reorder_code' and 'safe_mode' settings are incompatible and cannot be used together.")
-		return ""
 
 	if should_reorder:
 		formatter_arguments.push_back("--reorder-code")
 
-	if not force_reorder and get_editor_setting(SETTING_SAFE_MODE):
+	if get_editor_setting(SETTING_SAFE_MODE):
 		formatter_arguments.push_back("--safe")
 
 	formatter_arguments.push_back(ProjectSettings.globalize_path(script_path))
