@@ -358,7 +358,7 @@ fn extract_tokens_to_reorder(
                 // Here we look for inline comments after declarations, and if
                 // so, we attach them as inline to the declaration.  For
                 // example:
-                // 
+                //
                 // var test = 1 # inline comment
                 //
                 // Without this code, the comment would wrap to the next line.

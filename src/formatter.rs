@@ -162,6 +162,7 @@ impl Formatter {
         self.add_newlines_after_extends_statement()
             .fix_dangling_semicolons()
             .fix_dangling_commas()
+            .fix_nested_parenthesized_lambda_indentation()
             .fix_trailing_spaces()
             .remove_trailing_commas_from_preload()
             .postprocess_tree_sitter()
@@ -186,12 +187,9 @@ impl Formatter {
 
     #[inline(always)]
     fn ensure_safe_reorder(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        let original_source = self
-            .original_source
-            .as_deref()
-            .ok_or_else(|| {
-                "Safe mode requires the original source to verify reordered code".to_string()
-            })?;
+        let original_source = self.original_source.as_deref().ok_or_else(|| {
+            "Safe mode requires the original source to verify reordered code".to_string()
+        })?;
 
         self.tree = self.parser.parse(&self.content, None).unwrap();
         ensure_top_level_tokens_match(original_source, &self.tree, &self.content)?;
@@ -263,9 +261,10 @@ impl Formatter {
         // separate arguments or elements in arrays and use inline comments to
         // describe the elements
         // This is done in the Godot Nakama repository for example.
-        let comment_re = RegexBuilder::new(r"(?m)(?P<before>[^\n\r]*?)(?P<comment>#[^\n\r]*)\n\s+,")
-            .build()
-            .expect("dangling comma with comment regex should compile");
+        let comment_re =
+            RegexBuilder::new(r"(?m)(?P<before>[^\n\r]*?)(?P<comment>#[^\n\r]*)\n\s+,")
+                .build()
+                .expect("dangling comma with comment regex should compile");
 
         self.regex_replace_all_outside_strings(comment_re, |caps: &regex::Captures| {
             let before = caps.name("before").unwrap().as_str();
@@ -295,6 +294,162 @@ impl Formatter {
             replacement.push(',');
             replacement
         });
+        self
+    }
+
+    /// This function removes duplicate indentation caused by lambdas wrapped in nested
+    /// parenthesized expressions (e.g. a multiline lambda inside a ternary expression).
+    /// Topiary applies an indent for each parenthesis level and another indent for the
+    /// lambda body. That causes the lambda to have too much indentation and
+    /// causes a GDScript parse error.
+    #[inline(always)]
+    fn fix_nested_parenthesized_lambda_indentation(&mut self) -> &mut Self {
+        let mut captures = Vec::new();
+        let mut stack = vec![self.tree.root_node()];
+
+        while let Some(node) = stack.pop() {
+            if node.kind() == "lambda" {
+                if let Some(body) = node.child_by_field_name("body") {
+                    if body.end_position().row > node.start_position().row {
+                        captures.push((node, body));
+                    }
+                }
+            }
+
+            let mut cursor = node.walk();
+            for child in node.children(&mut cursor) {
+                stack.push(child);
+            }
+        }
+
+        if captures.is_empty() {
+            return self;
+        }
+
+        captures.sort_by_key(|(lambda, _)| lambda.start_position().row);
+
+        let mut lines: Vec<String> = self
+            .content
+            .split('\n')
+            .map(|line| line.to_string())
+            .collect();
+        let indent_size = self.config.indent_size.max(1);
+        // We might need to pull the closing parenthesis up to the lambda's last line
+        // to fix the indentation.
+        // GDScript doesn't parse multi-line lambdas when there is a newline between the body
+        // and the closing parenthesis (parenthesized expression, ternary, ...).
+        let mut closing_merges: Vec<(usize, usize)> = Vec::new();
+
+        for (lambda, body) in captures {
+            let header_row = lambda.start_position().row as usize;
+            let mut first_row = body.start_position().row as usize;
+            let last_row = body.end_position().row as usize;
+
+            if first_row == header_row {
+                first_row = first_row.saturating_add(1);
+            }
+
+            if header_row >= lines.len()
+                || first_row >= lines.len()
+                || last_row >= lines.len()
+                || first_row > last_row
+            {
+                continue;
+            }
+
+            // Skip empty lines at the top of the lambda body. They shouldn't count when
+            // we inspect indentation or decide whether the lambda is multi-line.
+            while first_row <= last_row
+                && first_row < lines.len()
+                && lines[first_row].trim().is_empty()
+            {
+                first_row += 1;
+            }
+            if first_row > last_row || first_row >= lines.len() {
+                continue;
+            }
+
+            let header_indent = calculate_indent_info(&lines[header_row], indent_size);
+            let first_indent = calculate_indent_info(&lines[first_row], indent_size);
+            let target_spaces = header_indent.spaces + indent_size;
+            if first_indent.spaces <= target_spaces {
+                continue;
+            }
+            let delta_spaces = first_indent.spaces - target_spaces;
+
+            let suffix = lines[first_row][first_indent.column..].to_string();
+            lines[first_row] = format!(
+                "{}{suffix}",
+                render_indent(
+                    &IndentInfo {
+                        spaces: target_spaces,
+                        column: first_indent.column,
+                    },
+                    indent_size,
+                    self.config.use_spaces
+                )
+            );
+
+            for row in (first_row + 1)..=last_row {
+                if row >= lines.len() || lines[row].trim().is_empty() {
+                    continue;
+                }
+                let current_indent = calculate_indent_info(&lines[row], indent_size);
+                if current_indent.spaces <= delta_spaces {
+                    continue;
+                }
+                let new_spaces = current_indent.spaces - delta_spaces;
+                let suffix = lines[row][current_indent.column..].to_string();
+                lines[row] = format!(
+                    "{}{}",
+                    render_indent(
+                        &IndentInfo {
+                            spaces: new_spaces,
+                            column: current_indent.column,
+                        },
+                        indent_size,
+                        self.config.use_spaces
+                    ),
+                    suffix
+                );
+            }
+            if let Some(parent) = lambda.parent() {
+                // When a lambda sits inside an expression wrapped with
+                // parentheses, the GDScript parser needs the closing ")" to
+                // immediately follow the lambda body (no blank line, no line
+                // return at the end of the lambda body).
+                // We look for the next non-empty line and, if it's just a
+                // closing parenthesis, we merge it back onto the lambda body.
+                if parent.kind() == "parenthesized_expression"
+                    && !lines[last_row].trim_end().ends_with(')')
+                {
+                    let mut closing_row = last_row + 1;
+                    while closing_row < lines.len() && lines[closing_row].trim().is_empty() {
+                        closing_row += 1;
+                    }
+                    if closing_row < lines.len() && lines[closing_row].trim() == ")" {
+                        closing_merges.push((closing_row, last_row));
+                    }
+                }
+            }
+        }
+
+        closing_merges.sort_by(|a, b| b.0.cmp(&a.0));
+        for (closing_row, body_row) in closing_merges {
+            if closing_row >= lines.len() || body_row >= lines.len() {
+                continue;
+            }
+            if lines[closing_row].trim() != ")" {
+                continue;
+            }
+            let trimmed_body = lines[body_row].trim_end().to_string();
+            lines[body_row] = format!("{trimmed_body})");
+            lines.remove(closing_row);
+        }
+
+        self.content = lines.join("\n");
+        self.tree = self.parser.parse(&self.content, Some(&self.tree)).unwrap();
+
         self
     }
 
@@ -939,6 +1094,53 @@ struct GdTreeNode {
     grammar_name: &'static str,
     text: Option<String>,
     children: Vec<usize>,
+}
+
+/// Represents a line's indentation using two metrics:
+/// - `spaces`: the total indentation width measured in space units;
+/// - `column`: the byte index of the first non-whitespace character in the line.
+struct IndentInfo {
+    spaces: usize,
+    column: usize,
+}
+
+/// Calculates indentation information for `line`, interpreting tabs using
+/// `indent_size`.
+fn calculate_indent_info(line: &str, indent_size: usize) -> IndentInfo {
+    let mut spaces = 0usize;
+
+    for (idx, ch) in line.char_indices() {
+        match ch {
+            '\t' => spaces += indent_size,
+            ' ' => spaces += 1,
+            _ => {
+                return IndentInfo {
+                    spaces,
+                    column: idx,
+                };
+            }
+        }
+    }
+
+    IndentInfo {
+        spaces,
+        column: line.len(),
+    }
+}
+
+/// Renders an indentation string with width `indent.spaces` according to the
+/// formatter's configuration.
+fn render_indent(indent: &IndentInfo, indent_size: usize, use_spaces: bool) -> String {
+    if use_spaces {
+        return " ".repeat(indent.spaces);
+    }
+
+    let tabs = indent.spaces / indent_size;
+    let remainder = indent.spaces % indent_size;
+    let mut result = String::with_capacity(tabs + remainder);
+    result.push_str(&"\t".repeat(tabs));
+    result.push_str(&" ".repeat(remainder));
+    result
 }
 
 /// Calculates end position of the `slice` counting from `start`
