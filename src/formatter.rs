@@ -931,22 +931,18 @@ impl GdTree {
                 continue;
             }
 
-            // If this class extends from anything, extends_statement will be the second child,
-            // because the first child will be the name of the class
-            if child.children.len() < 2 {
+            // Checking if this node has extends_statement node as child
+            let Some(extends_statement_child_index) =
+                self.first_named_child(child, "extends_statement")
+            else {
                 continue;
-            }
-
-            let second_child_id = child.children[1];
-            let second_child = &self.nodes[second_child_id];
-
-            if second_child.grammar_name != "extends_statement" {
-                continue;
-            }
+            };
 
             // When we found it, we move it to be a direct sibling of class_name_statement node
             let class_name_node = &mut self.nodes[child_id];
-            let extends_node_id = class_name_node.children.remove(1);
+            let extends_node_id = class_name_node
+                .children
+                .remove(extends_statement_child_index);
 
             let root = &mut self.nodes[0];
             root.children.insert(child_index + 1, extends_node_id);
@@ -1043,6 +1039,21 @@ impl GdTree {
                 }
             }
         }
+    }
+
+    /// Returns index of the first child with the given grammar name.
+    fn first_named_child(&self, node: &GdTreeNode, grammar_name: &str) -> Option<usize> {
+        node.children
+            .iter()
+            .enumerate()
+            .find_map(|(index, &child_id)| {
+                let child = &self.nodes[child_id];
+                if child.grammar_name == grammar_name {
+                    Some(index)
+                } else {
+                    None
+                }
+            })
     }
 }
 
