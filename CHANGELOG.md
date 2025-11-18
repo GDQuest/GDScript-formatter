@@ -2,6 +2,18 @@
 
 This file documents the changes made to the formatter with each release. This project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## Release 0.18.0 (2025-11-18)
+
+### Added
+
+- Godot addon: allow using both reorder code and safe mode together
+
+### Fixed
+
+- Safe mode: search for `extends_statement` node instead of accessing it by index (#174)
+- Multiline lambdas in ternaries having too much indentation and getting a parse error
+- Remove version number from Godot addon zip in releases (it was breaking download links)
+
 ## Release 0.17.0 (2025-11-10)
 
 ### Added
