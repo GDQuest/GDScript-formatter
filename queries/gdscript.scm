@@ -135,6 +135,8 @@
 (if_statement ":" @prepend_antispace)
 (elif_clause ":" @prepend_antispace)
 (else_clause ":" @prepend_antispace)
+(elif_clause) @prepend_hardline
+(else_clause) @prepend_hardline
 (for_statement "in" ":" @prepend_antispace)
 (while_statement ":" @prepend_antispace)
 
