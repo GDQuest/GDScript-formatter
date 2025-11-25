@@ -2,6 +2,13 @@
 
 This file documents the changes made to the formatter with each release. This project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## Release 0.18.1 (2025-11-25)
+
+### Fixed
+
+- `if/elif/else` statements on single lines wrapping incorrectly (#175)
+- Godot addon: support for non-English characters
+
 ## Release 0.18.0 (2025-11-18)
 
 ### Added
