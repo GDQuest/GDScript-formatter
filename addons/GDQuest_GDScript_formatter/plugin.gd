@@ -440,10 +440,37 @@ func format_code(script: GDScript, force_reorder := false) -> String:
 		push_error("GDScript Formatter Error: Can't format an unsaved script.")
 		return ""
 
-	var output: Array = []
-	var error_output: Array = []
-	var formatter_arguments := PackedStringArray(["--stdout"])
+	# This is a bit of a hack to avoid two issues:
+	#
+	# 1. Running GDScript formatter on stdin/stdout through Godot with
+	# OS.execute() has encoding issues with UTF-8 characters and we don't have
+	# control over the output encoding (it might be assuming ASCII characters)
+	#
+	# 2. If we modify a file in place using the external formatter from Godot,
+	# it will bring up a pop-up that warns users that the file has been changed
+	# outside Godot.
+	#
+	# To work around that, I save a copy of the script as a temporary file,
+	# format the file, and read it specifically as a UTF-8 string.
+	var source_file := FileAccess.open(ProjectSettings.globalize_path(script_path), FileAccess.READ)
+	if not source_file:
+		push_error("GDScript Formatter Error: Cannot read source file: " + script_path)
+		return ""
 
+	# FileAccess.get_as_text() reads the file as UTF-8. We use it here and after
+	# formatting the temporary file.
+	var source_content := source_file.get_as_text()
+	source_file.close()
+
+	var path_temporary_file := OS.get_temp_dir().path_join("gdscript_formatter_%d.gd" % Time.get_ticks_msec())
+	var temporary_file := FileAccess.open(path_temporary_file, FileAccess.WRITE)
+	if temporary_file == null:
+		push_error("GDScript Formatter Error: Cannot create temporary file: " + path_temporary_file)
+		return ""
+	temporary_file.store_string(source_content)
+	temporary_file.close()
+
+	var formatter_arguments := PackedStringArray()
 	if get_editor_setting(SETTING_USE_SPACES):
 		formatter_arguments.push_back("--use-spaces")
 		formatter_arguments.push_back("--indent-size=%d" % get_editor_setting(SETTING_INDENT_SIZE))
@@ -456,28 +483,35 @@ func format_code(script: GDScript, force_reorder := false) -> String:
 	if get_editor_setting(SETTING_SAFE_MODE):
 		formatter_arguments.push_back("--safe")
 
-	formatter_arguments.push_back(ProjectSettings.globalize_path(script_path))
+	formatter_arguments.push_back(path_temporary_file)
 
+	var output: Array = []
 	var exit_code := OS.execute(
 		get_editor_setting(SETTING_FORMATTER_PATH),
 		formatter_arguments,
 		output,
 	)
+
+	var formatted_content := ""
 	if exit_code == OK:
-		if output.is_empty():
-			push_error("Format GDScript returned no output for: " + script_path)
-			return ""
-		return output.front()
+		var result_file := FileAccess.open(path_temporary_file, FileAccess.READ)
+		if result_file:
+			formatted_content = result_file.get_as_text()
+			result_file.close()
+		else:
+			push_error("Format GDScript: Cannot read formatted output from temp file")
 	else:
 		push_error("Format GDScript failed: " + script_path)
 		push_error(
-			"\tExit code: " + str(exit_code) + " Stdout: " +
-			(output.front().strip_edges() if output.size() > 0 else "No output"),
+			"\tExit code: " + str(exit_code) + " Output: " +
+			(output[0].strip_edges() if output.size() > 0 else "No output"),
 		)
-		if error_output.size() > 0:
-			push_error("\tStderr: " + error_output.front().strip_edges())
 		push_error('\tIf your script does not have any syntax errors, this might be a formatter bug.')
-		return ""
+
+	if FileAccess.file_exists(path_temporary_file):
+		DirAccess.remove_absolute(path_temporary_file)
+
+	return formatted_content
 
 
 ## Lints a GDScript file using the GDScript Formatter's linter,
