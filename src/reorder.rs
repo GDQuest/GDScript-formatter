@@ -393,7 +393,24 @@ fn extract_tokens_to_reorder(
                 });
             }
             "region_end" => {
-                region_end_comment = Some(text.clone());
+                // Attach #endregion to the most recently seen function so that
+                // when reordering the end stays with the last function in the
+                // region. Because functions change order, that can still change
+                // the region but it prevents issues with the end region jumping
+                // to a different function
+                let mut attached = false;
+                for element in elements.iter_mut().rev() {
+                    if matches!(element.token_kind, GDScriptTokenKind::Method(_, _, _)) {
+                        element.trailing_comments.push(text.clone());
+                        attached = true;
+                        break;
+                    }
+                }
+                if !attached {
+                    // We didn't find a function to attach to, so we save this
+                    // to handle down below
+                    region_end_comment = Some(text.clone());
+                }
             }
             "annotation" => {
                 if let Some(element) = reorderable_element {
@@ -505,26 +522,6 @@ fn extract_tokens_to_reorder(
                     let combined_comments =
                         merge_pending_texts(&pending_annotations, &pending_comments);
 
-                    // We store trailing #endregion comments to attach them to
-                    // the most recent function that has a #region comment at
-                    // the top, to move them along with the function when
-                    // reordering
-                    if let Some(region_end) = region_end_comment.take() {
-                        for i in (0..elements.len()).rev() {
-                            if matches!(elements[i].token_kind, GDScriptTokenKind::Method(_, _, _))
-                            {
-                                let has_region = elements[i]
-                                    .attached_comments
-                                    .iter()
-                                    .any(|c| c.trim().starts_with("#region"));
-                                if has_region {
-                                    elements[i].trailing_comments.push(region_end.clone());
-                                    break;
-                                }
-                            }
-                        }
-                    }
-
                     elements.push(GDScriptTokensWithComments {
                         token_kind: element,
                         attached_comments: combined_comments,
@@ -562,15 +559,7 @@ fn extract_tokens_to_reorder(
     // create a standalone element at the end). This avoids the formatter
     // deleting or losing the directive when we reorder code blocks.
     if let Some(region_end) = region_end_comment.take() {
-        if let Some(target_element) = elements.iter_mut().rev().find(|element| {
-            matches!(element.token_kind, GDScriptTokenKind::Method(_, _, _))
-                && element
-                    .attached_comments
-                    .iter()
-                    .any(|c| c.trim().starts_with("#region"))
-        }) {
-            target_element.trailing_comments.push(region_end);
-        } else if let Some(last_element) = elements.last_mut() {
+        if let Some(last_element) = elements.last_mut() {
             last_element.trailing_comments.push(region_end);
         } else {
             elements.push(GDScriptTokensWithComments {
