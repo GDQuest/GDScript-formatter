@@ -11,6 +11,7 @@ const MENU_ITEMS = {
 	"lint_script": "Lint Current Script",
 	"reorder_code": "Reorder Code",
 	"install_update": "Install or Update Formatter",
+	"manual_install": "Install Formatter Manually",
 	"uninstall": "Uninstall Formatter",
 	"report_issue": "Report Issue",
 	"help": "Help",
@@ -117,6 +118,11 @@ func _populate_menu(show_uninstall: bool = true) -> void:
 	popup_menu.add_item(MENU_ITEMS["install_update"], current_item_index)
 	popup_menu.set_item_metadata(current_item_index, "install_update")
 	popup_menu.set_item_tooltip(current_item_index, "Download the latest version of the GDScript Formatter")
+	current_item_index += 1
+
+	popup_menu.add_item(MENU_ITEMS["manual_install"], current_item_index)
+	popup_menu.set_item_metadata(current_item_index, "manual_install")
+	popup_menu.set_item_tooltip(current_item_index, "Manually install GDScript Formatter")
 	current_item_index += 1
 
 	if show_uninstall:
