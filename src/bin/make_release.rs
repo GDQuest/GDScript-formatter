@@ -63,7 +63,7 @@ fn main() {
     println!("\nNew version will be: {}", new_version);
 
     let tag_exists = Command::new("git")
-        .args(&["rev-parse", &new_version])
+        .args(["rev-parse", &new_version])
         .output()
         .map(|output| output.status.success())
         .unwrap_or(false);
@@ -96,7 +96,7 @@ fn main() {
 
     println!("\nRunning cargo build...");
     let build_status = Command::new("cargo")
-        .args(&["build", "--release"])
+        .args(["build", "--release"])
         .status()
         .expect("Failed to run cargo build");
 
@@ -108,7 +108,7 @@ fn main() {
 
     println!("\nAdding files to git...");
     let add_status = Command::new("git")
-        .args(&["add", "Cargo.toml", "Cargo.lock"])
+        .args(["add", "Cargo.toml", "Cargo.lock"])
         .status()
         .expect("Failed to run git add");
 
@@ -119,7 +119,7 @@ fn main() {
 
     let commit_msg = format!("Update to version {}", new_version);
     let commit_status = Command::new("git")
-        .args(&["commit", "-m", &commit_msg])
+        .args(["commit", "-m", &commit_msg])
         .status()
         .expect("Failed to run git commit");
 
@@ -130,7 +130,7 @@ fn main() {
     println!("✓ Committed changes");
 
     let tag_status = Command::new("git")
-        .args(&["tag", &new_version])
+        .args(["tag", &new_version])
         .status()
         .expect("Failed to run git tag");
 
@@ -142,7 +142,7 @@ fn main() {
 
     println!("\nGenerating changelog...");
     let shortlog_output = Command::new("git")
-        .args(&["shortlog", &format!("{}..HEAD", current_version)])
+        .args(["shortlog", &format!("{}..HEAD", current_version)])
         .output()
         .expect("Failed to run git shortlog");
 

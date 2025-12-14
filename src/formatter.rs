@@ -308,13 +308,11 @@ impl Formatter {
         let mut stack = vec![self.tree.root_node()];
 
         while let Some(node) = stack.pop() {
-            if node.kind() == "lambda" {
-                if let Some(body) = node.child_by_field_name("body") {
-                    if body.end_position().row > node.start_position().row {
+            if node.kind() == "lambda"
+                && let Some(body) = node.child_by_field_name("body")
+                    && body.end_position().row > node.start_position().row {
                         captures.push((node, body));
                     }
-                }
-            }
 
             let mut cursor = node.walk();
             for child in node.children(&mut cursor) {
@@ -341,9 +339,9 @@ impl Formatter {
         let mut closing_merges: Vec<(usize, usize)> = Vec::new();
 
         for (lambda, body) in captures {
-            let header_row = lambda.start_position().row as usize;
-            let mut first_row = body.start_position().row as usize;
-            let last_row = body.end_position().row as usize;
+            let header_row = lambda.start_position().row;
+            let mut first_row = body.start_position().row;
+            let last_row = body.end_position().row;
 
             if first_row == header_row {
                 first_row = first_row.saturating_add(1);
@@ -740,7 +738,7 @@ fn parse_top_level_token_signatures(
         .unwrap();
     let tree = parser
         .parse(source, None)
-        .ok_or_else(|| "Failed to parse GDScript source in safe mode")?;
+        .ok_or("Failed to parse GDScript source in safe mode")?;
 
     top_level_token_signatures_from_tree(&tree, source)
 }

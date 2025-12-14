@@ -366,8 +366,8 @@ fn extract_tokens_to_reorder(
                 if let Some(last_element) = elements.last_mut() {
                     let last_end = last_element.end_byte;
                     let comment_start = node.start_byte();
-                    if last_end <= comment_start && comment_start <= content.len() {
-                        if let Some(spacing) = content.get(last_end..comment_start) {
+                    if last_end <= comment_start && comment_start <= content.len()
+                        && let Some(spacing) = content.get(last_end..comment_start) {
                             let has_newline = spacing.contains('\n') || spacing.contains('\r');
                             if !has_newline {
                                 last_element.original_text.push_str(spacing);
@@ -376,7 +376,6 @@ fn extract_tokens_to_reorder(
                                 handled_inline = true;
                             }
                         }
-                    }
                 }
 
                 if !handled_inline {
