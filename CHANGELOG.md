@@ -2,6 +2,13 @@
 
 This file documents the changes made to the formatter with each release. This project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## Release 0.18.2 (2025-12-05)
+
+### Fixed
+
+- Reorder mode: region end comments being attached to the wrong function
+- Formatting @abstract methods with trailing semicolons
+
 ## Release 0.18.1 (2025-11-25)
 
 ### Fixed
