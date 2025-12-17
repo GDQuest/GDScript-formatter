@@ -2,11 +2,20 @@
 
 A fast code formatter for Godot's GDScript programming language built with [Tree Sitter GDScript](https://github.com/PrestonKnopp/tree-sitter-gdscript) and [Topiary](https://topiary.tweag.io/).
 
-The goal of this project is to provide a simple and really fast GDScript code formatter that's easy to contribute to, and easy to maintain. It also benefits GDScript support in code editors like Zed, Neovim, and Emacs as we use the project to improve the Tree Sitter GDScript parser.
+The goal of this project is to provide a simple GDScript code formatter that runs fast enough and that's both easy to contribute to and to maintain while an official one built into the engine remains unavailable. Making it in user space allowed us to get a production-ready tool quickly and to update it anytime from here on.
 
-This project aims to conform to the official [GDScript style guide](https://docs.godotengine.org/en/stable/tutorials/scripting/gdscript/gdscript_styleguide.html)
+This project aims to follow the official [GDScript style guide](https://docs.godotengine.org/en/stable/tutorials/scripting/gdscript/gdscript_styleguide.html)
 
 **Use a version control system:** Please consider using a version control system like Git to track changes to your code before running the formatter. Even though we already use the formatter ourselves at work, GDScript is a complex language and a formatter needs testing on all possible syntax combinations in the language to ensure the output is rock solid. There can always be edge cases or less common syntax that may not be handled correctly yet.
+
+## Features
+
+- Format GDScript files perceptually instantly (less than 100ms for a 1000-line file on a mid-range laptop, less than 30ms for most files)
+- Lint GDScript files for style and convention issues
+- Reorder GDScript code to match the official GDScript style guide (variables at the top, then functions, etc.)
+- Format code in place (overwrite the file) or print to the standard output
+- Check if a file is formatted (for CI/build systems)
+- Configure spaces vs tabs and indentation size
 
 ## Learn how to use
 
@@ -16,14 +25,6 @@ For detailed documentation and guides, check out these pages:
 
 - **[Godot 4 addon manual](https://www.gdquest.com/library/gdscript_formatter_godot_addon/):** If you want to use the formatter directly from the Godot editor, this page will tell you how to install, configure, and use the official Godot 4 addon (it works with the latest version of Godot 4).
 
-## Features
-
-- Format GDScript files nearly instantly (less than 100ms for a 1000-line file on a mid-range laptop, less than 30ms for most files)
-- Lint GDScript files for style and convention issues
-- Reorder GDScript code to match the official GDScript style guide (variables at the top, then functions, etc.)
-- Format code in place (overwrite the file) or print to the standard output
-- Check if a file is formatted (for CI/build systems)
-- Configure spaces vs tabs and indentation size
 
 ## Installing and running the formatter
 
