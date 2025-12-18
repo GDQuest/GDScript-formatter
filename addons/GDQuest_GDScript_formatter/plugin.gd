@@ -521,6 +521,15 @@ func lint_code(script: GDScript) -> Array:
 	var output: Array = []
 	var formatter_arguments: Array = ["lint", ProjectSettings.globalize_path(script_path)]
 
+	var max_line_length := get_editor_setting(SETTING_LINT_LINE_LENGTH) as int
+	formatter_arguments.append("--max-line-length")
+	formatter_arguments.append(str(max_line_length))
+
+	var ignored_rules := get_editor_setting(SETTING_LINT_IGNORED_RULES) as String
+	if not ignored_rules.is_empty():
+		formatter_arguments.append("--disable")
+		formatter_arguments.append(ignored_rules)
+
 	var exit_code := OS.execute(get_editor_setting(SETTING_FORMATTER_PATH), formatter_arguments, output)
 	if exit_code == OK:
 		return [] # No issues found
