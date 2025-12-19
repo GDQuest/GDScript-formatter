@@ -28,9 +28,100 @@ For detailed documentation and guides, check out these pages:
 
 ## Installing and running the formatter
 
-You can find binaries for Windows, macOS, and Linux in the [releases tab](https://github.com/GDQuest/godot-gdscript-formatter-tree-sitter/releases) of this repository. Download the binary for your platform, unzip it, rename it to the command name you want (e.g. `gdscript-formatter`) and place it somewhere in your system PATH.
+### Automated Installation (Recommended)
+
+The easiest way to install the GDScript formatter is using our automated installation script. This script will:
+- Detect your platform (Linux, macOS, or Windows via Git Bash/WSL)
+- Download the latest release automatically
+- Install any missing dependencies (curl, unzip)
+- Place the binary in your PATH
+
+**On Linux/macOS:**
+
+```bash
+curl -sSL https://raw.githubusercontent.com/GDQuest/godot-gdscript-formatter-tree-sitter/main/install.sh | bash
+```
+
+Or if you prefer to download and inspect the script first:
+
+```bash
+wget https://raw.githubusercontent.com/GDQuest/godot-gdscript-formatter-tree-sitter/main/install.sh
+chmod +x install.sh
+./install.sh
+```
+
+**On Windows (Git Bash/WSL):**
+
+```bash
+curl -sSL https://raw.githubusercontent.com/GDQuest/godot-gdscript-formatter-tree-sitter/main/install.sh | bash
+```
+
+### Manual Installation
+
+You can find binaries for Windows, macOS, and Linux in the [releases tab](https://github.com/GDQuest/godot-gdscript-formatter-tree-sitter/releases) of this repository. Download the binary for your platform, unzip it, and place it somewhere in your system PATH.
+
+**Supported platforms:**
+- Linux (x86_64, aarch64)
+- macOS (x86_64, aarch64/Apple Silicon)
+- Windows (x86_64, aarch64)
 
 Alternatively for Arch Linux, there is the community maintained AUR Package [gdscript-formatter-bin](https://aur.archlinux.org/packages/gdscript-formatter-bin).
+
+### Uninstalling
+
+To remove the GDScript formatter from your system, follow the instructions for your platform:
+
+**On Linux/macOS:**
+
+The install script places the binary in one of these locations (in order of preference):
+1. `/usr/local/bin/gdscript-formatter`
+2. `~/.local/bin/gdscript-formatter`
+3. `~/bin/gdscript-formatter`
+
+To uninstall, remove the binary from the appropriate location:
+
+```bash
+# Check which location has the binary
+which gdscript-formatter
+
+# Remove from /usr/local/bin (may require sudo)
+sudo rm /usr/local/bin/gdscript-formatter
+
+# Or remove from ~/.local/bin
+rm ~/.local/bin/gdscript-formatter
+
+# Or remove from ~/bin
+rm ~/bin/gdscript-formatter
+```
+
+**On Windows (Git Bash/WSL):**
+
+```bash
+# Check location
+which gdscript-formatter
+
+# Remove the binary
+rm "$(which gdscript-formatter)"
+```
+
+**On Windows (Native PowerShell):**
+
+```powershell
+# Find the binary location
+Get-Command gdscript-formatter
+
+# Remove it (adjust path as needed)
+Remove-Item "C:\Path\To\gdscript-formatter.exe"
+```
+
+**For Arch Linux (AUR Package):**
+
+```bash
+# If installed via AUR
+yay -R gdscript-formatter-bin
+# or
+paru -R gdscript-formatter-bin
+```
 
 To format a file, run:
 
