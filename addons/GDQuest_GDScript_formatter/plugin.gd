@@ -22,6 +22,7 @@ const SETTING_FORMATTER_PATH = "formatter_path"
 const SETTING_LINT_ON_SAVE = "lint_on_save"
 const SETTING_LINT_LINE_LENGTH = "lint_line_length"
 const SETTING_LINT_IGNORED_RULES = "lint_ignored_rules"
+const SETTING_IGNORED_DIRECTORIES = "on_save_ignored_directories"
 
 const COMMAND_PALETTE_CATEGORY = "gdquest gdscript formatter/"
 const COMMAND_PALETTE_FORMAT_SCRIPT = "Format GDScript"
@@ -30,7 +31,7 @@ const COMMAND_PALETTE_INSTALL_UPDATE = "Install or Update Formatter"
 const COMMAND_PALETTE_UNINSTALL = "Uninstall Formatter"
 const COMMAND_PALETTE_REPORT_ISSUE = "Report Issue"
 
-const DEFAULT_SETTINGS = {
+var DEFAULT_SETTINGS = {
 	SETTING_FORMAT_ON_SAVE: false,
 	SETTING_USE_SPACES: false,
 	SETTING_INDENT_SIZE: 4,
@@ -40,6 +41,7 @@ const DEFAULT_SETTINGS = {
 	SETTING_LINT_ON_SAVE: false,
 	SETTING_LINT_LINE_LENGTH: 100,
 	SETTING_LINT_IGNORED_RULES: "",
+	SETTING_IGNORED_DIRECTORIES: PackedStringArray(["addons/"]),
 }
 
 ## Which gutter lint icons are shown in.
@@ -202,6 +204,13 @@ func _on_resource_saved(saved_resource: Resource) -> void:
 		return
 
 	var script := saved_resource as GDScript
+	
+	var ignored_directories := get_editor_setting(SETTING_IGNORED_DIRECTORIES)
+	var path = script.resource_path.trim_prefix("res://")
+
+	for dir: String in ignored_directories:
+		if path.begins_with(dir):
+			return
 
 	if not has_command(get_editor_setting(SETTING_FORMATTER_PATH)) or not is_instance_valid(script):
 		return
