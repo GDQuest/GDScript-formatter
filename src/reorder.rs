@@ -9,6 +9,45 @@
 //! a code editor command or task when you're met with a messy file.
 use tree_sitter::{Node, Query, QueryCursor, StreamingIterator, Tree};
 
+/// This lists and assigns priority values to Godot built-in virtual methods.
+/// This allows us to first to detect and classify them, and secondly to order
+/// them correctly. Returns 0 if the method is not a built-in virtual method.
+fn get_builtin_virtual_priority(method_name: &str) -> u8 {
+    match method_name {
+        "_init" => 1,
+        "_enter_tree" => 2,
+        "_ready" => 3,
+        "_process" => 4,
+        "_physics_process" => 5,
+        "_exit_tree" => 6,
+        "_input" => 7,
+        "_unhandled_input" => 8,
+        "_gui_input" => 9,
+        "_draw" => 10,
+        "_notification" => 11,
+        "_get_configuration_warnings" => 12,
+        "_validate_property" => 13,
+        "_get_property_list" => 14,
+        "_property_can_revert" => 15,
+        "_property_get_revert" => 16,
+        "_get" => 17,
+        "_set" => 18,
+        "_to_string" => 19,
+        // Control node virtual methods
+        "_accessibility_get_contextual_info" => 20,
+        "_can_drop_data" => 21,
+        "_drop_data" => 22,
+        "_get_accessibility_container_name" => 23,
+        "_get_drag_data" => 24,
+        "_get_minimum_size" => 25,
+        "_get_tooltip" => 26,
+        "_has_point" => 27,
+        "_make_custom_tooltip" => 28,
+        "_structured_text_parser" => 29,
+        _ => 0,
+    }
+}
+
 /// This method parses the GDScript content, extracts top-level elements,
 /// and reorders them according to the GDScript style guide.
 pub fn reorder_gdscript_elements(
@@ -107,29 +146,6 @@ struct PendingAttachment {
     text: String,
 }
 
-/// This constant lists built-in virtual methods in the order they should appear.
-/// The higher the method is in the list, the higher the priority (i.e. _init comes before _ready).
-const BUILTIN_VIRTUAL_METHODS: &[&str] = &[
-    "_init",
-    "_enter_tree",
-    "_ready",
-    "_process",
-    "_physics_process",
-    "_exit_tree",
-    "_input",
-    "_unhandled_input",
-    "_gui_input",
-    "_draw",
-    "_notification",
-    "_get_configuration_warnings",
-    "_validate_property",
-    "_get_property_list",
-    "_property_can_revert",
-    "_property_get_revert",
-    "_get",
-    "_set",
-    "_to_string",
-];
 
 impl GDScriptTokenKind {
     /// Returns the ordering priority for this kind of declaration. The lower the
@@ -660,10 +676,13 @@ fn classify_element(
                 MethodType::StaticInit
             } else if is_static {
                 MethodType::StaticFunction
-            } else if let Some(priority) = get_builtin_virtual_priority(&name) {
-                MethodType::BuiltinVirtual(priority)
             } else {
-                MethodType::Custom
+                let priority = get_builtin_virtual_priority(&name);
+                if priority != 0 {
+                    MethodType::BuiltinVirtual(priority)
+                } else {
+                    MethodType::Custom
+                }
             };
 
             Ok(Some(GDScriptTokenKind::Method(
@@ -814,13 +833,6 @@ fn is_static_method(node: Node, content: &str) -> bool {
     text.contains("static func")
 }
 
-fn get_builtin_virtual_priority(method_name: &str) -> Option<u8> {
-    BUILTIN_VIRTUAL_METHODS
-        .iter()
-        .enumerate()
-        // Position in the list is the priority
-        .find_map(|(index, name)| (*name == method_name).then_some((index + 1) as u8))
-}
 
 /// Sorts declarations according to the GDScript style guide and returns the ordered list.
 fn sort_gdscript_tokens(
