@@ -234,7 +234,12 @@ func _on_resource_saved(saved_resource: Resource) -> void:
 
 		script.source_code = formatted_code
 		ResourceSaver.save(script)
-		script.reload()
+		# The argument (keep_state parameter) tells Godot to try to preserve the
+		# state of the script instance, like static variables. Without this,
+		# attempting to reload tool scripts will fail with an error because they
+		# are already instantiated in the editor and instantiated scripts are
+		# not allowed to force reload without unloading first.
+		script.reload(true)
 
 		var script_editor := EditorInterface.get_script_editor()
 		var open_script_editors := script_editor.get_open_script_editors()
