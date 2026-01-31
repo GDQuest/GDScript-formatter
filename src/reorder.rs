@@ -22,6 +22,7 @@ fn get_builtin_virtual_priority(method_name: &str) -> u8 {
         "_exit_tree" => 6,
         "_input" => 7,
         "_unhandled_input" => 8,
+        "_unhandled_key_input" => 9,
         "_gui_input" => 9,
         "_draw" => 10,
         "_notification" => 11,
