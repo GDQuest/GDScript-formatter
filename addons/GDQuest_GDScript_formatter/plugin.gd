@@ -582,16 +582,17 @@ func lint_code(script: GDScript) -> Array:
 ## Parses a lint issue line and returns a dictionary with issue information
 func parse_lint_issue(line: String) -> Dictionary:
 	# Expected format: filename:line:rule:severity: message
-	var parts = line.split(":", 4)
-	if parts.size() < 5:
-		return { }
-
-	return {
-		"line": int(parts[1]) - 1, # Convert to 0-based indexing
-		"rule": parts[2],
-		"severity": parts[3],
-		"message": parts[4].strip_edges(),
-	}
+	var regex = RegEx.new()
+	regex.compile(r"^(.*\.gd):(\d+):([^:]+):([^:]+):([\s\S]*)$")
+	var result = regex.search(line)
+	if result:
+		return {
+			"line": int(result.get_string(2)) - 1,
+			"rule": result.get_string(3),
+			"severity": result.get_string(4),
+			"message": result.get_string(5).strip_edges(),
+		}
+	return { }
 
 
 ## Applies lint highlighting to the code editor
