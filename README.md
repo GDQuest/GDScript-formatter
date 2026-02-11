@@ -30,7 +30,10 @@ For detailed documentation and guides, check out these pages:
 
 You can find binaries for Windows, macOS, and Linux in the [releases tab](https://github.com/GDQuest/godot-gdscript-formatter-tree-sitter/releases) of this repository. Download the binary for your platform, unzip it, rename it to the command name you want (e.g. `gdscript-formatter`) and place it somewhere in your system PATH.
 
-Alternatively for Arch Linux, there is the community maintained AUR Package [gdscript-formatter-bin](https://aur.archlinux.org/packages/gdscript-formatter-bin).
+**Alternative sources:**
+
+- **Arch Linux:** Community maintained AUR Package [gdscript-formatter-bin](https://aur.archlinux.org/packages/gdscript-formatter-bin).
+- **Windows:** Community maintained Scoop package (`scoop install` [`extras/gdscript-formatter`](https://github.com/ScoopInstaller/Extras/blob/master/bucket/gdscript-formatter.json))
 
 To format a file, run:
 
