@@ -54,6 +54,7 @@ var connection_list: Array[Resource] = []
 var installer: FormatterInstaller = null
 var formatter_cache_dir: String
 var menu: FormatterMenu = null
+var file_select_dialog: EditorFileDialog = null
 
 
 func _init() -> void:
@@ -106,6 +107,22 @@ func _enter_tree() -> void:
 	menu.menu_item_selected.connect(_on_menu_item_selected)
 	menu.update_menu(is_formatter_installed_locally())
 
+	file_select_dialog = EditorFileDialog.new()
+	file_select_dialog.access = EditorFileDialog.ACCESS_FILESYSTEM
+	file_select_dialog.file_mode = EditorFileDialog.FILE_MODE_OPEN_FILE
+	file_select_dialog.filters = ["*.zip ; ZIP Archives"]
+	file_select_dialog.title = "Select Formatter zip file"
+	get_editor_interface().get_base_control().add_child(file_select_dialog)
+	installer.show_file_select_dialog.connect(
+		func _on_show_file_select_dialog():
+			if is_instance_valid(file_select_dialog):
+				file_select_dialog.popup_centered()
+	)
+	file_select_dialog.file_selected.connect(
+		func _on_file_selected(path: String):
+			installer.zip_file_selected.emit(path)
+	)
+
 	update_shortcut()
 	resource_saved.connect(_on_resource_saved)
 
@@ -127,6 +144,10 @@ func _exit_tree() -> void:
 		menu.remove_formatter_menu()
 		menu.queue_free()
 		menu = null
+
+	if is_instance_valid(file_select_dialog):
+		file_select_dialog.queue_free()
+		file_select_dialog = null
 
 
 func _shortcut_input(event: InputEvent) -> void:
@@ -407,6 +428,8 @@ func _on_menu_item_selected(command: String) -> void:
 			reorder_code()
 		"install_update":
 			installer.install_or_update_formatter()
+		"manual_install":
+			installer.manual_install_formatter()
 		"uninstall":
 			uninstall_formatter()
 		"report_issue":
