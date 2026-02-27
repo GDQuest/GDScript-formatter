@@ -64,7 +64,7 @@ The formatter also includes a linter that checks for style and convention issues
 To lint a file, run:
 
 ```bash
-gdscript-format lint path/to/file.gd
+gdscript-formatter lint path/to/file.gd
 ```
 
 This will output issues in the format:
@@ -78,7 +78,7 @@ filepath:line:rule:severity: description
 To see all available linting rules:
 
 ```bash
-gdscript-format lint --list-rules
+gdscript-formatter lint --list-rules
 ```
 
 ### Configuring the linter
@@ -88,7 +88,7 @@ gdscript-format lint --list-rules
 You can disable specific rules using the `--disable` flag:
 
 ```bash
-gdscript-format lint --disable class-name,signal-name path/to/file.gd
+gdscript-formatter lint --disable class-name,signal-name path/to/file.gd
 ```
 
 #### Setting line length
@@ -96,7 +96,7 @@ gdscript-format lint --disable class-name,signal-name path/to/file.gd
 The linter provides several configurable options:
 
 ```bash
-gdscript-format lint --max-line-length 120 path/to/file.gd
+gdscript-formatter lint --max-line-length 120 path/to/file.gd
 ```
 
 #### Pretty printing
@@ -106,7 +106,7 @@ By default, the linter outputs one line for each warning/error.
 For more human readable output, use the `--pretty` flag:
 
 ```bash
-gdscript-format lint --pretty path/to/file.gd
+gdscript-formatter lint --pretty path/to/file.gd
 ```
 
 #### Ignoring lines
