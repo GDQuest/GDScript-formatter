@@ -47,8 +47,7 @@ var DEFAULT_SETTINGS = {
 
 ## Which gutter lint icons are shown in.
 ## By default, gutter 0 is for breakpoints and 1 is for things like overrides.
-# FIXME: see other FIXME comment about gutter icons
-# const LINT_ICON_GUTTER := 2
+const LINT_ICON_GUTTER := 2
 
 var connection_list: Array[Resource] = []
 var installer: FormatterInstaller = null
@@ -600,6 +599,11 @@ func parse_lint_issue(line: String) -> Dictionary:
 func apply_lint_highlights(code_edit: CodeEdit, issues: Array) -> void:
 	clear_lint_highlights(code_edit)
 
+	# Add and set up gutter for lint icons
+	code_edit.add_gutter(LINT_ICON_GUTTER)
+	code_edit.set_gutter_name(LINT_ICON_GUTTER, "lint_icon_gutter")
+	code_edit.set_gutter_type(LINT_ICON_GUTTER, CodeEdit.GutterType.GUTTER_TYPE_ICON)
+
 	for issue in issues:
 		var line_number: int = issue.line
 		var severity: String = issue.severity
@@ -613,13 +617,10 @@ func apply_lint_highlights(code_edit: CodeEdit, issues: Array) -> void:
 
 		code_edit.set_line_background_color(line_number, color)
 
-		# FIXME: This currently removes line numbers as Godot's script editor uses all its gutters,
-		# I commented out the code in case someone wants to solve it, otherwise this should be removed.
-		#
-		# var icon_name = "StatusError" if severity == "error" else "StatusWarning"
-		# var icon = EditorInterface.get_editor_theme().get_icon(icon_name, "EditorIcons")
-		# code_edit.set_gutter_type(LINT_ICON_GUTTER, CodeEdit.GutterType.GUTTER_TYPE_ICON)
-		# code_edit.set_line_gutter_icon(line_number, LINT_ICON_GUTTER, icon)
+		# Add gutter icon for severity
+		var icon_name = "StatusError" if severity == "error" else "StatusWarning"
+		var icon = EditorInterface.get_editor_theme().get_icon(icon_name, "EditorIcons")
+		code_edit.set_line_gutter_icon(line_number, LINT_ICON_GUTTER, icon)
 
 
 ## Prints a detailed summary of lint issues to the output
@@ -645,10 +646,16 @@ func print_lint_summary(issues: Array, script_path: String) -> void:
 
 ## Clears all lint highlighting from the code editor
 func clear_lint_highlights(code_edit: CodeEdit) -> void:
+	# Remove existing lint icon gutter, if any. Iterate instead of assuming gutter position
+	# to avoid potential conflicts with gutters added by other addons.
+	for i: int in code_edit.get_gutter_count():
+		if code_edit.get_gutter_name(i) == "lint_icon_gutter":
+			code_edit.remove_gutter(i)
+			break
+
 	for line in range(code_edit.get_line_count()):
 		code_edit.set_line_background_color(line, Color(0, 0, 0, 0))
-		# FIXME: See other FIXME comment about gutter icons
-		# code_edit.set_line_gutter_icon(line, LINT_ICON_GUTTER, null)
+		code_edit.set_line_gutter_icon(line, LINT_ICON_GUTTER, null)
 
 
 ## Data structure to hold code editor state information
