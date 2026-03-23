@@ -47,8 +47,8 @@ var DEFAULT_SETTINGS = {
 
 ## Which gutter lint icons are shown in.
 ## By default, gutter 0 is for breakpoints and 1 is for things like overrides.
-# FIXME: see other FIXME comment about gutter icons
-# const LINT_ICON_GUTTER := 2
+const GUTTER_LINT_ICON_INDEX = 2
+const GUTTER_LINT_ICONS_NAME = "gdscript_formatter_lint_icons"
 
 var connection_list: Array[Resource] = []
 var installer: FormatterInstaller = null
@@ -600,26 +600,30 @@ func parse_lint_issue(line: String) -> Dictionary:
 func apply_lint_highlights(code_edit: CodeEdit, issues: Array) -> void:
 	clear_lint_highlights(code_edit)
 
+	# Add and set up gutter for lint icons if not already present.
+	# We check by name to avoid conflicts with gutters added by other addons.
+	# Once added, the gutter is never removed so the layout doesn't shift on clear.
+	var has_lint_gutter := false
+	for i: int in code_edit.get_gutter_count():
+		if code_edit.get_gutter_name(i) == GUTTER_LINT_ICONS_NAME:
+			has_lint_gutter = true
+			break
+	if not has_lint_gutter:
+		code_edit.add_gutter(GUTTER_LINT_ICON_INDEX)
+		code_edit.set_gutter_name(GUTTER_LINT_ICON_INDEX, GUTTER_LINT_ICONS_NAME)
+		code_edit.set_gutter_type(GUTTER_LINT_ICON_INDEX, CodeEdit.GutterType.GUTTER_TYPE_ICON)
+		const EDITOR_ICON_DEFAULT_WIDTH = 16.0
+		code_edit.set_gutter_width(GUTTER_LINT_ICON_INDEX, EDITOR_ICON_DEFAULT_WIDTH * EditorInterface.get_editor_scale())
+
 	for issue in issues:
 		var line_number: int = issue.line
 		var severity: String = issue.severity
 
-		# Set line background color based on severity
-		var color: Color
-		if severity == "error":
-			color = Color(1, 0, 0, 0.1)
-		else: # warning
-			color = Color(1, 1, 0, 0.1)
-
+		var color := Color(1, 0, 0, 0.1) if severity == "error" else Color(1, 1, 0, 0.1)
 		code_edit.set_line_background_color(line_number, color)
-
-		# FIXME: This currently removes line numbers as Godot's script editor uses all its gutters,
-		# I commented out the code in case someone wants to solve it, otherwise this should be removed.
-		#
-		# var icon_name = "StatusError" if severity == "error" else "StatusWarning"
-		# var icon = EditorInterface.get_editor_theme().get_icon(icon_name, "EditorIcons")
-		# code_edit.set_gutter_type(LINT_ICON_GUTTER, CodeEdit.GutterType.GUTTER_TYPE_ICON)
-		# code_edit.set_line_gutter_icon(line_number, LINT_ICON_GUTTER, icon)
+		var icon_name := "StatusError" if severity == "error" else "StatusWarning"
+		var icon := EditorInterface.get_editor_theme().get_icon(icon_name, "EditorIcons")
+		code_edit.set_line_gutter_icon(line_number, GUTTER_LINT_ICON_INDEX, icon)
 
 
 ## Prints a detailed summary of lint issues to the output
@@ -643,12 +647,19 @@ func print_lint_summary(issues: Array, script_path: String) -> void:
 	print_rich("[b]=== End Linting Results ===[/b]\n")
 
 
-## Clears all lint highlighting from the code editor
+## Clears all lint highlighting from the code editor.
+## The lint gutter is intentionally kept so the layout does not shift.
 func clear_lint_highlights(code_edit: CodeEdit) -> void:
+	var lint_gutter_index := -1
+	for i: int in code_edit.get_gutter_count():
+		if code_edit.get_gutter_name(i) == GUTTER_LINT_ICONS_NAME:
+			lint_gutter_index = i
+			break
+
 	for line in range(code_edit.get_line_count()):
 		code_edit.set_line_background_color(line, Color(0, 0, 0, 0))
-		# FIXME: See other FIXME comment about gutter icons
-		# code_edit.set_line_gutter_icon(line, LINT_ICON_GUTTER, null)
+		if lint_gutter_index != -1:
+			code_edit.set_line_gutter_icon(line, lint_gutter_index, null)
 
 
 ## Data structure to hold code editor state information
