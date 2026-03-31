@@ -36,3 +36,12 @@ func foo():
 		],
 		2,
 	]
+
+	var sum = (1 +
+		2
+	)
+
+	var bitflags = (
+		0x0b
+		| 0xa0
+	)

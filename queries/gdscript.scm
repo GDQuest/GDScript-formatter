@@ -112,7 +112,8 @@
   [
     "+" "-" "*" "/" "%" "**"
     "==" "!=" "<" ">" "<=" ">=" "and"
-    "or" "in" "is" "&&" "||" "not"]
+    "or" "in" "is" "&&" "||" "not"
+    "&" "|" "^" "<<" ">>"]
   @prepend_input_softline @append_input_softline)
 ; Comparison operators (+ "as" keyword which needs the same spacing)
 [
@@ -121,10 +122,6 @@
 @prepend_space @append_space
 ; not can be at the start of an expression, so we handle it separately - needs another query for the case "is not"
 "not" @append_space
-; Bitwise operators
-[
-  "&" "|" "^" "<<" ">>"]
-@prepend_space @append_space
 ; ~ is generally right next to the variable it operates on, so we don't add a space after it
 [
     "=" ":=" "+=" "-=" "*=" "/=" "%=" "**=" "&=" "|=" "^=" "<<=" ">>="]
