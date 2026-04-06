@@ -53,6 +53,7 @@ struct Formatter {
     input_tree: GdTree,
     tree: Tree,
     original_source: Option<String>,
+    indent_string: String,
 }
 
 impl Formatter {
@@ -72,6 +73,11 @@ impl Formatter {
         } else {
             None
         };
+        let indent_string = if config.use_spaces {
+            " ".repeat(config.indent_size)
+        } else {
+            "\t".to_string()
+        };
 
         Self {
             original_source,
@@ -80,22 +86,17 @@ impl Formatter {
             tree,
             input_tree,
             parser,
+            indent_string,
         }
     }
 
     #[inline(always)]
     fn format(&mut self) -> Result<&mut Self, Box<dyn std::error::Error>> {
-        let indent_string = if self.config.use_spaces {
-            " ".repeat(self.config.indent_size)
-        } else {
-            "\t".to_string()
-        };
-
         let language = Language {
             name: "gdscript".to_owned(),
             query: TopiaryQuery::new(&tree_sitter_gdscript::LANGUAGE.into(), QUERY).unwrap(),
             grammar: tree_sitter_gdscript::LANGUAGE.into(),
-            indent: Some(indent_string),
+            indent: Some(self.indent_string.clone()),
         };
 
         let mut output = Vec::new();
@@ -475,12 +476,31 @@ impl Formatter {
         self
     }
 
+    /// This function indents lines following a line continuation by two
+    /// levels to match style guide.  Note that this function will only work
+    /// with an up-to-date tree-sitter tree.
+    #[inline(always)]
+    fn fix_line_continuation_indentation(&mut self) -> &mut Self {
+        let re = RegexBuilder::new(r"\\\r?\n")
+            .build()
+            .expect("line continuation regex should compile");
+
+        self.regex_replace_all_outside_strings(
+            re,
+            format!("$0{}{}", self.indent_string, self.indent_string),
+        );
+
+        self
+    }
+
     /// This function runs postprocess passes that uses tree-sitter.
     #[inline(always)]
     fn postprocess_tree_sitter(&mut self) -> &mut Self {
         self.tree = self.parser.parse(&self.content, None).unwrap();
 
-        self.handle_two_blank_line()
+        self.fix_line_continuation_indentation()
+            .handle_two_blank_line()
+
     }
 
     /// Replaces every match of regex `re` with `rep`, but only if the match is
@@ -509,7 +529,9 @@ impl Formatter {
                 .root_node()
                 .descendant_for_byte_range(start_byte, start_byte)
                 .unwrap();
-            if node.kind() == "string" {
+            // String nodes may also contain escape_sequence nodes.  These are
+            // found when a backslash is present within a string.
+            if node.kind() == "string" || node.kind() == "escape_sequence" {
                 continue;
             }
 
