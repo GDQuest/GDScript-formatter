@@ -159,6 +159,14 @@ impl Formatter {
     /// to clean up/balance out the output.
     #[inline(always)]
     fn postprocess(&mut self) -> &mut Self {
+        // Re-parse once here to sync self.tree with the content after Topiary
+        // formatted it.
+        //
+        // Topiary replaces self.content entirely but does not update self.tree.
+        // NOTE: Nathan: maybe I missed a way to do that but for now I'm
+        // reparsing to sync.
+        self.tree = self.parser.parse(&self.content, None).unwrap();
+
         self.add_newlines_after_extends_statement()
             .fix_dangling_semicolons()
             .fix_dangling_commas()
@@ -310,9 +318,10 @@ impl Formatter {
         while let Some(node) = stack.pop() {
             if node.kind() == "lambda"
                 && let Some(body) = node.child_by_field_name("body")
-                    && body.end_position().row > node.start_position().row {
-                        captures.push((node, body));
-                    }
+                && body.end_position().row > node.start_position().row
+            {
+                captures.push((node, body));
+            }
 
             let mut cursor = node.walk();
             for child in node.children(&mut cursor) {
@@ -478,6 +487,16 @@ impl Formatter {
     /// This function runs postprocess passes that uses tree-sitter.
     #[inline(always)]
     fn postprocess_tree_sitter(&mut self) -> &mut Self {
+        // FIXME: Nathan: A full re-parse is required here for now because the
+        // regex-based steps that run before this (fix_dangling_semicolons(),
+        // fix_dangling_commas(), etc.) can remove or reposition tokens, making
+        // the AST stale. handle_two_blank_line() runs tree-sitter queries
+        // against this tree, so it must reflect the actual content or it will
+        // compute wrong insertion points.
+        //
+        // If we're going to keep working on this, we should get rid of regexes
+        // and start moving everything to a visitor pattern that modifies the
+        // AST incrementally for formatting rules.
         self.tree = self.parser.parse(&self.content, None).unwrap();
 
         self.handle_two_blank_line()
