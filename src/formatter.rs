@@ -476,31 +476,12 @@ impl Formatter {
         self
     }
 
-    /// This function indents lines following a line continuation by two
-    /// levels to match style guide.  Note that this function will only work
-    /// with an up-to-date tree-sitter tree.
-    #[inline(always)]
-    fn fix_line_continuation_indentation(&mut self) -> &mut Self {
-        let re = RegexBuilder::new(r"\\\r?\n")
-            .build()
-            .expect("line continuation regex should compile");
-
-        self.regex_replace_all_outside_strings(
-            re,
-            format!("$0{}{}", self.indent_string, self.indent_string),
-        );
-
-        self
-    }
-
     /// This function runs postprocess passes that uses tree-sitter.
     #[inline(always)]
     fn postprocess_tree_sitter(&mut self) -> &mut Self {
         self.tree = self.parser.parse(&self.content, None).unwrap();
 
-        self.fix_line_continuation_indentation()
-            .handle_two_blank_line()
-
+        self.handle_two_blank_line()
     }
 
     /// Replaces every match of regex `re` with `rep`, but only if the match is

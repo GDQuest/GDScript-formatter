@@ -246,3 +246,10 @@
 (get_node) @leaf
 
 (line_continuation) @prepend_space @append_antispace @append_hardline
+; Indent nodes that immediately follows a line continuation ("\") by two levels,
+; following the GDScript style guide. The line_continuation token only appears
+; as a direct child of these three node types. We're leaving arrays, dicts, and
+; enums out because they should have a single indent level inside their bodies
+(attribute (line_continuation) @append_indent_start @append_indent_start . (_) @append_indent_end @append_indent_end)
+(binary_operator (line_continuation) @append_indent_start @append_indent_start . (_) @append_indent_end @append_indent_end)
+(variable_statement (line_continuation) @append_indent_start @append_indent_start . (_) @append_indent_end @append_indent_end)
