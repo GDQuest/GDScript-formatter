@@ -1,6 +1,6 @@
 [package]
 name = "gdscript-formatter"
-version = "0.18.2"
+version = "0.19.0"
 edition = "2024"
 description = "A GDScript code formatter and linter using Topiary and Tree-sitter"
 license = "MIT"
@@ -11,16 +11,16 @@ categories = ["command-line-utilities", "development-tools"]
 default-run = "gdscript-formatter"
 
 [dependencies]
-clap = { version = "4.0", features = ["derive", "wrap_help"] }
-topiary-core = "0.7.0"
+clap = { version = "=4.6.0", features = ["derive", "wrap_help"] }
+topiary-core = "=0.7.3"
 tree-sitter-gdscript  = { git = "https://github.com/PrestonKnopp/tree-sitter-gdscript.git", rev = "89e66b6bdc002ab976283f277cbb48b780c5d0e9" }
-regex = "1.11"
-tree-sitter = "0.25.10"
-rayon = "1.11.0"
+regex = "=1.12.3"
+tree-sitter = "=0.26.8"
+rayon = "=1.11.0"
 
 [dev-dependencies]
-test_each_file = "0.3.5"
-similar = "2.7.0"
+test_each_file = "=0.3.7"
+similar = "=2.7.0"
 
 [features]
 default = ["gdscript"]
