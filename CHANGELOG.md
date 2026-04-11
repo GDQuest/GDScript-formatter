@@ -1,6 +1,30 @@
 # Changelog
 
-This file documents the changes made to the formatter with each release. This project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
+This file documents the changes made to the formatter with each release.
+
+## Release 0.19.0 (2026-04-11)
+
+### Added
+
+- Backslash line continuations are now indented with 2 extra levels, following the official GDScript style guide (#218)
+- Bitwise binary operators (`&`, `|`, `^`, `~`, `<<`, `>>`) are now accounted for in line wrapping (#213)
+- Godot addon: restored the lint icon in the left column (#206)
+- Godot addon: added an option to select ignore directories for format-on-save (#191)
+- Reorder: added support for `Control` virtual built-in methods, refactored to be a bit less wasteful (#184)
+- Reorder: Added `_unhandled_key_input()` to the list of built-in functions (#194)
+
+### Fixed
+
+- Regression: multiline lambda indentation broken when there were blank lines before (#219)
+- Godot addon: fixed error when format-on-save is enabled and a tool script is actively running (#196)
+- Godot addon: fixed lint results being parsed incorrectly on Windows (#200)
+- Godot addon: fixed plugin menu button style to match other topbar buttons (#216)
+- Godot addon: fixed lint line length and some lint rules being ignored (#178)
+
+### Changed
+
+- README: updated project description, added features section, and updated installation instructions including Windows via Scoop (#203)
+- README: fixed references from `gdscript-format` to `gdscript-formatter` (#205)
 
 ## Release 0.18.2 (2025-12-05)
 
