@@ -53,6 +53,7 @@ struct Formatter {
     input_tree: GdTree,
     tree: Tree,
     original_source: Option<String>,
+    indent_string: String,
 }
 
 impl Formatter {
@@ -72,6 +73,11 @@ impl Formatter {
         } else {
             None
         };
+        let indent_string = if config.use_spaces {
+            " ".repeat(config.indent_size)
+        } else {
+            "\t".to_string()
+        };
 
         Self {
             original_source,
@@ -80,22 +86,17 @@ impl Formatter {
             tree,
             input_tree,
             parser,
+            indent_string,
         }
     }
 
     #[inline(always)]
     fn format(&mut self) -> Result<&mut Self, Box<dyn std::error::Error>> {
-        let indent_string = if self.config.use_spaces {
-            " ".repeat(self.config.indent_size)
-        } else {
-            "\t".to_string()
-        };
-
         let language = Language {
             name: "gdscript".to_owned(),
             query: TopiaryQuery::new(&tree_sitter_gdscript::LANGUAGE.into(), QUERY).unwrap(),
             grammar: tree_sitter_gdscript::LANGUAGE.into(),
-            indent: Some(indent_string),
+            indent: Some(self.indent_string.clone()),
         };
 
         let mut output = Vec::new();
@@ -528,7 +529,9 @@ impl Formatter {
                 .root_node()
                 .descendant_for_byte_range(start_byte, start_byte)
                 .unwrap();
-            if node.kind() == "string" {
+            // String nodes may also contain escape_sequence nodes.  These are
+            // found when a backslash is present within a string.
+            if node.kind() == "string" || node.kind() == "escape_sequence" {
                 continue;
             }
 
