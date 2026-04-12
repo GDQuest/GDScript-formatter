@@ -76,7 +76,7 @@ impl Rule for CodeOrderRule {
         // because synthetic tokens (Docstring, Unknown) are assigned start_byte: 0 as a
         // sentinel, making start_byte alone non-unique.
         let mut sorted_original_indices: Vec<usize> = Vec::with_capacity(sorted.len());
-        let mut remaining: Vec<(usize, &crate::reorder::GDScriptTokensWithComments)> =
+        let mut remaining: Vec<(usize, &GDScriptTokensWithComments)> =
             tokens.iter().enumerate().collect();
 
         for sorted_token in &sorted {
