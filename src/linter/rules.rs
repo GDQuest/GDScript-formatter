@@ -1,4 +1,5 @@
 pub mod class_name;
+pub mod code_order;
 pub mod comparison_with_itself;
 pub mod constant_name;
 pub mod duplicated_load;
@@ -50,6 +51,7 @@ pub trait Rule {
 }
 
 use class_name::ClassNameRule;
+use code_order::CodeOrderRule;
 use comparison_with_itself::ComparisonWithItselfRule;
 use constant_name::ConstantNameRule;
 use duplicated_load::DuplicatedLoadRule;
@@ -146,5 +148,9 @@ pub const ALL_RULES: &[RuleDefinition] = &[
     RuleDefinition {
         name: "constant-name",
         create: |_config| Box::new(ConstantNameRule),
+    },
+    RuleDefinition {
+        name: "code-order",
+        create: |_config| Box::new(CodeOrderRule),
     },
 ];
