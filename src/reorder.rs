@@ -836,7 +836,7 @@ fn is_static_method(node: Node, content: &str) -> bool {
 
 
 /// Sorts declarations according to the GDScript style guide and returns the ordered list.
-fn sort_gdscript_tokens(
+pub fn sort_gdscript_tokens(
     mut tokens: Vec<GDScriptTokensWithComments>,
 ) -> Vec<GDScriptTokensWithComments> {
     tokens.sort_by(|a, b| {
