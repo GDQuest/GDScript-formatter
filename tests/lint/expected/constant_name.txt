@@ -1,3 +1,4 @@
+tests/lint/input/constant_name.gd:4:code-order:warning: constant `_PRIVATE_GOOD_NAME` should appear after constant `BAD_LOAD` according to the GDScript style guide
 tests/lint/input/constant_name.gd:14:constant-name:error: Constant name 'bad_name' should be in CONSTANT_CASE format
 tests/lint/input/constant_name.gd:15:constant-name:error: Constant name '_private_bad_name' should be in CONSTANT_CASE format
 tests/lint/input/constant_name.gd:16:constant-name:error: Constant name 'AnotherBadName' should be in CONSTANT_CASE format

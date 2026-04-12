@@ -1,3 +1,4 @@
+tests/lint/input/variable_name.gd:4:code-order:warning: variable `_private_variable` should appear after variable `Bad_Variable_Name` according to the GDScript style guide
 tests/lint/input/variable_name.gd:13:variable-name:error: Variable name 'badVariableName' should be in snake_case or _private_snake_case format
 tests/lint/input/variable_name.gd:14:variable-name:error: Variable name 'BAD_VARIABLE_NAME' should be in snake_case or _private_snake_case format
 tests/lint/input/variable_name.gd:15:variable-name:error: Variable name 'Bad_Variable_Name' should be in snake_case or _private_snake_case format

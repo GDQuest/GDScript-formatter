@@ -1,3 +1,4 @@
+tests/lint/input/standalone_expression.gd:20:code-order:warning: unknown element should appear after method `bad` according to the GDScript style guide
 tests/lint/input/standalone_expression.gd:20:standalone-expression:warning: Standalone expression '"I am not assigned"' is not assigned or used, the line may have no effect
 tests/lint/input/standalone_expression.gd:23:standalone-expression:warning: Standalone expression '"I am not assigned"' is not assigned or used, the line may have no effect
 tests/lint/input/standalone_expression.gd:24:standalone-expression:warning: Standalone expression '42' is not assigned or used, the line may have no effect

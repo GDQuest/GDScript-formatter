@@ -1,0 +1,1 @@
+tests/lint/input/code_order.gd:3:code-order:warning: variable `early_variable` should appear after @export variable `unknown_var` according to the GDScript style guide

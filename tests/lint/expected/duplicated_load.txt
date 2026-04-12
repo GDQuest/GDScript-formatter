@@ -1,3 +1,4 @@
+tests/lint/input/duplicated_load.gd:5:code-order:warning: variable `good_load_1` should appear after constant `BAD_PRELOAD_2` according to the GDScript style guide
 tests/lint/input/duplicated_load.gd:16:duplicated-load:warning: Duplicated load of '"res://duplicate/path.tscn"'. Consider extracting to a constant.
 tests/lint/input/duplicated_load.gd:17:duplicated-load:warning: Duplicated load of '"res://duplicate/path.tscn"'. Consider extracting to a constant.
 tests/lint/input/duplicated_load.gd:19:duplicated-load:warning: Duplicated load of '"res://another/duplicate/path.tscn"'. Consider extracting to a constant.
