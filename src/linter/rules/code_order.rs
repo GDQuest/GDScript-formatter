@@ -68,22 +68,15 @@ impl Rule for CodeOrderRule {
             return vec![];
         }
 
-        // Build the expected order by sorting a vector of original indices.
-        // We use index-based tracking (not start_byte) because synthetic tokens
-        // like Docstring and Unknown are assigned start_byte: 0 as a sentinel,
-        // which would cause collisions in a HashMap keyed by start_byte.
+        // Clone tokens before sorting so the original order is still available for index lookup.
         let sorted = sort_gdscript_tokens(tokens.clone());
 
-        // Map each token's start_byte to its position in the *sorted* list.
-        // Since sort_gdscript_tokens returns tokens in the new order, we need to
-        // find where each sorted token appeared in the original list.
-        // We do this by matching on start_byte only for tokens with unique start bytes,
-        // but to be safe we use a different strategy: sort a list of indices.
-        //
-        // Strategy: create pairs of (original_index, token) for each sorted token
-        // by scanning the original tokens list.
+        // Build sorted_original_indices: for each token in the expected (sorted) order,
+        // find its position in the original list. We match by both start_byte AND end_byte
+        // because synthetic tokens (Docstring, Unknown) are assigned start_byte: 0 as a
+        // sentinel, making start_byte alone non-unique.
         let mut sorted_original_indices: Vec<usize> = Vec::with_capacity(sorted.len());
-        let mut remaining: Vec<(usize, &GDScriptTokensWithComments)> =
+        let mut remaining: Vec<(usize, &crate::reorder::GDScriptTokensWithComments)> =
             tokens.iter().enumerate().collect();
 
         for sorted_token in &sorted {

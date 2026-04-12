@@ -165,6 +165,7 @@ obj._private_method() # gdlint-ignore
 - `private-access` - detects calls to private methods or variable references (prefixed with `_`)
 - `max-line-length` - validates maximum line length
 - `no-else-return` - detects unnecessary else after `if`/`elif` blocks that end with `return`
+- `code-order` - detects top-level declarations that are out of order according to the GDScript style guide (signals before variables, variables before methods, etc.)
 
 ## Using the formatter in code editors
 
