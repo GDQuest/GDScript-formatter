@@ -1,6 +1,6 @@
 use crate::linter::rules::Rule;
 use crate::linter::{LintIssue, LintSeverity};
-use crate::reorder::{GDScriptTokenKind, collect_top_level_tokens, sort_gdscript_tokens};
+use crate::reorder::{GDScriptTokenKind, GDScriptTokensWithComments, collect_top_level_tokens, sort_gdscript_tokens};
 use tree_sitter::Parser;
 
 pub struct CodeOrderRule;
@@ -42,6 +42,10 @@ impl CodeOrderRule {
 
 impl Rule for CodeOrderRule {
     fn check_source(&mut self, source_code: &str) -> Vec<LintIssue> {
+        // NOTE: This rule re-parses the source because the Rule trait's check_source
+        // only receives the raw string, not the pre-built tree from the linter.
+        // TODO: consider extending the Rule trait to pass the tree to avoid the
+        // extra parse for source-level rules that need the AST.
         let mut parser = Parser::new();
         if parser
             .set_language(&tree_sitter_gdscript::LANGUAGE.into())
@@ -64,29 +68,50 @@ impl Rule for CodeOrderRule {
             return vec![];
         }
 
-        // Build a lookup: start_byte -> index in the original (unsorted) list
-        let original_index: std::collections::HashMap<usize, usize> = tokens
-            .iter()
-            .enumerate()
-            .map(|(i, t)| (t.start_byte, i))
-            .collect();
+        // Build the expected order by sorting a vector of original indices.
+        // We use index-based tracking (not start_byte) because synthetic tokens
+        // like Docstring and Unknown are assigned start_byte: 0 as a sentinel,
+        // which would cause collisions in a HashMap keyed by start_byte.
+        let sorted = sort_gdscript_tokens(tokens.clone());
 
-        let sorted = sort_gdscript_tokens(tokens);
+        // Map each token's start_byte to its position in the *sorted* list.
+        // Since sort_gdscript_tokens returns tokens in the new order, we need to
+        // find where each sorted token appeared in the original list.
+        // We do this by matching on start_byte only for tokens with unique start bytes,
+        // but to be safe we use a different strategy: sort a list of indices.
+        //
+        // Strategy: create pairs of (original_index, token) for each sorted token
+        // by scanning the original tokens list.
+        let mut sorted_original_indices: Vec<usize> = Vec::with_capacity(sorted.len());
+        let mut remaining: Vec<(usize, &GDScriptTokensWithComments)> =
+            tokens.iter().enumerate().collect();
+
+        for sorted_token in &sorted {
+            // Find this token in the remaining original tokens by matching start_byte AND end_byte
+            if let Some(pos) = remaining.iter().position(|(_, t)| {
+                t.start_byte == sorted_token.start_byte && t.end_byte == sorted_token.end_byte
+            }) {
+                let (orig_idx, _) = remaining.remove(pos);
+                sorted_original_indices.push(orig_idx);
+            }
+        }
+
+        if sorted_original_indices.len() != sorted.len() {
+            // Couldn't match all tokens; bail out safely
+            return vec![];
+        }
 
         let mut issues = Vec::new();
 
         // For each consecutive pair in the expected (sorted) order, check that
         // the second element did not appear *before* the first one in the original.
-        for i in 1..sorted.len() {
-            let prev = &sorted[i - 1];
-            let curr = &sorted[i];
-
-            let prev_original_idx = original_index[&prev.start_byte];
-            let curr_original_idx = original_index[&curr.start_byte];
+        for i in 1..sorted_original_indices.len() {
+            let prev_original_idx = sorted_original_indices[i - 1];
+            let curr_original_idx = sorted_original_indices[i];
 
             if curr_original_idx < prev_original_idx {
-                // curr comes earlier in the source than prev, but should come after
-                let line = Self::byte_to_line(source_code, curr.start_byte);
+                // curr appears earlier in the source than prev, but should come after
+                let line = Self::byte_to_line(source_code, tokens[curr_original_idx].start_byte);
                 issues.push(LintIssue::new(
                     line,
                     1,
@@ -94,8 +119,8 @@ impl Rule for CodeOrderRule {
                     LintSeverity::Warning,
                     format!(
                         "{} should appear after {} according to the GDScript style guide",
-                        Self::describe(&curr.token_kind),
-                        Self::describe(&prev.token_kind),
+                        Self::describe(&sorted[i].token_kind),
+                        Self::describe(&sorted[i - 1].token_kind),
                     ),
                 ));
             }
