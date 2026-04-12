@@ -1,0 +1,6 @@
+- id: gdscript-formatter
+  name: GDScript Formatter
+  description: Format GDScript files using gdscript-formatter
+  entry: gdscript-formatter
+  language: system
+  files: \.gd$
