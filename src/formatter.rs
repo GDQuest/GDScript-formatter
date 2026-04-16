@@ -229,7 +229,7 @@ impl Formatter {
         .build()
         .expect("regex should compile");
 
-        self.regex_replace_all_outside_strings(re, |caps: &regex::Captures| {
+        self.regex_replace_all_outside_strings_or_comments(re, |caps: &regex::Captures| {
             let extends_line = caps.name("extends_line").unwrap().as_str();
             let extends_name = caps.name("extends_name").unwrap().as_str();
             let doc = caps.name("doc").map(|m| m.as_str()).unwrap_or_default();
@@ -257,7 +257,7 @@ impl Formatter {
             .build()
             .expect("semicolon regex should compile");
 
-        self.regex_replace_all_outside_strings(re_trailing, "");
+        self.regex_replace_all_outside_strings_or_comments(re_trailing, "");
         self
     }
 
@@ -275,7 +275,7 @@ impl Formatter {
                 .build()
                 .expect("dangling comma with comment regex should compile");
 
-        self.regex_replace_all_outside_strings(comment_re, |caps: &regex::Captures| {
+        self.regex_replace_all_outside_strings_or_comments(comment_re, |caps: &regex::Captures| {
             let before = caps.name("before").unwrap().as_str();
             let comment = caps.name("comment").unwrap().as_str();
 
@@ -296,7 +296,7 @@ impl Formatter {
             .build()
             .expect("dangling comma regex should compile");
 
-        self.regex_replace_all_outside_strings(re, |caps: &regex::Captures| {
+        self.regex_replace_all_outside_strings_or_comments(re, |caps: &regex::Captures| {
             let first_part = caps.get(1).unwrap().as_str();
             let mut replacement = String::with_capacity(first_part.len() + 1);
             replacement.push_str(first_part);
@@ -468,7 +468,7 @@ impl Formatter {
             .multi_line(true)
             .build()
             .expect("trailing spaces regex should compile");
-        self.regex_replace_all_outside_strings(re, "");
+        self.regex_replace_all_outside_strings_or_comments(re, "");
         self
     }
 
@@ -481,7 +481,7 @@ impl Formatter {
             .build()
             .expect("preload regex should compile");
 
-        self.regex_replace_all_outside_strings(re, "preload($1$2)");
+        self.regex_replace_all_outside_strings_or_comments(re, "preload($1$2)");
         self
     }
 
@@ -507,7 +507,11 @@ impl Formatter {
     /// outside of strings (simple or multiline).
     /// Use this to make post-processing changes needed for formatting but that
     /// shouldn't affect strings in the source code.
-    fn regex_replace_all_outside_strings<R: Replacer>(&mut self, re: Regex, mut rep: R) {
+    fn regex_replace_all_outside_strings_or_comments<R: Replacer>(
+        &mut self,
+        re: Regex,
+        mut rep: R,
+    ) {
         let mut iter = re.captures_iter(&self.content).peekable();
         if iter.peek().is_none() {
             return;
@@ -531,7 +535,12 @@ impl Formatter {
                 .unwrap();
             // String nodes may also contain escape_sequence nodes.  These are
             // found when a backslash is present within a string.
-            if node.kind() == "string" || node.kind() == "escape_sequence" {
+            // Comment nodes contain docstrings (##) and regular comments (#).
+            // We skip all of these to avoid modifying content inside strings or comments.
+            if node.kind() == "string"
+                || node.kind() == "escape_sequence"
+                || node.kind() == "comment"
+            {
                 continue;
             }
 
