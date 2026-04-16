@@ -264,6 +264,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // If true, all input files were already formatted (used for check mode)
     let mut all_formatted = true;
+    let mut modified_file_count = 0;
     for output in sorted_outputs {
         match output {
             Ok(output) => {
@@ -282,14 +283,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         println!("#--file:{}", output.file_path.display());
                     }
                     print!("{}", output.formatted_content);
-                } else {
-                    fs::write(&output.file_path, output.formatted_content).map_err(|e| {
+                } else if !output.is_formatted {
+                    fs::write(&output.file_path, output.formatted_content).map_err(|error| {
                         format!(
                             "Failed to write to file {}: {}",
                             output.file_path.display(),
-                            e
+                            error
                         )
                     })?;
+                    modified_file_count += 1;
                 }
             }
             Err(error_msg) => {
@@ -310,9 +312,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else if !args.stdout {
         terminal_clear_line();
         if total_files == 1 {
-            eprintln!("\rFormatted {}", input_gdscript_files[0].display());
+            if modified_file_count > 0 {
+                eprintln!("\rFormatted {}", input_gdscript_files[0].display());
+            } else {
+                eprintln!("\rAlready formatted: {}", input_gdscript_files[0].display());
+            }
         } else {
-            eprintln!("\rFormatted {} files", total_files);
+            let already_formatted_count = total_files - modified_file_count;
+            if modified_file_count > 0 && already_formatted_count > 0 {
+                eprintln!(
+                    "\rFormatted {} files, {} already formatted",
+                    modified_file_count, already_formatted_count
+                );
+            } else if modified_file_count > 0 {
+                eprintln!("\rFormatted {} files", modified_file_count);
+            } else {
+                eprintln!("\rAll {} files already formatted", total_files);
+            }
         }
     }
 
