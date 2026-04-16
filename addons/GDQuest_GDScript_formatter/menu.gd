@@ -102,38 +102,42 @@ func _populate_menu(show_uninstall: bool = true) -> void:
 	popup_menu.add_item(MENU_ITEMS["format_script"], current_item_index)
 	popup_menu.set_item_metadata(current_item_index, "format_script")
 	popup_menu.set_item_tooltip(current_item_index, "Run the GDScript Formatter over the current script")
-	current_item_index += 1
 
+	current_item_index += 1
 	popup_menu.add_item(MENU_ITEMS["lint_script"], current_item_index)
 	popup_menu.set_item_metadata(current_item_index, "lint_script")
 	popup_menu.set_item_tooltip(current_item_index, "Check the current script for linting issues")
-	current_item_index += 1
 
+	current_item_index += 1
 	popup_menu.add_item(MENU_ITEMS["reorder_code"], current_item_index)
 	popup_menu.set_item_metadata(current_item_index, "reorder_code")
 	popup_menu.set_item_tooltip(current_item_index, "Reorder the code elements in the current script according to the GDScript Style Guide")
-	current_item_index += 1
 
 	popup_menu.add_separator()
 
+	# NOTE: When we add separators, it bumps the internal index of menu items.
+	# That's why we have to increase it even on separators. Otherwise the
+	# tooltip will lose sync.
+	current_item_index += 2
 	popup_menu.add_item(MENU_ITEMS["install_update"], current_item_index)
 	popup_menu.set_item_metadata(current_item_index, "install_update")
 	popup_menu.set_item_tooltip(current_item_index, "Download the latest version of the GDScript Formatter")
-	current_item_index += 1
 
 	if show_uninstall:
+		current_item_index += 1
 		popup_menu.add_item(MENU_ITEMS["uninstall"], current_item_index)
 		popup_menu.set_item_metadata(current_item_index, "uninstall")
 		popup_menu.set_item_tooltip(current_item_index, "Remove the GDScript Formatter installed through this add-on from your computer")
-		current_item_index += 1
 
 	popup_menu.add_separator()
 
+	# Bumped index by 1 extra step because of the previous separator.
+	current_item_index += 2
 	popup_menu.add_item(MENU_ITEMS["report_issue"], current_item_index)
 	popup_menu.set_item_metadata(current_item_index, "report_issue")
 	popup_menu.set_item_tooltip(current_item_index, "Tell us about problems or bugs you found")
-	current_item_index += 1
 
+	current_item_index += 1
 	popup_menu.add_item(MENU_ITEMS["help"], current_item_index)
 	popup_menu.set_item_metadata(current_item_index, "help")
 	popup_menu.set_item_tooltip(current_item_index, "Learn how to use the GDScript Formatter")
