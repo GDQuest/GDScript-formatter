@@ -55,6 +55,19 @@ gdscript-formatter --check path/to/file.gd
 
 To see other possible options, run `gdscript-formatter` without any arguments.
 
+## Git pre-commit hook
+
+You can run the `gdscript-formatter` automatically on staged `.gd` prior to each commit. This repository includes a pre-commit hook you can copy into your project.
+
+From the root of your project, run:
+
+```sh
+cp path/to/GDScript-formatter/hooks/pre-commit .git/hooks/pre-commit
+chmod +x .git/hooks/pre-commit
+```
+
+This copies the hook into `.git/hooks/`, where Git looks for hooks to run automatically. Git will now run the formatter on your staged `.gd` files before every commit.
+
 ## Linting GDScript files
 
 The formatter also includes a linter that checks for style and convention issues according to the official GDScript style guide.
