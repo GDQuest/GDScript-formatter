@@ -12,6 +12,9 @@ const URL_GITHUB_API_LATEST_RELEASE = "https://api.github.com/repos/gdquest/GDSc
 signal installation_completed(binary_path: String)
 signal installation_failed(error_message: String)
 
+signal show_file_select_dialog
+signal zip_file_selected(path: String)
+
 var http_request_state := HttpRequestState.IDLE
 var http_request: HTTPRequest = HTTPRequest.new()
 var formatter_cache_dir: String
@@ -24,12 +27,57 @@ func _init(cache_dir: String) -> void:
 func _ready() -> void:
 	add_child(http_request)
 	http_request.request_completed.connect(_on_request_completed)
+	zip_file_selected.connect(_process_selected_zip_file)
 
 
 func install_or_update_formatter() -> void:
 	print("Starting GDScript formatter installation...")
 	http_request_state = HttpRequestState.FETCHING_RELEASE_INFO
 	http_request.request(URL_GITHUB_API_LATEST_RELEASE)
+
+
+func manual_install_formatter() -> void:
+	print("Starting GDScript formatter installation...")
+	show_file_select_dialog.emit()
+	pass
+
+
+func _process_selected_zip_file(path: String) -> void:
+	if not path:
+		push_error("Path is invalid")
+		return
+
+	var file := FileAccess.open(path, FileAccess.READ)
+	if not file:
+		push_error("Can not open the file(%s)" % path)
+		return
+
+	var body: PackedByteArray = file.get_buffer(file.get_length())
+
+	var asset_info := _get_platform_info()
+	if asset_info.is_empty():
+		var error_message := "Failed to determine platform information"
+		push_error(error_message)
+		installation_failed.emit(error_message)
+		return
+
+	print("Extracting and installing binary...")
+	var binary_path := _download_and_install_binary(body, asset_info)
+	if binary_path.is_empty():
+		var error_message := "Installation failed"
+		push_error(error_message)
+		installation_failed.emit(error_message)
+		return
+
+	print(
+		"\n".join(
+			[
+				"GDScript formatter installed successfully!",
+				"Binary location: " + binary_path,
+			],
+		),
+	)
+	installation_completed.emit(binary_path)
 
 
 func _on_request_completed(
