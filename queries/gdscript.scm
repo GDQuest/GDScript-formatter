@@ -223,9 +223,18 @@
 
 (parenthesized_expression "(" @append_antispace)
 (parenthesized_expression
- "(" @append_input_softline @append_indent_start
- ")" @prepend_input_softline @prepend_indent_end
+ "(" @append_input_softline @append_indent_start @append_indent_start
+ ")" @prepend_input_softline @prepend_indent_end @prepend_indent_end
  (#multi_line_only!))
+(parenthesized_expression ")" @prepend_antispace (#multi_line_only!))
+
+; Remove the space added by binary operators when a multiline parenthesized
+; expression closes immediately after them, as in:
+; if (a or
+;     b):
+(parenthesized_expression
+    (binary_operator) . ")" @prepend_antispace
+    (#multi_line_only!))
 
 ; LAMBDA
 (lambda ":" @append_space (#single_line_only!))
