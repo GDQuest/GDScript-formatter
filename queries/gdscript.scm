@@ -61,8 +61,6 @@
 
 ; MULTI-LINE ARGUMENTS (in function calls)
 (arguments "," @append_hardline . (comment)? @do_nothing (#multi_line_only!))
-; uncomment for double indentation in multiline function calls
-; (arguments (_) @prepend_indent_start @append_indent_end)
 (arguments
     "(" @append_hardline @append_indent_start
     ")" @prepend_hardline @prepend_indent_end
@@ -106,6 +104,9 @@
 (constructor_definition (body) @prepend_hardline)
 
 ; OPERATORS
+; Preserve user-inserted line breaks in chained attribute/method calls.
+(attribute "." @prepend_input_softline @prepend_antispace)
+
 ; Allow line breaks around binary operators for long expressions
 ; This means that if the programmer has a long expression, they can break it up by wrapping something on a line
 (binary_operator
