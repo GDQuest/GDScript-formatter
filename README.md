@@ -35,10 +35,28 @@ You can find binaries for Windows, macOS, and Linux in the [releases tab](https:
 - **Arch Linux:** Community maintained AUR Package [gdscript-formatter-bin](https://aur.archlinux.org/packages/gdscript-formatter-bin).
 - **Windows:** Community maintained Scoop package (`scoop install` [`extras/gdscript-formatter`](https://github.com/ScoopInstaller/Extras/blob/master/bucket/gdscript-formatter.json))
 
+To recursively format all GDScript files in the current folder, run:
+
+```bash
+gdscript-formatter
+```
+
 To format a file, run:
 
 ```bash
 gdscript-formatter path/to/file.gd
+```
+
+To recursively format all GDScript files in another folder, run:
+
+```bash
+gdscript-formatter path/to/folder
+```
+
+You can also pass multiple files or folders:
+
+```bash
+gdscript-formatter path/to/file.gd path/to/folder
 ```
 
 Use the `--safe` flag to add a safety check that prevents overwriting files if the formatter makes unwanted changes (any change that would modify the code meaning, like removing a piece of functional code). This is useful when you use a development version of the formatter or when you want to be extra careful:
@@ -53,7 +71,9 @@ Format with check mode, to use in a build system (exit code 1 if changes needed)
 gdscript-formatter --check path/to/file.gd
 ```
 
-To see other possible options, run `gdscript-formatter` without any arguments.
+It will print the files that need to be formatted.
+
+To see other possible options, run `gdscript-formatter --help`.
 
 ## Linting GDScript files
 

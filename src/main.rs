@@ -4,7 +4,7 @@ use std::{
     path::PathBuf,
 };
 
-use clap::{CommandFactory, Parser};
+use clap::Parser;
 use rayon::prelude::*;
 
 use gdscript_formatter::linter::rule_config::{
@@ -128,13 +128,6 @@ enum Commands {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // If there are no arguments and nothing piped from stdin, print the help message
-    if env::args().len() == 1 && io::stdin().is_terminal() {
-        Args::command().print_help()?;
-        println!();
-        return Ok(());
-    }
-
     let args = Args::parse();
 
     // Handle lint subcommand
@@ -182,7 +175,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         safe: args.safe,
     };
 
-    if args.input.is_empty() {
+    // Is terminal allows us to distinguish between formatting piped code from
+    // stdin automatically finding all gdscript files from the current directory
+    if args.input.is_empty() && !io::stdin().is_terminal() {
         let mut input_content = String::new();
         io::stdin()
             .read_to_string(&mut input_content)
@@ -204,7 +199,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    let input_gdscript_files = find_gdscript_files(&args.input)?;
+    let input_paths = if args.input.is_empty() {
+        vec![
+            env::current_dir()
+                .map_err(|error| format!("Failed to get current directory: {}", error))?,
+        ]
+    } else {
+        args.input
+    };
+    let input_gdscript_files = find_gdscript_files(&input_paths)?;
 
     let total_files = input_gdscript_files.len();
 
