@@ -265,12 +265,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // If true, all input files were already formatted (used for check mode)
     let mut all_formatted = true;
     let mut modified_file_count = 0;
+    let mut unformatted_files = Vec::new();
     for output in sorted_outputs {
         match output {
             Ok(output) => {
                 if args.check {
                     if !output.is_formatted {
                         all_formatted = false;
+                        unformatted_files.push(output.file_path);
                     }
                 } else if args.stdout {
                     // Clear the progress message before printing formatted files to stdout
@@ -307,6 +309,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         } else {
             terminal_clear_line();
             eprintln!("\rSome files are not formatted");
+            for file_path in unformatted_files {
+                eprintln!("{}", file_path.display());
+            }
             std::process::exit(1);
         }
     } else if !args.stdout {
