@@ -171,7 +171,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             max_line_length,
         };
 
-        return run_linter(input, linter_config, pretty);
+        let input_gdscript_files = find_gdscript_files(&input)?;
+        return run_linter(input_gdscript_files, linter_config, pretty);
     }
 
     let config = FormatterConfig {
@@ -203,18 +204,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    let input_gdscript_files: Vec<&PathBuf> = args
-        .input
-        .iter()
-        .filter(|path| path.extension().is_some_and(|ext| ext == "gd"))
-        .collect();
-
-    if input_gdscript_files.is_empty() {
-        eprintln!(
-            "Error: No GDScript files found in the arguments provided. Please provide at least one .gd file."
-        );
-        std::process::exit(1);
-    }
+    let input_gdscript_files = find_gdscript_files(&args.input)?;
 
     let total_files = input_gdscript_files.len();
 
@@ -245,7 +235,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             Ok(FormatterOutput {
                 index,
-                file_path: (*file_path).clone(),
+                file_path: file_path.clone(),
                 formatted_content,
                 is_formatted,
             })
@@ -353,6 +343,55 @@ fn run_linter(
     }
 
     Ok(())
+}
+
+fn find_gdscript_files(
+    input_paths: &[PathBuf],
+) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
+    let mut gdscript_file_paths = Vec::new();
+    let mut paths_to_check: Vec<PathBuf> = input_paths.iter().map(|p| p.to_path_buf()).collect();
+
+    while let Some(current_path) = paths_to_check.pop() {
+        if current_path.is_dir() {
+            let entries = fs::read_dir(&current_path).map_err(|error| {
+                format!(
+                    "Failed to read directory {}: {}",
+                    current_path.display(),
+                    error
+                )
+            })?;
+            for entry in entries {
+                let entry = entry.map_err(|error| {
+                    format!(
+                        "Failed to read entry in {}: {}",
+                        current_path.display(),
+                        error
+                    )
+                })?;
+                if entry.path().is_dir() {
+                    paths_to_check.push(entry.path());
+                } else if entry.path().extension().is_some_and(|ext| ext == "gd") {
+                    gdscript_file_paths.push(entry.path());
+                }
+            }
+        } else if current_path.extension().is_some_and(|ext| ext == "gd") {
+            gdscript_file_paths.push(current_path);
+        }
+    }
+    // We sort the files and deduplicate them so their order is deterministic
+    // Plus to ensure you will not get any duplicated output, for example, when
+    // linting or checking formatted files with multiple input paths.
+    gdscript_file_paths.sort();
+    gdscript_file_paths.dedup();
+
+    if gdscript_file_paths.is_empty() {
+        eprintln!(
+            "Error: No GDScript files found in the arguments provided. Please provide at least one .gd file or directory containing .gd files."
+        );
+        std::process::exit(1);
+    }
+
+    Ok(gdscript_file_paths)
 }
 
 fn terminal_clear_line() {

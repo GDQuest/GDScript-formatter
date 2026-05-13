@@ -165,21 +165,9 @@ impl GDScriptLinter {
 
     pub fn lint_files(
         &mut self,
-        input_files: Vec<PathBuf>,
+        gdscript_files: Vec<PathBuf>,
         pretty: bool,
     ) -> Result<bool, Box<dyn std::error::Error>> {
-        let gdscript_files: Vec<&PathBuf> = input_files
-            .iter()
-            .filter(|path| path.extension().is_some_and(|ext| ext == "gd"))
-            .collect();
-
-        if gdscript_files.is_empty() {
-            eprintln!(
-                "Error: No GDScript files found in the arguments provided. Please provide at least one .gd file."
-            );
-            std::process::exit(1);
-        }
-
         let with_colors = std::io::stdout().is_terminal();
 
         if pretty {
@@ -191,7 +179,7 @@ impl GDScriptLinter {
 
     fn lint_files_pretty(
         &mut self,
-        gdscript_files: &[&PathBuf],
+        gdscript_files: &[PathBuf],
         with_colors: bool,
     ) -> Result<bool, Box<dyn std::error::Error>> {
         use std::collections::HashMap;
@@ -268,7 +256,7 @@ impl GDScriptLinter {
 
     fn lint_files_standard(
         &mut self,
-        gdscript_files: &[&PathBuf],
+        gdscript_files: &[PathBuf],
     ) -> Result<bool, Box<dyn std::error::Error>> {
         let mut has_issues = false;
 
