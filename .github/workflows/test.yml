@@ -20,7 +20,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       
-      - name: Cache
+      - name: Cache Dependencies
         uses: actions/cache@v5
         with:
           path: |
