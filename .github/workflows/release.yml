@@ -35,10 +35,10 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     permissions:
-      contents: write
+      contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -90,14 +90,13 @@ jobs:
     name: Package the Godot add-on
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Create godot-addon.zip
-        run: |
-          zip -r godot-addon.zip addons/
+        run: zip -r godot-addon.zip addons/
         shell: bash
 
       - name: Upload artifact
@@ -115,25 +114,30 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    if: ${{ success() }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        
       - name: Download artifacts
         uses: actions/download-artifact@v8
         with:
           path: artifacts
-      - name: Create/Update Release
-        uses: softprops/action-gh-release@v3
-        with:
-          name: GDScript formatter ${{ github.ref_name }}
-          body: |
-            A fast code formatter for GDScript in Godot 4.
+          merge-multiple: true
 
+      - name: Create Release
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --verify-tag \
+            --draft \
+            --title "GDScript formatter ${{ github.ref_name }}" \
+            --notes "A fast code formatter for GDScript in Godot 4.
+            
             You can learn how to install, use, configure, and integrate the formatter into your workflow on this page:
+            
+            https://www.gdquest.com/library/gdscript_formatter/"
 
-            https://www.gdquest.com/library/gdscript_formatter/
-          files: |
-            artifacts/**/*.zip
-          draft: false
-          prerelease: false
+          gh release upload "${{ github.ref_name }}" artifacts/*.zip
+          gh release edit "${{ github.ref_name }}" --draft=false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
