@@ -36,7 +36,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.2
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -47,7 +47,7 @@ jobs:
       # it for other architectures and OSes than the build runner's.
       - name: Install cross
         if: matrix.os == 'ubuntu-latest' && matrix.target != 'x86_64-unknown-linux-gnu'
-        run: cargo install cross --git https://github.com/cross-rs/cross
+        run: cargo install cross --version 0.2.5
 
       # Build either with cross or cargo, depending on the target.
       - name: Build binary
@@ -78,7 +78,7 @@ jobs:
         shell: bash
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: ${{ matrix.name }}
           path: ${{ matrix.name }}.zip
@@ -115,7 +115,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        
+
       - name: Download artifacts
         uses: actions/download-artifact@v8
         with:
@@ -129,9 +129,9 @@ jobs:
             --draft \
             --title "GDScript formatter ${{ github.ref_name }}" \
             --notes "A fast code formatter for GDScript in Godot 4.
-            
+
             You can learn how to install, use, configure, and integrate the formatter into your workflow on this page:
-            
+
             https://www.gdquest.com/library/gdscript_formatter/"
 
           gh release upload "${{ github.ref_name }}" artifacts/*.zip
