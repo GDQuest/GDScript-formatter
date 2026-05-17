@@ -34,8 +34,6 @@ jobs:
             name: gdscript-formatter-${{ github.ref_name }}-windows-aarch64.exe
 
     runs-on: ${{ matrix.os }}
-    permissions:
-      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -85,12 +83,11 @@ jobs:
           name: ${{ matrix.name }}
           path: ${{ matrix.name }}.zip
           if-no-files-found: error
+          retention-days: 10
 
   package-godot-addon:
     name: Package the Godot add-on
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -105,6 +102,7 @@ jobs:
           name: godot-addon
           path: godot-addon.zip
           if-no-files-found: error
+          retention-days: 10
 
   publish-release:
     name: Publish release
