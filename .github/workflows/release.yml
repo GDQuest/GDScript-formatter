@@ -34,11 +34,9 @@ jobs:
             name: gdscript-formatter-${{ github.ref_name }}-windows-aarch64.exe
 
     runs-on: ${{ matrix.os }}
-    permissions:
-      contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6.0.2
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -49,7 +47,7 @@ jobs:
       # it for other architectures and OSes than the build runner's.
       - name: Install cross
         if: matrix.os == 'ubuntu-latest' && matrix.target != 'x86_64-unknown-linux-gnu'
-        run: cargo install cross --git https://github.com/cross-rs/cross
+        run: cargo install cross --version 0.2.5
 
       # Build either with cross or cargo, depending on the target.
       - name: Build binary
@@ -80,32 +78,31 @@ jobs:
         shell: bash
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: ${{ matrix.name }}
           path: ${{ matrix.name }}.zip
           if-no-files-found: error
+          retention-days: 10
 
   package-godot-addon:
     name: Package the Godot add-on
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Create godot-addon.zip
-        run: |
-          zip -r godot-addon.zip addons/
+        run: zip -r godot-addon.zip addons/
         shell: bash
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: godot-addon
           path: godot-addon.zip
           if-no-files-found: error
+          retention-days: 10
 
   publish-release:
     name: Publish release
@@ -115,25 +112,30 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    if: ${{ success() }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
-      - name: Create/Update Release
-        uses: softprops/action-gh-release@v2
-        with:
-          name: GDScript formatter ${{ github.ref_name }}
-          body: |
-            A fast code formatter for GDScript in Godot 4.
+          merge-multiple: true
+
+      - name: Create Release
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --verify-tag \
+            --draft \
+            --title "GDScript formatter ${{ github.ref_name }}" \
+            --notes "A fast code formatter for GDScript in Godot 4.
 
             You can learn how to install, use, configure, and integrate the formatter into your workflow on this page:
 
-            https://www.gdquest.com/library/gdscript_formatter/
-          files: |
-            artifacts/**/*.zip
-          draft: false
-          prerelease: false
+            https://www.gdquest.com/library/gdscript_formatter/"
+
+          gh release upload "${{ github.ref_name }}" artifacts/*.zip
+          gh release edit "${{ github.ref_name }}" --draft=false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
