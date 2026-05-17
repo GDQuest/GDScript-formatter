@@ -104,6 +104,14 @@ struct Args {
     /// lead to syntax changes.
     #[arg(short, long)]
     safe: bool,
+
+    /// Print one line per file while processing.
+    ///
+    /// By default, only a summary is printed at the end. With this flag, each
+    /// processed file is reported individually, which you can use to see the
+    /// list of found and visited files
+    #[arg(short, long)]
+    verbose: bool,
 }
 
 #[derive(clap::Subcommand)]
@@ -211,12 +219,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let total_files = input_gdscript_files.len();
 
-    eprint!(
-        "Formatting {} file{}...",
-        total_files,
-        if total_files == 1 { "" } else { "s" }
-    );
-    io::stdout().flush().unwrap();
+    if !args.verbose {
+        eprint!(
+            "Formatting {} file{}...",
+            total_files,
+            if total_files == 1 { "" } else { "s" }
+        );
+        io::stdout().flush().unwrap();
+    }
 
     // We use the rayon library to automatically process files in parallel for
     // us. The formatter runs largely single threaded so this speeds things up a
@@ -235,6 +245,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 })?;
 
             let is_formatted = input_content == formatted_content;
+
+            // With the verbose flag we print status messages after processing
+            // each file to see the formatter's progress and flow.
+            if args.verbose {
+                let status = if args.check {
+                    if is_formatted {
+                        "OK"
+                    } else {
+                        "needs formatting"
+                    }
+                } else {
+                    if is_formatted {
+                        "already formatted"
+                    } else {
+                        "done"
+                    }
+                };
+                let verb = if args.check { "Checking" } else { "Formatting" };
+                eprintln!("{} {}... {}", verb, file_path.display(), status);
+            }
 
             Ok(FormatterOutput {
                 index,
@@ -279,7 +309,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     print!("{}", output.formatted_content);
                 } else if !output.is_formatted {
-                    fs::write(&output.file_path, output.formatted_content).map_err(|error| {
+                    fs::write(&output.file_path, &output.formatted_content).map_err(|error| {
                         format!(
                             "Failed to write to file {}: {}",
                             output.file_path.display(),
@@ -296,19 +326,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     if args.check {
+        if !args.verbose {
+            terminal_clear_line();
+        }
         if all_formatted {
-            terminal_clear_line();
-            eprintln!("\rAll {} file(s) are formatted", total_files);
+            eprintln!("\rAll {} file(s) are formatted.", total_files);
         } else {
-            terminal_clear_line();
-            eprintln!("\rSome files are not formatted");
-            for file_path in unformatted_files {
-                eprintln!("{}", file_path.display());
+            eprintln!("\rSome files are not formatted:");
+            for file_path in &unformatted_files {
+                eprintln!("  {}", file_path.display());
             }
+            eprintln!(
+                "{} of {} file(s) need formatting.",
+                unformatted_files.len(),
+                total_files
+            );
             std::process::exit(1);
         }
     } else if !args.stdout {
-        terminal_clear_line();
+        if !args.verbose {
+            terminal_clear_line();
+        }
         if total_files == 1 {
             if modified_file_count > 0 {
                 eprintln!("\rFormatted {}", input_gdscript_files[0].display());
@@ -319,13 +357,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let already_formatted_count = total_files - modified_file_count;
             if modified_file_count > 0 && already_formatted_count > 0 {
                 eprintln!(
-                    "\rFormatted {} files, {} already formatted",
+                    "\rFormatted {} files, {} already formatted.",
                     modified_file_count, already_formatted_count
                 );
             } else if modified_file_count > 0 {
-                eprintln!("\rFormatted {} files", modified_file_count);
+                eprintln!("\rFormatted {} files.", modified_file_count);
             } else {
-                eprintln!("\rAll {} files already formatted", total_files);
+                eprintln!("\rAll {} files already formatted.", total_files);
             }
         }
     }
@@ -386,6 +424,15 @@ fn find_gdscript_files(
     // linting or checking formatted files with multiple input paths.
     gdscript_file_paths.sort();
     gdscript_file_paths.dedup();
+
+    // Strip the cwd from the file paths to make them relative if possible. It
+    // makes the output leaner.
+    if let Ok(cwd) = env::current_dir() {
+        gdscript_file_paths = gdscript_file_paths
+            .into_iter()
+            .map(|p| p.strip_prefix(&cwd).map(PathBuf::from).unwrap_or(p))
+            .collect();
+    }
 
     if gdscript_file_paths.is_empty() {
         eprintln!(
