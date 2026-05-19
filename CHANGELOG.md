@@ -2,6 +2,29 @@
 
 This file documents the changes made to the formatter with each release.
 
+
+## Release 0.20.0 (2026-05-20)
+
+### Added
+
+- Support for recursive directory formatting (#227)
+- Default to formatting current directory when no files are specified (#227)
+- List unformatted files when running the `--check` option (#228)
+- Only write files when the formatter actually modified them to avoid unnecessary disk writes (#229)
+- Support for line breaks in chained function calls (#230)
+
+### Fixed
+
+- Fix multiline parenthesized expression spacing and indentation in some continuation expressions (#231)
+- Fix semicolons being removed within comments (#233)
+- Godot addon: Fix incorrect tooltips on last menu items (#232)
+
+### Changed
+
+- Simplify and clean up CI, pin dependency versions, swap a community dependency for the official `gh` program
+- Complete and clean up release script to facilitate new releases
+
+
 ## Release 0.19.0 (2026-04-11)
 
 ### Added
