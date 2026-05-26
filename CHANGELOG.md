@@ -2,6 +2,14 @@
 
 This file documents the changes made to the formatter with each release.
 
+## Release 0.20.1 (2026-05-26)
+
+### Fixed
+
+- Fix missing space between `extends` and `class_name` when they're on on one line (#209)
+- Fix `if` statements inside of lambdas causing parse errors after formatting (#201)
+- Fix nested dictionaries using `=` for key-value pairs missing a space in some cases (#136)
+- Fix annotated signals in inner classes failing to parse, causing broken formatting (#195)
 
 ## Release 0.20.0 (2026-05-20)
 
