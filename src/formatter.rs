@@ -129,6 +129,16 @@ impl Formatter {
         }
 
         self.tree = self.parser.parse(&self.content, Some(&self.tree)).unwrap();
+
+        // The reorder query uses (_) which silently skips ERROR nodes, so any
+        // top-level declaration wrapped in an ERROR node will be lost from the
+        // output. Bail out instead of producing a file with missing functions.
+        if self.tree.root_node().has_error() {
+            eprintln!(
+                "Warning: Parse errors detected, skipping code reordering to avoid data loss."
+            );
+            return Ok(self);
+        }
         match crate::reorder::reorder_gdscript_elements(&self.tree, &self.content) {
             Ok(reordered) => {
                 self.content = reordered;
