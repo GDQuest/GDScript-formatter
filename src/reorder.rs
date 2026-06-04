@@ -7,7 +7,7 @@
 //!
 //! We assume that you won't run this on every save, but rather manually using
 //! a code editor command or task when you're met with a messy file.
-use tree_sitter::{Node, Query, QueryCursor, StreamingIterator, Tree};
+use tree_sitter::{Node, Tree};
 
 /// This lists and assigns priority values to Godot built-in virtual methods.
 /// This allows us to first to detect and classify them, and secondly to order
@@ -147,7 +147,6 @@ struct PendingAttachment {
     text: String,
 }
 
-
 impl GDScriptTokenKind {
     /// Returns the ordering priority for this kind of declaration. The lower the
     /// number, the higher the priority.
@@ -253,25 +252,15 @@ fn extract_tokens_to_reorder(
     let root = tree.root_node();
     let mut elements: Vec<GDScriptTokensWithComments> = Vec::new();
 
-    // This query covers all top-level elements (direct children of source)
-    // We need to capture everything so nothing gets lost
-    let query_str = r#"
-        (source (_) @element)
-    "#;
-
-    let query = Query::new(&tree_sitter_gdscript::LANGUAGE.into(), query_str)?;
-    let mut cursor = QueryCursor::new();
-    let mut matches = cursor.matches(&query, root, content.as_bytes());
-
-    let mut all_nodes = Vec::new();
-
-    // Collect all the nodes and their positions
-    while let Some(m) = matches.next() {
-        for capture in m.captures {
-            let node = capture.node;
-            let text = node.utf8_text(content.as_bytes())?;
-            all_nodes.push((node, text.to_string()));
-        }
+    // Collect all direct children of the source node by walking the tree.
+    // We use `children(...)` rather than a tree-sitter query because queries
+    // can miss extras like ERROR nodes, causing malformed code to be silently
+    // dropped. Direct iteration captures everything.
+    let mut cursor = root.walk();
+    let mut nodes_top_level_definitions = Vec::new();
+    for child in root.children(&mut cursor) {
+        let text = child.utf8_text(content.as_bytes())?;
+        nodes_top_level_definitions.push((child, text.to_string()));
     }
 
     // First we process the top of the node tree. We look for the class docstring.
@@ -287,7 +276,7 @@ fn extract_tokens_to_reorder(
 
     // Find the byte position of the first class_name or extends statement
     // Any annotations before this position are class-level annotations
-    let first_class_declaration_byte = all_nodes
+    let first_class_declaration_byte = nodes_top_level_definitions
         .iter()
         .find(|(node, _)| {
             node.kind() == "class_name_statement" || node.kind() == "extends_statement"
@@ -297,7 +286,7 @@ fn extract_tokens_to_reorder(
 
     let mut class_docstring_comments = Vec::new();
     let mut class_docstring_comments_rows = Vec::new();
-    for (node, text) in &all_nodes {
+    for (node, text) in &nodes_top_level_definitions {
         match node.kind() {
             "comment" => {
                 if text.trim_start().starts_with("##") {
@@ -338,7 +327,7 @@ fn extract_tokens_to_reorder(
     // loop through the node tree from top to bottom, collecting comments and
     // annotations until we hit a declaration, at which point we attach the
     // collected comments/annotations to that declaration.
-    for (node, text) in &all_nodes {
+    for (node, text) in &nodes_top_level_definitions {
         let is_before_class_declaration = node.start_byte() < first_class_declaration_byte;
         let reorderable_element =
             classify_element(*node, text, content, is_before_class_declaration)?;
@@ -383,16 +372,18 @@ fn extract_tokens_to_reorder(
                 if let Some(last_element) = elements.last_mut() {
                     let last_end = last_element.end_byte;
                     let comment_start = node.start_byte();
-                    if last_end <= comment_start && comment_start <= content.len()
-                        && let Some(spacing) = content.get(last_end..comment_start) {
-                            let has_newline = spacing.contains('\n') || spacing.contains('\r');
-                            if !has_newline {
-                                last_element.original_text.push_str(spacing);
-                                last_element.original_text.push_str(&text);
-                                last_element.end_byte = node.end_byte();
-                                handled_inline = true;
-                            }
+                    if last_end <= comment_start
+                        && comment_start <= content.len()
+                        && let Some(spacing) = content.get(last_end..comment_start)
+                    {
+                        let has_newline = spacing.contains('\n') || spacing.contains('\r');
+                        if !has_newline {
+                            last_element.original_text.push_str(spacing);
+                            last_element.original_text.push_str(&text);
+                            last_element.end_byte = node.end_byte();
+                            handled_inline = true;
                         }
+                    }
                 }
 
                 if !handled_inline {
@@ -833,7 +824,6 @@ fn is_static_method(node: Node, content: &str) -> bool {
     let text = node.utf8_text(content.as_bytes()).unwrap_or("");
     text.contains("static func")
 }
-
 
 /// Sorts declarations according to the GDScript style guide and returns the ordered list.
 fn sort_gdscript_tokens(
