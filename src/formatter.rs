@@ -54,6 +54,9 @@ struct Formatter {
     tree: Tree,
     original_source: Option<String>,
     indent_string: String,
+    // Original text of each # gd-formatter:disable ... # gd-formatter:enable region,
+    // indexed by the order they appear in the file. Used to restore regions after formatting.
+    disabled_regions: Vec<String>,
 }
 
 impl Formatter {
@@ -87,6 +90,7 @@ impl Formatter {
             input_tree,
             parser,
             indent_string,
+            disabled_regions: Vec::new(),
         }
     }
 
@@ -153,6 +157,104 @@ impl Formatter {
     /// pre-applying rules that could be performance-intensive through topiary.
     #[inline(always)]
     fn preprocess(&mut self) -> &mut Self {
+        // Replace # gd-formatter:disable ... # gd-formatter:enable regions with placeholder
+        // comments so they pass through Topiary and post-processing untouched.
+        self.extract_disabled_regions();
+        self
+    }
+
+    /// Scans the content for # gd-formatter:disable / # gd-formatter:enable regions.
+    /// Each complete region (including the marker lines) is stored verbatim in
+    /// self.disabled_regions and replaced with a single placeholder comment of the
+    /// form `# gd-formatter:preserved-region:N`. This prevents Topiary and all
+    /// post-processing steps from touching the content inside those regions.
+    fn extract_disabled_regions(&mut self) {
+        const DISABLE_MARKER: &str = "# gd-formatter:disable";
+        const ENABLE_MARKER: &str = "# gd-formatter:enable";
+
+        if !self.content.contains(DISABLE_MARKER) {
+            return;
+        }
+
+        let mut result = String::new();
+        let mut in_disabled_region = false;
+        let mut current_region = String::new();
+
+        // split_inclusive keeps the '\n' attached to each line so we never lose
+        // trailing newlines when we reassemble the string.
+        for line in self.content.split_inclusive('\n') {
+            let trimmed = line.trim();
+
+            if !in_disabled_region && trimmed == DISABLE_MARKER {
+                // Begin accumulating the disabled region (include the marker line itself).
+                in_disabled_region = true;
+                current_region.push_str(line);
+            } else if in_disabled_region && trimmed == ENABLE_MARKER {
+                // Close the region (include the closing marker line).
+                current_region.push_str(line);
+                in_disabled_region = false;
+                let region_index = self.disabled_regions.len();
+                self.disabled_regions.push(current_region.clone());
+                current_region.clear();
+                // Emit a single placeholder comment so the rest of the pipeline sees
+                // one clean comment node in place of the entire disabled block.
+                result.push_str(&format!(
+                    "# gd-formatter:preserved-region:{}\n",
+                    region_index
+                ));
+            } else if in_disabled_region {
+                current_region.push_str(line);
+            } else {
+                result.push_str(line);
+            }
+        }
+
+        // An unclosed disable region (no matching enable marker) is also preserved.
+        if in_disabled_region {
+            let region_index = self.disabled_regions.len();
+            self.disabled_regions.push(current_region);
+            result.push_str(&format!(
+                "# gd-formatter:preserved-region:{}\n",
+                region_index
+            ));
+        }
+
+        self.content = result;
+        // Re-parse so self.tree matches the new placeholder-containing content before
+        // it is handed to Topiary.
+        self.tree = self.parser.parse(&self.content, None).unwrap();
+    }
+
+    /// Replaces every placeholder comment emitted by extract_disabled_regions() with
+    /// the original region text that was saved at that time.  Called as the last
+    /// post-processing step so all normal formatting has already been applied to the
+    /// surrounding code.
+    fn restore_disabled_regions(&mut self) -> &mut Self {
+        if self.disabled_regions.is_empty() {
+            return self;
+        }
+
+        let mut result = String::new();
+
+        for line in self.content.split_inclusive('\n') {
+            // Strip leading whitespace before checking for the placeholder; Topiary
+            // may have adjusted indentation on comment lines.
+            let trimmed = line.trim();
+            if let Some(rest) = trimmed.strip_prefix("# gd-formatter:preserved-region:") {
+                if let Ok(index) = rest.parse::<usize>() {
+                    if let Some(original) = self.disabled_regions.get(index) {
+                        result.push_str(original);
+                        continue;
+                    }
+                }
+            }
+            result.push_str(line);
+        }
+
+        self.content = result;
+        // Re-parse so self.tree stays in sync with the restored content for any
+        // subsequent steps (validate_formatting, reorder) that rely on it.
+        self.tree = self.parser.parse(&self.content, Some(&self.tree)).unwrap();
         self
     }
 
@@ -175,6 +277,10 @@ impl Formatter {
             .fix_trailing_spaces()
             .remove_trailing_commas_from_preload()
             .postprocess_tree_sitter()
+            // Restore the original text of disabled regions after all other post-processing,
+            // so that the surrounding code is formatted normally while the disabled regions
+            // keep their exact original content.
+            .restore_disabled_regions()
     }
 
     #[inline(always)]
