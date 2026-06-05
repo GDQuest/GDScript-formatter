@@ -104,6 +104,14 @@ struct Args {
     /// lead to syntax changes.
     #[arg(short, long)]
     safe: bool,
+
+    /// Preserve trailing whitespace on lines instead of stripping it.
+    ///
+    /// By default, the formatter removes trailing spaces and tabs from every
+    /// line. Enable this flag when the trailing whitespace is intentional
+    /// (e.g. alignment-sensitive files or editor configurations that rely on it).
+    #[arg(long)]
+    preserve_trailing_whitespace: bool,
 }
 
 #[derive(clap::Subcommand)]
@@ -173,6 +181,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         use_spaces: args.use_spaces,
         reorder_code: args.reorder_code,
         safe: args.safe,
+        preserve_trailing_whitespace: args.preserve_trailing_whitespace,
     };
 
     // Is terminal allows us to distinguish between formatting piped code from

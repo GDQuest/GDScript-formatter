@@ -8,6 +8,8 @@ use std::path::Path;
 test_each_file::test_each_path! { in "./tests/input" => test_file }
 test_each_file::test_each_path! { in "./tests/reorder_code/input" => test_reorder_file }
 test_each_file::test_each_path! { in "./tests/lint/input" as lint => test_lint_file  }
+// Tests that run with preserve_trailing_whitespace = true so trailing whitespace is kept.
+test_each_file::test_each_path! { in "./tests/preserve_trailing_whitespace/input" => test_preserve_trailing_whitespace_file }
 
 fn make_whitespace_visible(s: &str) -> String {
     s.replace(' ', "·")
@@ -52,6 +54,18 @@ fn test_reorder_file(file_path: &Path) {
         &FormatterConfig {
             reorder_code: true,
             safe: true,
+            ..Default::default()
+        },
+        true,
+    );
+}
+
+fn test_preserve_trailing_whitespace_file(file_path: &Path) {
+    test_file_with_config(
+        file_path,
+        &FormatterConfig {
+            // Enable the option under test; all other settings remain at defaults.
+            preserve_trailing_whitespace: true,
             ..Default::default()
         },
         true,

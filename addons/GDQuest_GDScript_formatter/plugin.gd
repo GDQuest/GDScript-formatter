@@ -18,6 +18,7 @@ const SETTING_USE_SPACES = "use_spaces"
 const SETTING_INDENT_SIZE = "indent_size"
 const SETTING_REORDER_CODE = "reorder_code"
 const SETTING_SAFE_MODE = "safe_mode"
+const PRESERVE_TRAILING_WHITESPACE = "preserve_trailing_whitespace"
 const SETTING_FORMATTER_PATH = "formatter_path"
 const SETTING_LINT_ON_SAVE = "lint_on_save"
 const SETTING_LINT_LINE_LENGTH = "lint_line_length"
@@ -38,6 +39,7 @@ var DEFAULT_SETTINGS = {
 	SETTING_INDENT_SIZE: 4,
 	SETTING_REORDER_CODE: false,
 	SETTING_SAFE_MODE: true,
+	PRESERVE_TRAILING_WHITESPACE: false,
 	SETTING_FORMATTER_PATH: "",
 	SETTING_LINT_ON_SAVE: false,
 	SETTING_LINT_LINE_LENGTH: 100,
@@ -509,6 +511,9 @@ func format_code(script: GDScript, force_reorder := false) -> String:
 
 	if get_editor_setting(SETTING_SAFE_MODE):
 		formatter_arguments.push_back("--safe")
+
+	if get_editor_setting(PRESERVE_TRAILING_WHITESPACE):
+		formatter_arguments.push_back("--preserve-trailing-whitespace")
 
 	formatter_arguments.push_back(path_temporary_file)
 

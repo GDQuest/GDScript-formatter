@@ -153,6 +153,116 @@ impl Formatter {
     /// pre-applying rules that could be performance-intensive through topiary.
     #[inline(always)]
     fn preprocess(&mut self) -> &mut Self {
+        if self.config.preserve_trailing_whitespace {
+            // Topiary strips trailing whitespace from every line.
+            // We have to encode all trailing whitespace as comment placeholders before the
+            // Topiary pass, so it can be restored in postprocess().
+            self.encode_trailing_whitespace();
+        }
+        self
+    }
+
+    /// HEX-encodes all trailing whitespace as an inline comment placeholder so it
+    /// survives the Topiary pass (Topiary strips trailing whitespace from every line).
+    ///
+    /// For every line that has trailing whitespace and whose non-whitespace content
+    /// does not already contain `#` (i.e. no existing inline comment), the trailing
+    /// whitespace is replaced with ` # __gdf_tw:HEX__` where HEX is the hex-encoded whitespace:
+    /// - blank whitespace-only line: `\t\n` -> `# __gdf_tw:09__\n`
+    /// - non-blank line:             `pass   \n` -> `pass # __gdf_tw:202020__\n`
+    ///
+    /// Topiary preserves comment nodes as leafs so lines that already contains `#` are left alone.
+    fn encode_trailing_whitespace(&mut self) {
+        const PREFIX: &str = "# __gdf_tw:";
+        const SUFFIX: &str = "__";
+
+        let mut result = String::new();
+        let mut changed = false;
+
+        // split_inclusive keeps '\n' attached so line endings are never lost.
+        for line in self.content.split_inclusive('\n') {
+            let without_nl = line.strip_suffix('\n').unwrap_or(line);
+            let stripped = without_nl.trim_end();
+
+            if stripped.len() < without_nl.len() && !stripped.contains('#') {
+                // Line has trailing whitespace and no existing comment — encode it.
+                let trailing = &without_nl[stripped.len()..];
+                let encoded: String = trailing.bytes().map(|b| format!("{:02X}", b)).collect();
+                if !stripped.is_empty() {
+                    result.push_str(stripped);
+                    result.push(' ');
+                }
+                result.push_str(PREFIX);
+                result.push_str(&encoded);
+                result.push_str(SUFFIX);
+                if line.ends_with('\n') {
+                    result.push('\n');
+                }
+                changed = true;
+            } else {
+                result.push_str(line);
+            }
+        }
+
+        if changed {
+            self.content = result;
+            // Re-parse so self.tree is in sync before Topiary receives the content.
+            self.tree = self.parser.parse(&self.content, None).unwrap();
+        }
+    }
+
+    /// Restores the HEX-encoded placeholders written by encode_trailing_whitespace()
+    /// back to the original trailing whitespace.
+    ///
+    /// Topiary may change the spacing before the `#` marker (e.g. normalise to one
+    /// space), so we locate the marker with rfind and discard everything between the
+    /// code content and the `#` before restoring the decoded whitespace.
+    fn decode_trailing_whitespace(&mut self) -> &mut Self {
+        const PREFIX: &str = "# __gdf_tw:";
+        const SUFFIX: &str = "__";
+
+        if !self.config.preserve_trailing_whitespace || !self.content.contains(PREFIX) {
+            return self;
+        }
+
+        let mut result = String::new();
+        let mut changed = false;
+
+        for line in self.content.split_inclusive('\n') {
+            let line_content = line.strip_suffix('\n').unwrap_or(line);
+            if let Some(marker_pos) = line_content.rfind(PREFIX) {
+                let before = &line_content[..marker_pos];
+                let rest = &line_content[marker_pos + PREFIX.len()..];
+                if let Some(encoded) = rest.strip_suffix(SUFFIX) {
+                    // Only act when every character is a hex digit — guards against
+                    // false-positive matches on user-written comments.
+                    if !encoded.is_empty() && encoded.bytes().all(|b| b.is_ascii_hexdigit()) {
+                        // Trim Topiary's spacing before the marker, then restore the
+                        // decoded trailing whitespace.
+                        result.push_str(before.trim_end());
+                        let chars: Vec<char> = encoded.chars().collect();
+                        for pair in chars.chunks(2) {
+                            let hex: String = pair.iter().collect();
+                            if let Ok(byte) = u8::from_str_radix(&hex, 16) {
+                                result.push(byte as char);
+                            }
+                        }
+                        if line.ends_with('\n') {
+                            result.push('\n');
+                        }
+                        changed = true;
+                        continue;
+                    }
+                }
+            }
+            result.push_str(line);
+        }
+
+        if changed {
+            self.content = result;
+            // Re-parse so self.tree stays in sync for validate_formatting / reorder.
+            self.tree = self.parser.parse(&self.content, Some(&self.tree)).unwrap();
+        }
         self
     }
 
@@ -175,6 +285,8 @@ impl Formatter {
             .fix_trailing_spaces()
             .remove_trailing_commas_from_preload()
             .postprocess_tree_sitter()
+            // Keep this the last postprocessing step, to have surrounding code already formatted!
+            .decode_trailing_whitespace()
     }
 
     #[inline(always)]
@@ -464,6 +576,11 @@ impl Formatter {
     /// This function removes trailing spaces at the end of lines.
     #[inline(always)]
     fn fix_trailing_spaces(&mut self) -> &mut Self {
+        // When we want to preserve trailing whitespace, we can skip here.
+        // They are HEX encoded anyway.
+        if self.config.preserve_trailing_whitespace {
+            return self;
+        }
         let re = RegexBuilder::new(r"[ \t]+$")
             .multi_line(true)
             .build()
