@@ -8,6 +8,7 @@ pub struct FormatterConfig {
     pub use_spaces: bool,
     pub reorder_code: bool,
     pub safe: bool,
+    pub preserve_trailing_whitespace: bool,
 }
 
 impl Default for FormatterConfig {
@@ -17,6 +18,7 @@ impl Default for FormatterConfig {
             use_spaces: false,
             reorder_code: false,
             safe: false,
+            preserve_trailing_whitespace: false,
         }
     }
 }
