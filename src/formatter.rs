@@ -54,6 +54,9 @@ struct Formatter {
     tree: Tree,
     original_source: Option<String>,
     indent_string: String,
+    // Original text of each `# fmt: off` ... `# fmt: on` region,
+    // indexed by the order they appear in the file. Used to restore regions after formatting.
+    disabled_regions: Vec<String>,
 }
 
 impl Formatter {
@@ -87,6 +90,7 @@ impl Formatter {
             input_tree,
             parser,
             indent_string,
+            disabled_regions: Vec::new(),
         }
     }
 
@@ -153,6 +157,119 @@ impl Formatter {
     /// pre-applying rules that could be performance-intensive through topiary.
     #[inline(always)]
     fn preprocess(&mut self) -> &mut Self {
+        self.extract_disabled_regions();
+        self
+    }
+
+    /// Scans the content for `# fmt: off` / `# fmt: on` regions (ignoring whitespace).
+    /// Each complete region (including the marker lines) is stored literally in
+    /// self.disabled_regions and replaced with a single placeholder comment of the
+    /// form `# fmt:preserved-region:N`. This prevents Topiary and all
+    /// post-processing steps from touching the content inside those regions.
+    fn extract_disabled_regions(&mut self) {
+        enum LineKind {
+            FmtOn,
+            FmtOff,
+            Other,
+        }
+
+        /// Checks whether `line` is a `# fmt: off` or `# fmt: on` marker.
+        fn classify_line(line: &str) -> LineKind {
+            if !line.contains('#') {
+                return LineKind::Other;
+            }
+
+            let line = line.trim();
+            let Some(after_hash) = line.strip_prefix('#') else {
+                return LineKind::Other;
+            };
+            let Some(after_fmt) = after_hash.trim_start().strip_prefix("fmt:") else {
+                return LineKind::Other;
+            };
+
+            match after_fmt.trim_start() {
+                "off" => LineKind::FmtOff,
+                "on" => LineKind::FmtOn,
+                _ => LineKind::Other,
+            }
+        }
+
+        let mut result = String::new();
+        let mut in_disabled_region = false;
+        let mut current_region = String::new();
+
+        // split_inclusive keeps the '\n' attached to each line so we never lose
+        // trailing newlines when we reassemble the string.
+        for line in self.content.split_inclusive('\n') {
+            match classify_line(line) {
+                LineKind::FmtOff if !in_disabled_region => {
+                    in_disabled_region = true;
+                    current_region.push_str(line);
+                }
+                LineKind::FmtOn if in_disabled_region => {
+                    current_region.push_str(line);
+                    in_disabled_region = false;
+                    let region_index = self.disabled_regions.len();
+                    self.disabled_regions.push(current_region.clone());
+                    current_region.clear();
+                    result.push_str(&format!("# fmt:preserved-region:{}\n", region_index));
+                }
+                _ => {
+                    if in_disabled_region {
+                        current_region.push_str(line);
+                    } else {
+                        result.push_str(line);
+                    }
+                }
+            }
+        }
+
+        // An unclosed disable region (no matching enable marker) is also preserved.
+        if in_disabled_region {
+            let region_index = self.disabled_regions.len();
+            self.disabled_regions.push(current_region);
+            result.push_str(&format!("# fmt:preserved-region:{}\n", region_index));
+        }
+
+        self.content = result;
+
+        // Reparse the tree in case we modified the source code and replaced
+        // some regions with disabled formatting.
+        if !self.disabled_regions.is_empty() {
+            self.tree = self.parser.parse(&self.content, None).unwrap();
+        }
+    }
+
+    /// Replaces every placeholder comment emitted by extract_disabled_regions() with
+    /// the original region text that was saved at that time.  Called as the last
+    /// post-processing step so all normal formatting has already been applied to the
+    /// surrounding code.
+    fn restore_disabled_regions(&mut self) -> &mut Self {
+        if self.disabled_regions.is_empty() {
+            return self;
+        }
+
+        let mut result = String::new();
+
+        for line in self.content.split_inclusive('\n') {
+            // Strip leading whitespace before checking for the placeholder; Topiary
+            // may have adjusted indentation on comment lines.
+            let trimmed = line.trim();
+            if let Some(rest) = trimmed.strip_prefix("# fmt:preserved-region:") {
+                if let Ok(index) = rest.parse::<usize>() {
+                    if let Some(original) = self.disabled_regions.get(index) {
+                        result.push_str(original);
+                        continue;
+                    }
+                }
+            }
+            result.push_str(line);
+        }
+
+        self.content = result;
+        // Re-parse so self.tree stays in sync with the restored content for any
+        // subsequent steps (validate_formatting, reorder) that rely on it.
+        self.tree = self.parser.parse(&self.content, Some(&self.tree)).unwrap();
         self
     }
 
@@ -175,6 +292,10 @@ impl Formatter {
             .fix_trailing_spaces()
             .remove_trailing_commas_from_preload()
             .postprocess_tree_sitter()
+            // Restore the original text of disabled regions after all other post-processing,
+            // so that the surrounding code is formatted normally while the disabled regions
+            // keep their exact original content.
+            .restore_disabled_regions()
     }
 
     #[inline(always)]
