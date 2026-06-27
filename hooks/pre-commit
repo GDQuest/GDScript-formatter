@@ -1,0 +1,5 @@
+#!/bin/sh
+staged=$(git diff --cached --name-only --diff-filter=ACM | grep '\.gd$')
+[ -z "$staged" ] && exit 0
+echo "$staged" | xargs gdscript-formatter
+git add $staged
