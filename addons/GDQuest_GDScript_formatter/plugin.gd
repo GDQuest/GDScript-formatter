@@ -146,7 +146,7 @@ func format_current_script() -> bool:
 		return false
 	var code_edit: CodeEdit = EditorInterface.get_script_editor().get_current_editor().get_base_editor()
 
-	var formatted_code := format_code(current_script)
+	var formatted_code := format_code(current_script, false, code_edit.text)
 	if formatted_code.is_empty():
 		return false
 
@@ -385,7 +385,7 @@ func reorder_code() -> bool:
 		return false
 	var code_edit: CodeEdit = EditorInterface.get_script_editor().get_current_editor().get_base_editor()
 
-	var formatted_code := format_code(current_script, true)
+	var formatted_code := format_code(current_script, true, code_edit.text)
 	if formatted_code.is_empty():
 		return false
 
@@ -465,14 +465,22 @@ func has_editor_setting(setting_name: String) -> bool:
 	return editor_settings.has_setting(full_setting_key)
 
 
-## Formats a GDScript file using the GDScript Formatter,
-## and returns the formatted code as a string. Optionally reorders the code.
-func format_code(script: GDScript, force_reorder := false) -> String:
+## Formats GDScript code using the GDScript Formatter and returns it as a string.
+## When source_content is null, reads the code from the GDScript resource directly.
+## Otherwise, formats source_content without reading from the file.
+##
+## Pass a string through source_content when the user is editing the script in
+## the editor and requests formatting without having saved their changes (in
+## that case, the code they're editing only exists in the script editor's open
+## tab).
+func format_code(script: GDScript, force_reorder := false, source_content: Variant = null) -> String:
 	var script_path := script.resource_path
-	if script_path.is_empty():
+	if source_content == null and script_path.is_empty():
 		push_error("GDScript Formatter Error: Can't format an unsaved script.")
 		return ""
 
+	# Source content is not set, read from the GDScript resource instead.
+	#
 	# This is a bit of a hack to avoid two issues:
 	#
 	# 1. Running GDScript formatter on stdin/stdout through Godot with
@@ -485,22 +493,23 @@ func format_code(script: GDScript, force_reorder := false) -> String:
 	#
 	# To work around that, I save a copy of the script as a temporary file,
 	# format the file, and read it specifically as a UTF-8 string.
-	var source_file := FileAccess.open(ProjectSettings.globalize_path(script_path), FileAccess.READ)
-	if not source_file:
-		push_error("GDScript Formatter Error: Cannot read source file: " + script_path)
-		return ""
+	if source_content == null:
+		var source_file := FileAccess.open(ProjectSettings.globalize_path(script_path), FileAccess.READ)
+		if not source_file:
+			push_error("GDScript Formatter Error: Cannot read source file: " + script_path)
+			return ""
 
-	# FileAccess.get_as_text() reads the file as UTF-8. We use it here and after
-	# formatting the temporary file.
-	var source_content := source_file.get_as_text()
-	source_file.close()
+		# FileAccess.get_as_text() reads the file as UTF-8. We use it here and after
+		# formatting the temporary file.
+		source_content = source_file.get_as_text()
+		source_file.close()
 
 	var path_temporary_file := OS.get_temp_dir().path_join("gdscript_formatter_%d.gd" % Time.get_ticks_msec())
 	var temporary_file := FileAccess.open(path_temporary_file, FileAccess.WRITE)
 	if temporary_file == null:
 		push_error("GDScript Formatter Error: Cannot create temporary file: " + path_temporary_file)
 		return ""
-	temporary_file.store_string(source_content)
+	temporary_file.store_string(source_content as String)
 	temporary_file.close()
 
 	var formatter_arguments := PackedStringArray()
@@ -534,7 +543,7 @@ func format_code(script: GDScript, force_reorder := false) -> String:
 		else:
 			push_error("Format GDScript: Cannot read formatted output from temp file")
 	else:
-		push_error("Format GDScript failed: " + script_path)
+		push_error("Format GDScript failed: " + (script_path if not script_path.is_empty() else "unsaved script"))
 		push_error(
 			"\tExit code: " + str(exit_code) + " Output: " +
 			(output[0].strip_edges() if output.size() > 0 else "No output"),

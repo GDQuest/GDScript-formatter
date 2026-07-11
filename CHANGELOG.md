@@ -30,10 +30,12 @@ This file documents the changes made to the formatter with each release.
 - Fix `lint loop-variable-name` for unused variables (#225)
 - Fix `if` statement and comment line getting dedented in nested code blocks (#190)
 - Fix formatting with vs without `--reorder-code` not being idempotent in some situations (#207)
-- Fix Godot addon: "Uninstall Formatter" command doesn't exist (#189)
-- Fix Godot addon: Installing the binary formatter on Mac M1 with ARM installs wrong x86 binary (#248)
 - Fix code inside dedented region comments getting dedented too: region comments will now indent into the code (#172)
 - Fix dedented comment in a block's body (function body, loop body, if statement body...) causing following lines in the block to be dedented too (#252)
+- Godot addon fixes:
+  - Fix formatter undoes any changes in script if they have not been saved (#243)
+  - Fix "Uninstall Formatter" command doesn't exist message (#189)
+  - Fix installing the binary formatter on Mac M1 with ARM installs wrong x86 binary (#248)
 
 
 ## Release 0.20.1 (2026-05-26)
