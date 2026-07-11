@@ -59,7 +59,7 @@ pub enum DeclarationKind {
     OnReadyVariable, // 10
     Method,          // 11: functions (sub-sorted by MethodType)
     InnerClass,      // 12
-    Unknown,         // 255
+    Unknown = 255,   // 255
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

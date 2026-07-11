@@ -2297,6 +2297,14 @@ fn emit_inter_child_separator(
         return;
     }
 
+    // Variable annotations stay inline even when they have arguments. Keeping
+    // them inline also ensures that sibling and nested annotation AST shapes
+    // produce the same output.
+    if previous_kind == GDScriptNodeKind::Annotations && parent_kind == GDScriptNodeKind::Variable {
+        render_elements.push(RenderElement::Space);
+        return;
+    }
+
     // If the previous child is an annotations node and any of the annotations
     // has arguments (e.g. @rpc("any_peer")), keep the annotation on its own line.
     if previous_kind == GDScriptNodeKind::Annotations {
