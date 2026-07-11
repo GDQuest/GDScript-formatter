@@ -227,7 +227,7 @@ dependencies = [
 [[package]]
 name = "tree-sitter-gdscript"
 version = "6.1.0"
-source = "git+https://github.com/GDQuest/tree-sitter-gdscript.git?rev=d7cf0d60cabcd69688471891076508a4c606270f#d7cf0d60cabcd69688471891076508a4c606270f"
+source = "git+https://github.com/GDQuest/tree-sitter-gdscript.git?rev=7225c50a205eebac339227e3fef1a491bffeb92b#7225c50a205eebac339227e3fef1a491bffeb92b"
 dependencies = [
  "cc",
  "tree-sitter-language",
