@@ -1,15 +1,20 @@
 use crate::linter::lib::{get_line_column, get_node_text};
 use crate::linter::rules::Rule;
 use crate::linter::{LintIssue, LintSeverity};
+use crate::node_kind::GDScriptNodeKind;
 use tree_sitter::Node;
 pub struct PrivateAccessRule;
 
 impl Rule for PrivateAccessRule {
-    fn get_target_ast_nodes(&self) -> &[&str] {
-        &["attribute"]
+    fn get_target_ast_nodes(&self) -> &[GDScriptNodeKind] {
+        &[GDScriptNodeKind::Attribute]
     }
 
-    fn check_node(&mut self, node: &Node, source_code: &str) -> Vec<LintIssue> {
+    fn check_node(
+        &mut self,
+        node: &Node,
+        source_code: &str,
+    ) -> Vec<LintIssue> {
         let mut issues = Vec::new();
 
         let mut attr_cursor = node.walk();
@@ -19,7 +24,9 @@ impl Rule for PrivateAccessRule {
 
             if attr_cursor.goto_next_sibling() && attr_cursor.goto_next_sibling() {
                 let method_node = attr_cursor.node();
-                if method_node.kind() == "attribute_call" {
+                if GDScriptNodeKind::get_kind_from_ast_node(method_node)
+                    == GDScriptNodeKind::AttributeCall
+                {
                     if let Some(method_name_node) = method_node.child(0) {
                         let method_name = get_node_text(&method_name_node, source_code);
                         if method_name.starts_with('_')
@@ -36,7 +43,9 @@ impl Rule for PrivateAccessRule {
                             ));
                         }
                     }
-                } else if method_node.kind() == "identifier" {
+                } else if GDScriptNodeKind::get_kind_from_ast_node(method_node)
+                    == GDScriptNodeKind::Identifier
+                {
                     let method_name = get_node_text(&method_node, source_code);
                     if method_name.starts_with('_')
                         && object_name != "super"

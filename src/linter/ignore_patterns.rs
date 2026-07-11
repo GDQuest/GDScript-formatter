@@ -65,9 +65,9 @@ fn parse_ignore_comment(comment: &str) -> Option<HashSet<String>> {
             // Parse comma and/or space separated rule names
             let rules: HashSet<String> = rules_part
                 .split(|c: char| c == ',' || c.is_whitespace())
-                .map(|s| s.trim())
+                .map(str::trim)
                 .filter(|s| !s.is_empty())
-                .map(|s| s.to_string())
+                .map(ToString::to_string)
                 .collect();
 
             return Some(rules);
@@ -93,6 +93,7 @@ pub fn should_ignore_rule(
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used)]
     use super::*;
 
     #[test]

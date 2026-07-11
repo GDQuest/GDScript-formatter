@@ -1,3 +1,6 @@
+# Enum spacing and wrapping
+# Single line enum get spaces between members, multi-line enums get 1 indent and
+# trailing commas.
 enum { A, B, C }
 
 enum Named { A, B, C }

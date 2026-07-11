@@ -2,19 +2,20 @@ use crate::linter::lib::{get_line_column, get_node_text};
 use crate::linter::regex_patterns::PASCAL_CASE;
 use crate::linter::rules::Rule;
 use crate::linter::{LintIssue, LintSeverity};
+use crate::node_kind::GDScriptNodeKind;
 use tree_sitter::Node;
 
 pub struct ClassNameRule;
 
 impl ClassNameRule {
-    fn is_valid_class_name(&self, name: &str) -> bool {
+    fn is_valid_class_name(name: &str) -> bool {
         PASCAL_CASE.is_match(name)
     }
 }
 
 impl Rule for ClassNameRule {
-    fn get_target_ast_nodes(&self) -> &[&str] {
-        &["class_name_statement"]
+    fn get_target_ast_nodes(&self) -> &[GDScriptNodeKind] {
+        &[GDScriptNodeKind::ClassName]
     }
 
     fn check_node(&mut self, node: &Node, source_code: &str) -> Vec<LintIssue> {
@@ -22,7 +23,7 @@ impl Rule for ClassNameRule {
 
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = get_node_text(&name_node, source_code);
-            if !self.is_valid_class_name(name) {
+            if !Self::is_valid_class_name(name) {
                 let (line, column) = get_line_column(&name_node);
                 issues.push(LintIssue::new(
                     line,

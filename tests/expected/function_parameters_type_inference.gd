@@ -1,4 +1,4 @@
-# Type inference should stay without space between : and = (issue #31)
+# Type inference (:=) in function parameters
 func set_avatar_at(at := AvatarAt.LEFT) -> void:
 	pass
 

@@ -2,6 +2,38 @@
 
 This file documents the changes made to the formatter with each release.
 
+## (Unreleased) Development version 0.21.0 (2026-07-11)
+
+### Added
+
+- Implement automated line wrapping with a configurable max line length option (#187)
+- Add EditorConfig support to share formatting settings across devices or a team (#244)
+- Add option to preserve leading indentation within code blocks (#151)
+- Add a way to disable the formatter on code regions (Thanks @discordier!)
+- Allow configuring the number of blank lines between functions (#249)
+- Allow configuring the number of extra indents in continuation lines
+
+### Changed
+
+- Complete rewrite of the code formatter to make it more robust and much faster too (#250, #72)
+- Refactor post-processing to use a visitor pattern with AST edits instead of regex-based processing (#220)
+- Remove all `unwrap()` calls from the project and follow stricter linting rules (#145)
+- Remove multiple third-party dependencies and greatly improve compilation speed
+- Improve performance by an order of magnitude (10x to over 50x speedup depending on the case)
+
+### Fixed
+
+- Fix formatter issue with extra space in front of `class_name` (#235)
+- Fix wrong `@annotation` formatting inside an inner class (#245)
+- Fix `--reorder-code` detaching per-function `@warning_ignore(...)` from its function in scripts without a `class_name`/`extends` header (#242)
+- Fix wrong region order in inner classes (#247)
+- Fix `lint loop-variable-name` for unused variables (#225)
+- Fix `if` statement and comment line getting dedented in nested code blocks (#190)
+- Fix formatting with vs without `--reorder-code` not being idempotent in some situations (#207)
+- Fix Godot addon: "Uninstall Formatter" command doesn't exist (#189)
+- Fix Godot addon: Installing the binary formatter on Mac M1 with ARM installs wrong x86 binary (#248)
+
+
 ## Release 0.20.1 (2026-05-26)
 
 ### Fixed

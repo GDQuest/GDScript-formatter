@@ -1,24 +1,25 @@
+mod cli;
+
 use std::{
     env, fs,
     io::{self, IsTerminal, Read, Write},
     path::PathBuf,
+    thread,
 };
-
-use clap::Parser;
-use rayon::prelude::*;
 
 use gdscript_formatter::linter::rule_config::{
     get_all_rule_names, parse_disabled_rules, validate_rule_names,
 };
 use gdscript_formatter::{
-    FormatterConfig, formatter::format_gdscript_with_config, linter::LinterConfig,
+    FormatterConfiguration, RenderElement, format_gdscript, format_gdscript_with_buffers,
+    linter::LinterConfig,
 };
 use std::collections::HashSet;
 
-/// This struct is used to hold all the information about the result when
-/// formatting a single file. Now that we use parallel processing, we need to
-/// keep track of the original index to order the files in the output when
-/// printing results.
+use cli::{Command, parse_args};
+
+const ERROR_CODE_NOT_FORMATTED: i32 = 1;
+
 #[derive(Debug, Clone)]
 struct FormatterOutput {
     index: usize,
@@ -27,119 +28,17 @@ struct FormatterOutput {
     is_formatted: bool,
 }
 
-#[derive(Parser)]
-/// A GDScript formatter following the official style guide.
-///
-/// This program formats GDScript files with a consistent style and indentation
-/// using Topiary and Tree-sitter.
-///
-/// By default, the formatter overwrites input files with the formatted code.
-/// Use the --stdout flag to output to standard output instead.
-///
-/// The latest version of the GDScript style guide can be found at:
-/// https://docs.godotengine.org/en/stable/tutorials/scripting/gdscript/gdscript_styleguide.html
-#[clap(
-    // Use the version number directly from Cargo.toml at compile time
-    version = env!("CARGO_PKG_VERSION"),
-    max_term_width = 120
-)]
-struct Args {
-    /// The GDScript file(s) to format. If no file paths are provided, the
-    /// program reads from standard input and outputs to standard output.
-    #[arg(value_name = "FILES")]
-    input: Vec<PathBuf>,
-
-    #[command(subcommand)]
-    command: Option<Commands>,
-
-    /// Output formatted code to stdout without changing FILES.
-    ///
-    /// If multiple input files are provided, each file's content is preceded
-    /// by the line "#--file:<file_path>".
-    ///
-    /// This flag is ignored when reading from stdin since stdout is always
-    /// used.
-    #[arg(long)]
-    stdout: bool,
-
-    /// Check if FILES are formatted, making no changes.
-    ///
-    /// Exits with code 0 if the file is already formatted and 1 if it's not
-    /// formatted.
-    #[arg(short, long)]
-    check: bool,
-
-    /// Use spaces for indentation instead of tabs.
-    ///
-    /// Use --indent-size to set the number of spaces to use as indentation.
-    #[arg(long)]
-    use_spaces: bool,
-
-    /// Set how many spaces to use for indentation.
-    ///
-    /// Has no effect without the --use-spaces flag.
-    #[arg(long, default_value = "4", value_name = "NUM")]
-    indent_size: usize,
-
-    /// Reorder code to follow the official GDScript style guide.
-    ///
-    /// Reorder source-level declarations (signals, properties, methods, etc.)
-    /// in this order: signals, enums, constants, properties, static and built-in
-    /// virtual methods, public methods, pseudo-private methods, and sub-classes.
-    ///
-    /// If enabled, reordering happens after formatting the code.
-    #[arg(long)]
-    reorder_code: bool,
-
-    /// Enable safe mode.
-    ///
-    /// This mode ensures that after formatting, the code still has the same
-    /// syntax and structure as when initially parsed. If not, formatting is
-    /// canceled.
-    ///
-    /// This offers a good amount protection against the formatter failing
-    /// on new syntax at the cost of a small little extra running time.
-    ///
-    /// WARNING: this is not a perfect solution. Some rare edge cases may still
-    /// lead to syntax changes.
-    #[arg(short, long)]
-    safe: bool,
-}
-
-#[derive(clap::Subcommand)]
-enum Commands {
-    /// Lint GDScript files for style and convention issues
-    Lint {
-        #[arg(help = "Input GDScript file(s) to lint", value_name = "FILES")]
-        input: Vec<PathBuf>,
-        #[arg(
-            long,
-            help = "Disable specific linting rules (comma-separated)",
-            value_name = "RULES"
-        )]
-        disable: Option<String>,
-        #[arg(long, help = "Maximum line length allowed", default_value = "100")]
-        max_line_length: usize,
-        #[arg(long, help = "List all available linting rules")]
-        list_rules: bool,
-        #[arg(long, help = "Use pretty formatting for lint output")]
-        pretty: bool,
-    },
-}
-
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args = Args::parse();
+    let args = parse_args();
 
-    // Handle lint subcommand
-    if let Some(Commands::Lint {
-        input,
-        disable,
+    if let Command::Lint {
+        disabled_linter_rules,
         max_line_length,
-        list_rules,
-        pretty,
-    }) = args.command
+        do_list_rules,
+        do_pretty_print,
+    } = args.command
     {
-        if list_rules {
+        if do_list_rules {
             println!("Available linting rules:");
             for rule in get_all_rule_names() {
                 println!("  {}", rule);
@@ -147,7 +46,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             return Ok(());
         }
 
-        let disabled_rules = if let Some(disable_str) = disable {
+        let disabled_rules = if let Some(disable_str) = disabled_linter_rules {
             let rules = parse_disabled_rules(&disable_str);
             if let Err(invalid_rules) = validate_rule_names(&rules) {
                 eprintln!("Error: Invalid rule names: {}", invalid_rules.join(", "));
@@ -164,28 +63,62 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             max_line_length,
         };
 
-        let input_gdscript_files = find_gdscript_files(&input)?;
-        return run_linter(input_gdscript_files, linter_config, pretty);
+        let input_gdscript_files = find_gdscript_files(&args.input_file_paths)?;
+        return run_linter(&input_gdscript_files, linter_config, do_pretty_print);
     }
 
-    let config = FormatterConfig {
-        indent_size: args.indent_size,
-        use_spaces: args.use_spaces,
-        reorder_code: args.reorder_code,
-        safe: args.safe,
+    let Command::Format {
+        do_print_to_stdout,
+        do_check_formatted_only,
+        use_spaces,
+        indent_size,
+        use_safe_mode,
+        do_reorder_code,
+        max_line_length,
+        blank_lines_around_definitions,
+        continuation_indent_level,
+    } = args.command
+    else {
+        unreachable!();
     };
 
-    // Is terminal allows us to distinguish between formatting piped code from
-    // stdin automatically finding all gdscript files from the current directory
-    if args.input.is_empty() && !io::stdin().is_terminal() {
+    // Precedence: CLI > editorconfig > defaults.
+    // Build from defaults, apply editorconfig once, then CLI overrides.
+    let mut config = FormatterConfiguration::default();
+
+    config.printer.indent_size = indent_size;
+    config.printer.use_spaces = use_spaces;
+    config.safe = use_safe_mode;
+    config.reorder_code = do_reorder_code;
+
+    // Apply editorconfig using current dir or first file as anchor.
+    let anchor = if let Some(first) = args.input_file_paths.first() {
+        first.clone()
+    } else {
+        env::current_dir().map_err(|error| format!("Failed to get current directory: {}", error))?
+    };
+    gdscript_formatter::editorconfig::apply_editorconfig_to_formatter_config(&mut config, &anchor);
+
+    // CLI overrides beat editorconfig.
+    if let Some(n) = max_line_length {
+        config.printer.max_line_length = n;
+    }
+    if let Some(n) = blank_lines_around_definitions {
+        config.blank_lines_around_definitions = n;
+    }
+    if let Some(n) = continuation_indent_level {
+        config.printer.continuation_indent_level = n;
+    }
+
+    if args.input_file_paths.is_empty() && !io::stdin().is_terminal() {
         let mut input_content = String::new();
         io::stdin()
             .read_to_string(&mut input_content)
             .map_err(|error| format!("Failed to read from stdin: {}", error))?;
 
-        let formatted_content = format_gdscript_with_config(&input_content, &config)?;
+        let formatted_content = format_gdscript(&input_content, &config)?;
 
-        if args.check {
+        if do_check_formatted_only {
             if input_content != formatted_content {
                 eprintln!("The input passed via stdin is not formatted");
                 std::process::exit(1);
@@ -199,13 +132,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    let input_paths = if args.input.is_empty() {
+    let input_paths = if args.input_file_paths.is_empty() {
         vec![
             env::current_dir()
                 .map_err(|error| format!("Failed to get current directory: {}", error))?,
         ]
     } else {
-        args.input
+        args.input_file_paths
     };
     let input_gdscript_files = find_gdscript_files(&input_paths)?;
 
@@ -216,64 +149,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         total_files,
         if total_files == 1 { "" } else { "s" }
     );
-    io::stdout().flush().unwrap();
+    let _ = io::stdout().flush();
 
-    // We use the rayon library to automatically process files in parallel for
-    // us. The formatter runs largely single threaded so this speeds things up a
-    // lot on multi-core CPUs
-    let outputs: Vec<Result<FormatterOutput, String>> = input_gdscript_files
-        .par_iter()
-        .enumerate()
-        .map(|(index, file_path)| {
-            let input_content = fs::read_to_string(file_path).map_err(|error| {
-                format!("Failed to read file {}: {}", file_path.display(), error)
-            })?;
+    let mut sorted_outputs: Vec<Result<FormatterOutput, String>> =
+        format_files_parallel(&input_gdscript_files, &config);
 
-            let formatted_content =
-                format_gdscript_with_config(&input_content, &config).map_err(|error| {
-                    format!("Failed to format file {}: {}", file_path.display(), error)
-                })?;
+    sorted_outputs.sort_by(compare_output_index);
 
-            let is_formatted = input_content == formatted_content;
-
-            Ok(FormatterOutput {
-                index,
-                file_path: file_path.clone(),
-                formatted_content,
-                is_formatted,
-            })
-        })
-        .collect();
-
-    // Restore the original order of the input files based on their initial index
-    let mut sorted_outputs: Vec<_> = outputs.into_iter().collect();
-    sorted_outputs.sort_by_key(|output| {
-        match output {
-            Ok(output) => output.index,
-            // Sort errors at the end in no particular order
-            Err(_) => usize::MAX,
-        }
-    });
-
-    // If true, all input files were already formatted (used for check mode)
     let mut all_formatted = true;
     let mut modified_file_count = 0;
     let mut unformatted_files = Vec::new();
     for output in sorted_outputs {
         match output {
             Ok(output) => {
-                if args.check {
+                if do_check_formatted_only {
                     if !output.is_formatted {
                         all_formatted = false;
                         unformatted_files.push(output.file_path);
                     }
-                } else if args.stdout {
-                    // Clear the progress message before printing formatted files to stdout
+                } else if do_print_to_stdout {
                     terminal_clear_line();
-                    // A little bit hacky, but because terminals by default output both stdout and stderr
-                    // we need to return carriage to the start to print formatted output from the start of the line
                     eprint!("\r");
-                    // If there are multiple input files we still allow stdout but we print a separator
                     if total_files > 1 {
                         println!("#--file:{}", output.file_path.display());
                     }
@@ -295,19 +191,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    if args.check {
+    if do_check_formatted_only {
+        terminal_clear_line();
         if all_formatted {
-            terminal_clear_line();
             eprintln!("\rAll {} file(s) are formatted", total_files);
         } else {
-            terminal_clear_line();
             eprintln!("\rSome files are not formatted");
             for file_path in unformatted_files {
                 eprintln!("{}", file_path.display());
             }
-            std::process::exit(1);
+            std::process::exit(ERROR_CODE_NOT_FORMATTED);
         }
-    } else if !args.stdout {
+    } else if !do_print_to_stdout {
         terminal_clear_line();
         if total_files == 1 {
             if modified_file_count > 0 {
@@ -334,12 +229,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn run_linter(
-    input_files: Vec<PathBuf>,
+    input_files: &[PathBuf],
     config: LinterConfig,
-    pretty: bool,
+    do_pretty_print: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut linter = gdscript_formatter::linter::GDScriptLinter::new(config)?;
-    let has_issues = linter.lint_files(input_files, pretty)?;
+    let has_issues = linter.lint_files(input_files, do_pretty_print)?;
 
     if has_issues {
         std::process::exit(1);
@@ -348,11 +243,89 @@ fn run_linter(
     Ok(())
 }
 
+fn format_one_file(
+    index: usize,
+    file_path: &PathBuf,
+    config: &FormatterConfiguration,
+    render_elements: &mut Vec<RenderElement>,
+    output: &mut String,
+) -> Result<FormatterOutput, String> {
+    let input_content = fs::read_to_string(file_path)
+        .map_err(|error| format!("Failed to read file {}: {}", file_path.display(), error))?;
+
+    format_gdscript_with_buffers(&input_content, config, render_elements, output)
+        .map_err(|error| format!("Failed to format file {}: {}", file_path.display(), error))?;
+
+    let is_formatted = input_content == *output;
+
+    Ok(FormatterOutput {
+        index,
+        file_path: file_path.clone(),
+        formatted_content: output.clone(),
+        is_formatted,
+    })
+}
+
+fn format_files_parallel(
+    files: &[PathBuf],
+    config: &FormatterConfiguration,
+) -> Vec<Result<FormatterOutput, String>> {
+    if files.is_empty() {
+        return Vec::new();
+    }
+
+    let hardware_threads = match thread::available_parallelism() {
+        Ok(n) => n.get(),
+        Err(_) => 1,
+    };
+    let thread_count = hardware_threads.min(files.len());
+    let chunk_size = files.len().div_ceil(thread_count);
+
+    thread::scope(|scope| {
+        let mut handles = Vec::with_capacity(thread_count);
+        for (chunk_index, chunk) in files.chunks(chunk_size).enumerate() {
+            let handle = scope.spawn(move || format_chunk(chunk, chunk_index, chunk_size, config));
+            handles.push(handle);
+        }
+
+        let mut all = Vec::with_capacity(files.len());
+        for handle in handles {
+            all.extend(handle.join().expect("worker thread panicked"));
+        }
+        all
+    })
+}
+
+fn format_chunk(
+    chunk: &[PathBuf],
+    chunk_index: usize,
+    chunk_size: usize,
+    config: &FormatterConfiguration,
+) -> Vec<Result<FormatterOutput, String>> {
+    let mut results = Vec::with_capacity(chunk.len());
+    let mut render_elements: Vec<RenderElement> = Vec::new();
+    let mut output = String::new();
+    for (local_index, file_path) in chunk.iter().enumerate() {
+        let global_index = chunk_index * chunk_size + local_index;
+        results.push(format_one_file(
+            global_index,
+            file_path,
+            config,
+            &mut render_elements,
+            &mut output,
+        ));
+    }
+    results
+}
+
 fn find_gdscript_files(
     input_paths: &[PathBuf],
 ) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
     let mut gdscript_file_paths = Vec::new();
-    let mut paths_to_check: Vec<PathBuf> = input_paths.iter().map(|p| p.to_path_buf()).collect();
+    let mut paths_to_check: Vec<PathBuf> = Vec::with_capacity(input_paths.len());
+    for path in input_paths {
+        paths_to_check.push(path.to_path_buf());
+    }
 
     while let Some(current_path) = paths_to_check.pop() {
         if current_path.is_dir() {
@@ -373,17 +346,19 @@ fn find_gdscript_files(
                 })?;
                 if entry.path().is_dir() {
                     paths_to_check.push(entry.path());
-                } else if entry.path().extension().is_some_and(|ext| ext == "gd") {
-                    gdscript_file_paths.push(entry.path());
+                } else if let Some(extension) = entry.path().extension() {
+                    if extension == "gd" {
+                        gdscript_file_paths.push(entry.path());
+                    }
                 }
             }
-        } else if current_path.extension().is_some_and(|ext| ext == "gd") {
-            gdscript_file_paths.push(current_path);
+        } else if let Some(extension) = current_path.extension() {
+            if extension == "gd" {
+                gdscript_file_paths.push(current_path);
+            }
         }
     }
-    // We sort the files and deduplicate them so their order is deterministic
-    // Plus to ensure you will not get any duplicated output, for example, when
-    // linting or checking formatted files with multiple input paths.
+
     gdscript_file_paths.sort();
     gdscript_file_paths.dedup();
 
@@ -395,6 +370,21 @@ fn find_gdscript_files(
     }
 
     Ok(gdscript_file_paths)
+}
+
+fn compare_output_index(
+    left: &Result<FormatterOutput, String>,
+    right: &Result<FormatterOutput, String>,
+) -> std::cmp::Ordering {
+    let left_index = match left {
+        Ok(formatter_output) => formatter_output.index,
+        Err(_) => usize::MAX,
+    };
+    let right_index = match right {
+        Ok(formatter_output) => formatter_output.index,
+        Err(_) => usize::MAX,
+    };
+    left_index.cmp(&right_index)
 }
 
 fn terminal_clear_line() {

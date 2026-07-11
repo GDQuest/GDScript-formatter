@@ -1,16 +1,21 @@
 use crate::linter::lib::{get_line_column, get_node_text};
 use crate::linter::rules::Rule;
 use crate::linter::{LintIssue, LintSeverity};
+use crate::node_kind::GDScriptNodeKind;
 use tree_sitter::Node;
 
 pub struct ComparisonWithItselfRule;
 
 impl Rule for ComparisonWithItselfRule {
-    fn get_target_ast_nodes(&self) -> &[&str] {
-        &["binary_operator"]
+    fn get_target_ast_nodes(&self) -> &[GDScriptNodeKind] {
+        &[GDScriptNodeKind::BinaryOperator]
     }
 
-    fn check_node(&mut self, node: &Node, source_code: &str) -> Vec<LintIssue> {
+    fn check_node(
+        &mut self,
+        node: &Node,
+        source_code: &str,
+    ) -> Vec<LintIssue> {
         let mut issues = Vec::new();
 
         if let (Some(left_node), Some(op_node), Some(right_node)) = (

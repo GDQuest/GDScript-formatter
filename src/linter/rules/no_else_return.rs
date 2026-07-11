@@ -1,12 +1,13 @@
 use crate::linter::lib::get_line_column;
 use crate::linter::rules::Rule;
 use crate::linter::{LintIssue, LintSeverity};
+use crate::node_kind::GDScriptNodeKind;
 use tree_sitter::Node;
 
 pub struct NoElseReturnRule;
 
 impl NoElseReturnRule {
-    fn body_ends_with_return(&self, body_node: &Node, _source_code: &str) -> bool {
+    fn body_ends_with_return(body_node: &Node, _source_code: &str) -> bool {
         let mut cursor = body_node.walk();
         let mut last_statement = None;
 
@@ -14,10 +15,9 @@ impl NoElseReturnRule {
             loop {
                 let child_node = cursor.node();
                 // Skip whitespace and comments
-                if !matches!(
-                    child_node.kind(),
-                    "_newline" | "_indent" | "_dedent" | "comment"
-                ) {
+                let child_kind = GDScriptNodeKind::get_kind_from_ast_node(child_node);
+                if child_kind != GDScriptNodeKind::Comment && child_kind != GDScriptNodeKind::Other
+                {
                     last_statement = Some(child_node);
                 }
                 if !cursor.goto_next_sibling() {
@@ -27,7 +27,8 @@ impl NoElseReturnRule {
         }
 
         if let Some(last_stmt) = last_statement {
-            return last_stmt.kind() == "return_statement";
+            return GDScriptNodeKind::get_kind_from_ast_node(last_stmt)
+                == GDScriptNodeKind::ReturnStatement;
         }
 
         false
@@ -35,16 +36,20 @@ impl NoElseReturnRule {
 }
 
 impl Rule for NoElseReturnRule {
-    fn get_target_ast_nodes(&self) -> &[&str] {
-        &["if_statement"]
+    fn get_target_ast_nodes(&self) -> &[GDScriptNodeKind] {
+        &[GDScriptNodeKind::IfStatement]
     }
 
-    fn check_node(&mut self, node: &Node, source_code: &str) -> Vec<LintIssue> {
+    fn check_node(
+        &mut self,
+        node: &Node,
+        source_code: &str,
+    ) -> Vec<LintIssue> {
         let mut issues = Vec::new();
 
         let mut if_body_ends_with_return = false;
         if let Some(body_node) = node.child_by_field_name("body") {
-            if_body_ends_with_return = self.body_ends_with_return(&body_node, source_code);
+            if_body_ends_with_return = Self::body_ends_with_return(&body_node, source_code);
         }
 
         let mut all_branches_return = if_body_ends_with_return;
@@ -53,7 +58,9 @@ impl Rule for NoElseReturnRule {
         if stmt_cursor.goto_first_child() {
             loop {
                 let child_node = stmt_cursor.node();
-                if child_node.kind() == "elif_clause" {
+                if GDScriptNodeKind::get_kind_from_ast_node(child_node)
+                    == GDScriptNodeKind::ElifStatement
+                {
                     if if_body_ends_with_return {
                         let (line, column) = get_line_column(&child_node);
                         issues.push(LintIssue::new(
@@ -66,11 +73,13 @@ impl Rule for NoElseReturnRule {
                     }
 
                     if let Some(elif_body) = child_node.child_by_field_name("body")
-                        && !self.body_ends_with_return(&elif_body, source_code)
+                        && !Self::body_ends_with_return(&elif_body, source_code)
                     {
                         all_branches_return = false;
                     }
-                } else if child_node.kind() == "else_clause" {
+                } else if GDScriptNodeKind::get_kind_from_ast_node(child_node)
+                    == GDScriptNodeKind::ElseStatement
+                {
                     let (line, column) = get_line_column(&child_node);
                     if all_branches_return {
                         issues.push(LintIssue::new(

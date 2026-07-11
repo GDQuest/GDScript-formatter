@@ -13,7 +13,7 @@
 //! cargo run --bin benchmark --release >> benchmark_results.txt
 //! git checkout -
 //! ```
-use gdscript_formatter::{FormatterConfig, formatter::format_gdscript_with_config};
+use gdscript_formatter::{FormatterConfiguration, RenderElement, format_gdscript_with_buffers};
 use std::{fs, time::Instant};
 
 const ITERATIONS: u16 = 40;
@@ -21,32 +21,33 @@ const ITERATIONS: u16 = 40;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let short_content = fs::read_to_string("benchmarks/gdscript_files/short.gd")?;
     let long_content = fs::read_to_string("benchmarks/gdscript_files/long.gd")?;
-    let config = FormatterConfig::default();
+    let config = FormatterConfiguration::default();
 
     println!("Running GDScript Formatter Benchmark...");
 
+    let mut render_elements: Vec<RenderElement> = Vec::new();
+    let mut output = String::new();
+
     println!("Running short file warmup (10 iterations)");
     for _ in 0..10 {
-        let _ = format_gdscript_with_config(&short_content, &config)?;
+        format_gdscript_with_buffers(&short_content, &config, &mut render_elements, &mut output)?;
     }
 
     println!("Benchmarking short file ({} iterations)", ITERATIONS);
     let mut start = Instant::now();
     for _ in 0..ITERATIONS {
-        let _ = format_gdscript_with_config(&short_content, &config)?;
+        format_gdscript_with_buffers(&short_content, &config, &mut render_elements, &mut output)?;
     }
     let duration_short_file = start.elapsed();
 
-    // Benchmark long file
     println!("Benchmarking long file ({} iterations)...", ITERATIONS);
     start = Instant::now();
     for _ in 0..ITERATIONS {
-        let _ = format_gdscript_with_config(&long_content, &config)?;
+        format_gdscript_with_buffers(&long_content, &config, &mut render_elements, &mut output)?;
     }
     let long_time = start.elapsed();
 
-    // Benchmark with safe mode enabled
-    let safe_config = FormatterConfig {
+    let safe_config = FormatterConfiguration {
         safe: true,
         ..config
     };
@@ -57,7 +58,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     start = Instant::now();
     for _ in 0..ITERATIONS {
-        let _ = format_gdscript_with_config(&short_content, &safe_config)?;
+        format_gdscript_with_buffers(
+            &short_content,
+            &safe_config,
+            &mut render_elements,
+            &mut output,
+        )?;
     }
     let duration_short_file_safe = start.elapsed();
 
@@ -67,14 +73,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     start = Instant::now();
     for _ in 0..ITERATIONS {
-        let _ = format_gdscript_with_config(&long_content, &safe_config)?;
+        format_gdscript_with_buffers(
+            &long_content,
+            &safe_config,
+            &mut render_elements,
+            &mut output,
+        )?;
     }
     let long_time_safe = start.elapsed();
 
-    let average_time_short = duration_short_file.as_micros() as f64 / ITERATIONS as f64;
-    let average_time_long = long_time.as_micros() as f64 / ITERATIONS as f64;
-    let average_time_safe_short = duration_short_file_safe.as_micros() as f64 / ITERATIONS as f64;
-    let average_time_safe_long = long_time_safe.as_micros() as f64 / ITERATIONS as f64;
+    let average_time_short = duration_short_file.as_micros() as f64 / f64::from(ITERATIONS);
+    let average_time_long = long_time.as_micros() as f64 / f64::from(ITERATIONS);
+    let average_time_safe_short =
+        duration_short_file_safe.as_micros() as f64 / f64::from(ITERATIONS);
+    let average_time_safe_long = long_time_safe.as_micros() as f64 / f64::from(ITERATIONS);
 
     let short_slowdown =
         ((average_time_safe_short - average_time_short) / average_time_short) * 100.0;

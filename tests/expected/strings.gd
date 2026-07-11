@@ -1,3 +1,6 @@
+# String variants
+# Tests all variants of "strings": with single, double, triple quotes, node
+# paths, and StringName
 extends Node
 
 var simple_string = "Hello, World!"

@@ -1,3 +1,4 @@
+# Get node syntaxes
 var test_1 = get_node("Node2D")
 var test_2 = get_node("Node2D/Sprite2D")
 var test_3 := $CanvasLayer/HealthBar

@@ -1,5 +1,6 @@
 use crate::linter::rules::Rule;
 use crate::linter::{LintIssue, LintSeverity, LinterConfig};
+use crate::node_kind::GDScriptNodeKind;
 
 pub struct MaxLineLengthRule {
     config: LinterConfig,
@@ -39,7 +40,7 @@ impl Rule for MaxLineLengthRule {
         issues
     }
 
-    fn get_target_ast_nodes(&self) -> &[&str] {
+    fn get_target_ast_nodes(&self) -> &[GDScriptNodeKind] {
         &[]
     }
 }

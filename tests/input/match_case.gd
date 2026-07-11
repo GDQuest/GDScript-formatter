@@ -1,3 +1,7 @@
+# Match statements
+# Should test all match statement variants including single and multiple
+# patterns, binds, when guards, conditional expressions patterns, and
+# annotations on match cases.
 func foo():
 	match   "1"  :
 		"1"  :

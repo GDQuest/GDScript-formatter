@@ -17,13 +17,14 @@ pub mod unused_argument;
 pub mod variable_name;
 
 use crate::linter::{LintIssue, LinterConfig};
+use crate::node_kind::GDScriptNodeKind;
 use tree_sitter::Node;
 
 pub trait Rule {
     /// Returns the list of node kinds this rule is runs on/is interested in.
     /// This is used to only call this rule on specific nodes. Return an empty
     /// list if the rule doesn't work with individual AST nodes.
-    fn get_target_ast_nodes(&self) -> &[&str] {
+    fn get_target_ast_nodes(&self) -> &[GDScriptNodeKind] {
         &[]
     }
 

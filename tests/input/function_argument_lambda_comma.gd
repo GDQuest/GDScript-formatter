@@ -1,3 +1,6 @@
+# Lambda as a function call argument with trailing comma
+# This regression test verifies the lambda trailing comma gets preserved after
+# formatting.
 func test():
 	hurt_tween.tween_method(
 		func(weight):

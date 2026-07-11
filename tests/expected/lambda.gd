@@ -1,3 +1,4 @@
+# Lambda spacing and body placement
 var f = func(): print(123)
 var f2 = func():
 	print(123)

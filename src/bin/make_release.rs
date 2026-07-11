@@ -15,7 +15,7 @@ fn ask_user_input(prompt: &str) -> String {
     io::stdin()
         .read_line(&mut input)
         .expect("Failed to read user input");
-    return input.trim().to_owned();
+    input.trim().to_owned()
 }
 
 /// Runs a shell command with the given arguments.
@@ -127,7 +127,7 @@ fn main() {
         println!("Use the commits above as notes for the changelog.\n");
 
         let user_confirmation_input =
-            ask_user_input(&"Have you updated CHANGELOG.md and are ready to continue? [y/N]: ");
+            ask_user_input("Have you updated CHANGELOG.md and are ready to continue? [y/N]: ");
         if !(user_confirmation_input.eq_ignore_ascii_case("y")
             || user_confirmation_input.eq_ignore_ascii_case("yes"))
         {

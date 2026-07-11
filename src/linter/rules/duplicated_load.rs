@@ -1,6 +1,7 @@
 use crate::linter::lib::{get_line_column, get_node_text};
 use crate::linter::rules::Rule;
 use crate::linter::{LintIssue, LintSeverity};
+use crate::node_kind::GDScriptNodeKind;
 use std::collections::HashMap;
 use tree_sitter::Node;
 
@@ -9,11 +10,15 @@ pub struct DuplicatedLoadRule {
 }
 
 impl Rule for DuplicatedLoadRule {
-    fn get_target_ast_nodes(&self) -> &[&str] {
-        &["call"]
+    fn get_target_ast_nodes(&self) -> &[GDScriptNodeKind] {
+        &[GDScriptNodeKind::Call]
     }
 
-    fn check_node(&mut self, node: &Node, source_code: &str) -> Vec<LintIssue> {
+    fn check_node(
+        &mut self,
+        node: &Node,
+        source_code: &str,
+    ) -> Vec<LintIssue> {
         if let Some(function_node) = node.child(0) {
             let function_name = get_node_text(&function_node, source_code);
             if (function_name == "load" || function_name == "preload")
@@ -23,7 +28,9 @@ impl Rule for DuplicatedLoadRule {
                 if args_cursor.goto_first_child() {
                     loop {
                         let arg_node = args_cursor.node();
-                        if arg_node.kind() == "string" {
+                        if GDScriptNodeKind::get_kind_from_ast_node(arg_node)
+                            == GDScriptNodeKind::String
+                        {
                             let path = get_node_text(&arg_node, source_code);
                             let (line, column) = get_line_column(&arg_node);
                             self.load_paths

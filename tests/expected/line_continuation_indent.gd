@@ -1,3 +1,11 @@
+# Backslash line continuation
+# Should have +2 indents by default according to official styleguide.
+func _handles(resource: Resource) -> bool:
+	return resource is NoiseTexture2D \
+			or resource is GradientTexture1D \
+			or resource is GradientTexture2D
+
+
 var is_valid: bool = some_condition \
 		and another_condition
 

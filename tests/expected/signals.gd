@@ -1,9 +1,10 @@
-signal a()
+# Signal declarations
+signal with_parentheses_no_argument()
 
-signal b(value)
-signal c(value: float)
+signal with_untyped_argument(value)
+signal with_typed_argument(value: float)
 
-signal d
+signal without_parentheses
 
 
 func foo():

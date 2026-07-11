@@ -2,21 +2,55 @@
 name = "gdscript-formatter"
 version = "0.20.1"
 edition = "2024"
-description = "A GDScript code formatter and linter using Topiary and Tree-sitter"
+description = "A GDScript code formatter using Tree-sitter"
 license = "MIT"
 repository = "https://github.com/gdquest/gdscript-formatter"
 readme = "README.md"
 keywords = ["godot", "gdscript", "format", "lint"]
 categories = ["command-line-utilities", "development-tools"]
 default-run = "gdscript-formatter"
+rust-version = "1.85"
+
+[lints.clippy]
+dbg_macro = "warn"
+branches_sharing_code = "warn"
+needless_pass_by_value = "warn"
+unused_self = "warn"
+# We don't allow unwraps in code (use except() instead to give reason), except
+# in test modules/unit test code blocks.
+unwrap_used = "warn"
+
+# Performance-related lints: remind to pre-allocate vecs and warn about value
+# clones
+vec_init_then_push = "warn"
+
+ptr_arg = "warn"
+
+# Style-related lints
+redundant_closure = "warn"
+redundant_closure_for_method_calls = "warn"
+needless_return = "warn"
+match_same_arms = "warn"
+single_match_else = "warn"
+manual_strip = "warn"
+cast_lossless = "warn"
+
+# In our coding guidelines we favor plain loops over rust iterators and
+# functional-style functions, these linter configs allow us to use more
+# procedural code.
+needless_range_loop = "allow"
+manual_find = "allow"
+
+manual_filter_map = "allow"
+manual_flatten = "allow"
+manual_try_fold = "allow"
 
 [dependencies]
-clap = { version = "=4.6.0", features = ["derive", "wrap_help"] }
-topiary-core = "=0.7.3"
 tree-sitter-gdscript  = { git = "https://github.com/GDQuest/tree-sitter-gdscript.git", rev = "d7cf0d60cabcd69688471891076508a4c606270f" }
-regex = "=1.12.3"
 tree-sitter = "=0.26.8"
-rayon = "=1.11.0"
+regex = "=1.12.3"
+# Official editorconfig parser
+ec4rs = "=1.2.0"
 
 [dev-dependencies]
 test_each_file = "=0.3.7"

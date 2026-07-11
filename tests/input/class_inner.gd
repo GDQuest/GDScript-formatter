@@ -1,3 +1,6 @@
+# Inner class declarations and spacing
+# Within inner classes the vertical spacing around functions and nested inner
+# classes is the same as the outer class, with two blank lines between them.
 class InnerClass extends Node:
 
 	var a = 10

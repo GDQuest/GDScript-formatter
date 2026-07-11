@@ -125,7 +125,7 @@ func _get_platform_info() -> Dictionary:
 	var processor_name := OS.get_processor_name().to_lower()
 	var architecture := "x86_64"
 
-	if processor_name.contains("aarch64") or processor_name.contains("arm64"):
+	if processor_name.contains("aarch64") or processor_name.contains("arm64") or processor_name.contains("apple"):
 		architecture = "aarch64"
 	elif processor_name.contains("x86_64") or processor_name.contains("amd64"):
 		architecture = "x86_64"

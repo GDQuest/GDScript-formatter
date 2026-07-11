@@ -9,6 +9,12 @@ func good():
 	for some_value in array:
 		print(some_value)
 
+	for _i in range(1000):
+		spawn_ant()
+
+	for _some_value in array:
+		print(_some_value)
+
 #endregion
 
 #region Bad
@@ -20,13 +26,7 @@ func bad():
 	for Something in array:
 		print(Something)
 
-	for _B in array:
-		print(_B)
-
 	for someValue in array:
 		print(someValue)
-
-	for _some_value in array:
-		print(_some_value)
 
 #endregion

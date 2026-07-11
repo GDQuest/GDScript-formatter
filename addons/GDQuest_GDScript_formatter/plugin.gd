@@ -54,6 +54,7 @@ var connection_list: Array[Resource] = []
 var installer: FormatterInstaller = null
 var formatter_cache_dir: String
 var menu: FormatterMenu = null
+var _has_uninstall_command := false
 
 
 func _init() -> void:
@@ -83,9 +84,6 @@ func _enter_tree() -> void:
 	installer.installation_completed.connect(
 		func _on_installation_completed(binary_path: String) -> void:
 			set_editor_setting(SETTING_FORMATTER_PATH, binary_path)
-			add_format_command()
-			remove_uninstall_command()
-			add_uninstall_command()
 			# After installing the formatter we can add the menu option to show the uninstall command
 			if is_instance_valid(menu):
 				menu.update_menu(true)
@@ -270,12 +268,14 @@ func _on_resource_saved(saved_resource: Resource) -> void:
 
 
 func add_format_command() -> void:
-	if not has_command(get_editor_setting(SETTING_FORMATTER_PATH)):
-		push_error(
-			'GDScript Formatter: The command "%s" can\'t be found in your environment.\n' % get_editor_setting(SETTING_FORMATTER_PATH) +
-			'\tIf you have not installed the formatter, use the install/update command from the command palette.\n' +
-			'\tIf you have installed the formatter, change "formatter_path" to a valid command in the "GDScript Formatter" section in Editor Settings.',
-		)
+	var formatter_path := get_editor_setting(SETTING_FORMATTER_PATH) as String
+	if formatter_path.is_empty() or not has_command(formatter_path):
+		if not formatter_path.is_empty():
+			push_error(
+				'GDScript Formatter: The command "%s" can\'t be found in your environment.\n' % formatter_path +
+				'\tIf you have not installed the formatter, use the install/update command from the command palette.\n' +
+				'\tIf you have installed the formatter, change "formatter_path" to a valid command in the "GDScript Formatter" section in Editor Settings.',
+			)
 		return
 	var shortcut := get_editor_setting(SETTING_SHORTCUT) as Shortcut
 	EditorInterface.get_command_palette().add_command(
@@ -326,10 +326,14 @@ func add_uninstall_command() -> void:
 			COMMAND_PALETTE_CATEGORY + COMMAND_PALETTE_UNINSTALL,
 			uninstall_formatter,
 		)
+		_has_uninstall_command = true
 
 
 func remove_uninstall_command() -> void:
+	if not _has_uninstall_command:
+		return
 	EditorInterface.get_command_palette().remove_command(COMMAND_PALETTE_CATEGORY + COMMAND_PALETTE_UNINSTALL)
+	_has_uninstall_command = false
 
 
 func add_report_issue_command() -> void:
@@ -418,6 +422,8 @@ func _on_menu_item_selected(command: String) -> void:
 
 
 func has_command(command: String) -> bool:
+	if command.is_empty():
+		return false
 	var output: Array = []
 	var exit_code := OS.execute(command, ["--version"], output)
 	return exit_code == OK

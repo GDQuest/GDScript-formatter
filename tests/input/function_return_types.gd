@@ -1,4 +1,5 @@
-func return_dict() -> Dictionary[int, int]:
+# Function return types with subscripts
+func return_dict() -> Dictionary[ int , int  ]:
 	return { 1: 2, 3: 4, 5: 6 }
 
 

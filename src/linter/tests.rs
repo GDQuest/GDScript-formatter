@@ -1,5 +1,6 @@
 #[cfg(test)]
-mod tests {
+mod linter_tests {
+    #![allow(clippy::unwrap_used)]
     use crate::linter::{LintIssue, LintSeverity, LinterConfig, lint_gdscript_with_config};
 
     #[test]

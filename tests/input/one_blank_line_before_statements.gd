@@ -1,4 +1,8 @@
-# allow one blank line between statements, in case user wants to logically separate blocks of code
+# Blank lines between statements in functions
+# We preserve up to one blank line between statements so that users can separate
+# blocks of code but still automatically get them tidied up.
+# TODO: See if users give feedback about this to ensure this is wanted. If not,
+# work it out with multiple users.
 func foo():
 	print(123)
 
