@@ -1787,28 +1787,77 @@ fn process_attribute(
         return;
     }
 
-    // attribute children: [_expr, ".", attribute_call, ".", attribute_call, ...]
-    // May also contain line_continuation tokens interleaved with dot-call pairs.
-    let mut total = 0usize;
-    if let Some(expr) = node.child(0) {
-        total += node_byte_length(expr);
-    }
-    let mut current_index: u32 = 1;
-    while current_index + 1 < child_count as u32 {
-        if let (Some(_dot), Some(call)) = (node.child(current_index), node.child(current_index + 1))
-        {
-            total += 1;
-            total += node_byte_length(call);
+    // GDScript does not support function call chains as a standalone statement
+    // without explicit line continuations, but actually it supports chains in
+    // some contexts like parenthesized expressions. We check for those two
+    // cases here and adjust the formatting accordingly to make sure automatic
+    // line wrapping works.
+    //
+    // This is valid gdscript:
+    // ("test"
+    //       .begins_with("t"))
+    //
+    // But this, without parentheses or brackets, gives an error:
+    //
+    // "test"
+    //       .begins_with("t")
+    //
+    // You need a continuation line break here:
+    //
+    // "test" \
+    //       .begins_with("t")
+    let mut allows_implicit_continuation = false;
+    let mut visited_ancestor = node.parent();
+    while let Some(current_ancestor) = visited_ancestor {
+        let current_ancestor_kind = GDScriptNodeKind::get_kind_from_ast_node(current_ancestor);
+        if matches!(
+            current_ancestor_kind,
+            GDScriptNodeKind::Array
+                | GDScriptNodeKind::Dictionary
+                | GDScriptNodeKind::Arguments
+                | GDScriptNodeKind::SubscriptArguments
+                | GDScriptNodeKind::ParenthesizedExpression
+        ) {
+            allows_implicit_continuation = true;
+            break;
         }
-        current_index += 2;
+        if matches!(
+            current_ancestor_kind,
+            GDScriptNodeKind::Assignment
+                | GDScriptNodeKind::AugmentedAssignment
+                | GDScriptNodeKind::ExpressionStatement
+                | GDScriptNodeKind::ReturnStatement
+                | GDScriptNodeKind::Body
+        ) {
+            break;
+        }
+        visited_ancestor = current_ancestor.parent();
     }
 
-    let should_wrap = total > input.max_line_length;
+    let mut has_explicit_line_continuation = false;
+    let mut child_index = 1;
+    while child_index < child_count {
+        if let Some(child) = node.child(child_index as u32)
+            && GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::LineContinuation
+        {
+            has_explicit_line_continuation = true;
+            break;
+        }
+        child_index += 1;
+    }
+
+    let group_index = begin_group(render_elements);
 
     if let Some(expr) = node.child(0) {
         process_node(input, expr, render_elements);
     }
 
+    let chain_indent_level = if allows_implicit_continuation || has_explicit_line_continuation {
+        0
+    } else {
+        input.continuation_indent_level
+    };
+    let continuation_indent_index = begin_indent(render_elements, chain_indent_level);
     let mut attribute_index: u32 = 1;
     while attribute_index < child_count as u32 {
         let child = node.child(attribute_index);
@@ -1849,8 +1898,20 @@ fn process_attribute(
             continue;
         }
 
-        if should_wrap {
-            render_elements.push(RenderElement::HardLine);
+        if !allows_implicit_continuation && !has_explicit_line_continuation {
+            let continuation_index = render_elements.len() + 1;
+            render_elements.push(RenderElement::Branch {
+                if_single_line: None,
+                if_multiline: Some(RangeRenderElement {
+                    start: continuation_index,
+                    end: continuation_index + 2,
+                }),
+            });
+            render_elements.push(RenderElement::Space);
+            render_elements.push(RenderElement::TextStatic("\\"));
+        }
+        if !has_explicit_line_continuation {
+            render_elements.push(RenderElement::SoftLine);
         }
 
         if let Some(dot_node) = child {
@@ -1868,6 +1929,8 @@ fn process_attribute(
 
         attribute_index += 2;
     }
+    finish_indent(render_elements, continuation_indent_index);
+    finish_group(render_elements, group_index);
 }
 
 /// Builds a method call (name + arguments) inline without extra indentation.

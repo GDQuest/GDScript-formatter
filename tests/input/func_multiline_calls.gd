@@ -35,3 +35,9 @@ func _test() -> void:
 			).replace("B", "2").replace("C", "3"),
 			"second argument",
 	)
+
+
+# Chained calls outside delimiters need explicit line continuation marks
+# (trailing '\').
+func play_tween_jump() -> void:
+	create_tween().tween_property(animated_sprite, "scale", Vector2(1.2, 0.8), 0.1).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
