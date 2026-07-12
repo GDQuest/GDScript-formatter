@@ -430,7 +430,17 @@ fn process_body(
                         render_elements.push(RenderElement::Space);
                     }
                 } else if last_processed_child_kind == Some(GDScriptNodeKind::Comment) {
-                    if statement_has_inline_comment && current_is_declaration {
+                    if current_child_kind == GDScriptNodeKind::Comment {
+                        add_spacing_between_body_children(
+                            previous_end,
+                            child.start_byte(),
+                            input,
+                            render_elements,
+                            last_processed_child_kind,
+                            current_child_kind,
+                            false,
+                        );
+                    } else if statement_has_inline_comment && current_is_declaration {
                         let needs_two_blank_lines = needs_two_blank_lines(current_child_kind);
                         add_spacing_between_body_children(
                             previous_end,
@@ -988,7 +998,7 @@ fn output_pending_before_declaration(
             }
             render_elements.push(RenderElement::BlankLine);
         }
-        emit_pending_block(render_elements, input, pending);
+        process_pending_block(render_elements, input, pending);
         // pending is reused across declarations, so we need to clear it here
         // now that its contents have been emitted.
         pending.clear();
@@ -1029,7 +1039,7 @@ fn output_pending_before_declaration(
             render_elements.push(RenderElement::HardLine);
             render_elements.push(RenderElement::BlankLine);
         }
-        emit_pending_block(render_elements, input, &leading_block);
+        process_pending_block(render_elements, input, &leading_block);
         render_elements.push(RenderElement::HardLine);
         return;
     }
@@ -1045,7 +1055,7 @@ fn output_pending_before_declaration(
             render_elements.push(RenderElement::HardLine);
         }
         render_elements.push(RenderElement::BlankLine);
-        emit_pending_block(render_elements, input, &leading_block);
+        process_pending_block(render_elements, input, &leading_block);
         render_elements.push(RenderElement::HardLine);
     } else if attached_to_declaration {
         render_elements.push(RenderElement::HardLine);
@@ -1062,7 +1072,7 @@ fn output_pending_before_declaration(
 /// Outputs a batch of buffered comments or annotations. Iterates through the
 /// pending list and inserts spaces, hard lines, or blank lines between items
 /// based on the newline counts recorded when they were buffered.
-fn emit_pending_block(
+fn process_pending_block(
     render_elements: &mut Vec<RenderElement>,
     input: &ParseInput,
     pending: &[(tree_sitter::Node, usize)],
@@ -1200,7 +1210,7 @@ fn process_setget(
         while inner < child_count {
             if let Some(inner_child) = node.child(inner as u32) {
                 if let Some(ref previous_child) = previous {
-                    emit_inter_child_separator(
+                    process_separator_between_sibling_nodes(
                         GDScriptNodeKind::SetGet,
                         previous_child,
                         &inner_child,
@@ -1311,7 +1321,7 @@ fn process_container(
                     if previous_kind == GDScriptNodeKind::Comment {
                         render_elements.push(RenderElement::HardLine);
                     } else {
-                        emit_inter_child_separator(
+                        process_separator_between_sibling_nodes(
                             node_kind,
                             previous_child,
                             &child,
@@ -1457,7 +1467,7 @@ fn process_parenthesized_expression(
     while index < end {
         if let Some(child) = node.child(index) {
             if let Some(ref previous_child) = previous {
-                emit_inter_child_separator(
+                process_separator_between_sibling_nodes(
                     GDScriptNodeKind::ParenthesizedExpression,
                     previous_child,
                     &child,
@@ -1973,7 +1983,7 @@ fn process_method_call_flat(
             while argument_index < body_end {
                 if let Some(child_argument) = args.child(argument_index) {
                     if let Some(ref previous_node) = previous_child {
-                        emit_inter_child_separator(
+                        process_separator_between_sibling_nodes(
                             args_kind,
                             previous_node,
                             &child_argument,
@@ -1987,7 +1997,12 @@ fn process_method_call_flat(
             }
             if let Some(close) = args.child(close_parenthesis_index) {
                 if let Some(ref previous_node) = previous_child {
-                    emit_inter_child_separator(args_kind, previous_node, &close, render_elements);
+                    process_separator_between_sibling_nodes(
+                        args_kind,
+                        previous_node,
+                        &close,
+                        render_elements,
+                    );
                 }
                 process_node(input, close, render_elements);
             }
@@ -2031,7 +2046,7 @@ fn process_lambda(
                     });
                     render_elements.push(RenderElement::Space);
                 } else {
-                    emit_lambda_separator(previous_kind, child_kind, render_elements);
+                    process_lambda_separator(previous_kind, child_kind, render_elements);
                 }
             }
             process_node(input, child, render_elements);
@@ -2075,7 +2090,7 @@ fn process_lambda(
 /// Handles spacing between children of a lambda node. Deals with comments (hard
 /// line), body-like nodes (hard line), specific token pairs that need no
 /// separator, and defaults to a space.
-fn emit_lambda_separator(
+fn process_lambda_separator(
     previous_kind: GDScriptNodeKind,
     current_kind: GDScriptNodeKind,
     render_elements: &mut Vec<RenderElement>,
@@ -2132,7 +2147,7 @@ fn process_children_with_spacing(
                     let region = disabled_run.region;
                     if child.start_byte() == region.start {
                         if let Some(ref previous_child) = previous {
-                            emit_inter_child_separator(
+                            process_separator_between_sibling_nodes(
                                 parent_kind,
                                 previous_child,
                                 &child,
@@ -2165,7 +2180,12 @@ fn process_children_with_spacing(
             let child_kind = GDScriptNodeKind::get_kind_from_ast_node(child);
             if let Some(ref previous_child) = previous {
                 let previous_kind = GDScriptNodeKind::get_kind_from_ast_node(*previous_child);
-                emit_inter_child_separator(parent_kind, previous_child, &child, render_elements);
+                process_separator_between_sibling_nodes(
+                    parent_kind,
+                    previous_child,
+                    &child,
+                    render_elements,
+                );
                 if previous_kind == GDScriptNodeKind::LineContinuation {
                     let indent_index =
                         begin_indent(render_elements, input.continuation_indent_level);
@@ -2200,7 +2220,7 @@ fn process_children_with_spacing(
 /// a blank line, or nothing. Handles tokens (parens, brackets, dots, commas,
 /// colons), body nodes, comments, annotations, and special parent cases like
 /// InferredType and UnaryOperator.
-fn emit_inter_child_separator(
+fn process_separator_between_sibling_nodes(
     parent_kind: GDScriptNodeKind,
     previous_child: &tree_sitter::Node,
     current: &tree_sitter::Node,
@@ -2210,6 +2230,20 @@ fn emit_inter_child_separator(
     let current_kind = GDScriptNodeKind::get_kind_from_ast_node(*current);
 
     if parent_kind == GDScriptNodeKind::InferredType {
+        return;
+    }
+
+    if current_kind == GDScriptNodeKind::Comment {
+        let previous_end_row = previous_child.end_position().row;
+        let current_start_row = current.start_position().row;
+        if current_start_row == previous_end_row {
+            render_elements.push(RenderElement::Space);
+        } else {
+            render_elements.push(RenderElement::HardLine);
+            if current_start_row > previous_end_row + 1 {
+                render_elements.push(RenderElement::BlankLine);
+            }
+        }
         return;
     }
 
@@ -2448,7 +2482,7 @@ fn process_source_reorder(
                         continue;
                     }
                     if let Some(ref previous_node) = previous_node {
-                        emit_inter_child_separator(
+                        process_separator_between_sibling_nodes(
                             parent_kind,
                             previous_node,
                             &sub,
