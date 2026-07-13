@@ -28,6 +28,13 @@ struct FormatterOutput {
     is_formatted: bool,
 }
 
+#[derive(Clone, Copy)]
+struct FormatterConfigOverrides {
+    max_line_length: Option<usize>,
+    blank_lines_around_definitions: Option<u16>,
+    continuation_indent_level: Option<u16>,
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = parse_args();
 
@@ -82,8 +89,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         unreachable!();
     };
 
-    // Precedence: CLI > editorconfig > defaults.
-    // Build from defaults, apply editorconfig once, then CLI overrides.
     let mut config = FormatterConfiguration::default();
 
     config.printer.indent_size = indent_size;
@@ -91,24 +96,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     config.safe = use_safe_mode;
     config.reorder_code = do_reorder_code;
 
-    // Apply editorconfig using current dir or first file as anchor.
-    let anchor = if let Some(first) = args.input_file_paths.first() {
-        first.clone()
-    } else {
-        env::current_dir().map_err(|error| format!("Failed to get current directory: {}", error))?
+    let config_overrides = FormatterConfigOverrides {
+        max_line_length,
+        blank_lines_around_definitions,
+        continuation_indent_level,
     };
-    gdscript_formatter::editorconfig::apply_editorconfig_to_formatter_config(&mut config, &anchor);
-
-    // CLI overrides beat editorconfig.
-    if let Some(n) = max_line_length {
-        config.printer.max_line_length = n;
-    }
-    if let Some(n) = blank_lines_around_definitions {
-        config.blank_lines_around_definitions = n;
-    }
-    if let Some(n) = continuation_indent_level {
-        config.printer.continuation_indent_level = n;
-    }
 
     if args.input_file_paths.is_empty() && !io::stdin().is_terminal() {
         let mut input_content = String::new();
@@ -152,7 +144,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _ = io::stdout().flush();
 
     let mut sorted_outputs: Vec<Result<FormatterOutput, String>> =
-        format_files_parallel(&input_gdscript_files, &config);
+        format_files_parallel(&input_gdscript_files, &config, config_overrides);
 
     sorted_outputs.sort_by(compare_output_index);
 
@@ -247,13 +239,31 @@ fn format_one_file(
     index: usize,
     file_path: &PathBuf,
     config: &FormatterConfiguration,
+    config_overrides: FormatterConfigOverrides,
     render_elements: &mut Vec<RenderElement>,
     output: &mut String,
 ) -> Result<FormatterOutput, String> {
     let input_content = fs::read_to_string(file_path)
         .map_err(|error| format!("Failed to read file {}: {}", file_path.display(), error))?;
 
-    format_gdscript_with_buffers(&input_content, config, render_elements, output)
+    // We need to clone that config because files in nested directories can
+    // match different EditorConfig files and rules.
+    let mut file_config = config.clone();
+    gdscript_formatter::editorconfig::apply_editorconfig_to_formatter_config(
+        &mut file_config,
+        file_path,
+    );
+    if let Some(max_line_length) = config_overrides.max_line_length {
+        file_config.printer.max_line_length = max_line_length;
+    }
+    if let Some(blank_lines_around_definitions) = config_overrides.blank_lines_around_definitions {
+        file_config.blank_lines_around_definitions = blank_lines_around_definitions;
+    }
+    if let Some(continuation_indent_level) = config_overrides.continuation_indent_level {
+        file_config.printer.continuation_indent_level = continuation_indent_level;
+    }
+
+    format_gdscript_with_buffers(&input_content, &file_config, render_elements, output)
         .map_err(|error| format!("Failed to format file {}: {}", file_path.display(), error))?;
 
     let is_formatted = input_content == *output;
@@ -269,6 +279,7 @@ fn format_one_file(
 fn format_files_parallel(
     files: &[PathBuf],
     config: &FormatterConfiguration,
+    config_overrides: FormatterConfigOverrides,
 ) -> Vec<Result<FormatterOutput, String>> {
     if files.is_empty() {
         return Vec::new();
@@ -284,7 +295,9 @@ fn format_files_parallel(
     thread::scope(|scope| {
         let mut handles = Vec::with_capacity(thread_count);
         for (chunk_index, chunk) in files.chunks(chunk_size).enumerate() {
-            let handle = scope.spawn(move || format_chunk(chunk, chunk_index, chunk_size, config));
+            let handle = scope.spawn(move || {
+                format_chunk(chunk, chunk_index, chunk_size, config, config_overrides)
+            });
             handles.push(handle);
         }
 
@@ -301,6 +314,7 @@ fn format_chunk(
     chunk_index: usize,
     chunk_size: usize,
     config: &FormatterConfiguration,
+    config_overrides: FormatterConfigOverrides,
 ) -> Vec<Result<FormatterOutput, String>> {
     let mut results = Vec::with_capacity(chunk.len());
     let mut render_elements: Vec<RenderElement> = Vec::new();
@@ -311,6 +325,7 @@ fn format_chunk(
             global_index,
             file_path,
             config,
+            config_overrides,
             &mut render_elements,
             &mut output,
         ));

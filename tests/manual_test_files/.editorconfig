@@ -1,0 +1,4 @@
+root = true
+
+[*.gd]
+gdscript_formatter_indent_blank_lines = true
