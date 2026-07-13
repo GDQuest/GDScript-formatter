@@ -81,6 +81,15 @@ To see other possible options, run `gdscript-formatter --help`.
 
 You can also configure the formatter with an [EditorConfig](https://editorconfig.org/) file at the root of your project. This is a good way to share the same formatting settings with your whole team. The formatter supports the standard keys `indent_style`, `indent_size`, `max_line_length`, `insert_final_newline`, and `trim_trailing_whitespace`, plus custom keys prefixed with `gdscript_formatter_`. See the [GDScript Formatter docs](https://www.gdquest.com/library/gdscript_formatter/) for the complete list. Note that command line flags override `.editorconfig` values.
 
+The Godot add-on also reads `gdscript_formatter_format_on_save` from the `.editorconfig` file. This key only affects the add-on and enables or disables format on save for the whole project and overrides each user's add-on setting. For example:
+
+```ini
+[*.gd]
+gdscript_formatter_format_on_save = true
+```
+
+Use this to force everyone in your team to format their GDScript files on save.
+
 To keep a section of code exactly as you wrote it, wrap it between `# fmt: off` and `# fmt: on` comments. This is especially useful when you want to keep values aligned or arranged in a specific way when long data structures:
 
 ```gdscript

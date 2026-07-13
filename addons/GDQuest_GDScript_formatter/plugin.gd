@@ -55,6 +55,11 @@ var installer: FormatterInstaller = null
 var formatter_cache_dir: String
 var menu: FormatterMenu = null
 var _has_uninstall_command := false
+# Used to auto detect changes to the project's .editorconfig file.
+var _editorconfig_last_modified_time := -1
+# Editorconfig allows setting rules per path glob. We track globs for the format
+# on save rule here so users can enable it selectively for specific folders.
+var _editorconfig_format_on_save_rules: Array[Dictionary] = []
 
 
 func _init() -> void:
@@ -197,15 +202,17 @@ func _on_resource_saved(saved_resource: Resource) -> void:
 	if saved_resource is not GDScript:
 		return
 
-	var format_on_save := get_editor_setting(SETTING_FORMAT_ON_SAVE) as bool
+	var script := saved_resource as GDScript
+	var do_format_on_save := get_editor_setting(SETTING_FORMAT_ON_SAVE) as bool
+	var editorconfig_format_on_save = get_editorconfig_format_on_save(script.resource_path)
+	if editorconfig_format_on_save != null:
+		do_format_on_save = editorconfig_format_on_save as bool
 	var lint_on_save := get_editor_setting(SETTING_LINT_ON_SAVE) as bool
 
-	if not format_on_save and not lint_on_save:
+	if not do_format_on_save and not lint_on_save:
 		return
 
-	var script := saved_resource as GDScript
-
-	var ignored_directories := get_editor_setting(SETTING_IGNORED_DIRECTORIES)
+	var ignored_directories = get_editor_setting(SETTING_IGNORED_DIRECTORIES)
 	var path = script.resource_path.trim_prefix("res://")
 
 	var script_path_parts := path.split("/")
@@ -226,7 +233,7 @@ func _on_resource_saved(saved_resource: Resource) -> void:
 	if not has_command(get_editor_setting(SETTING_FORMATTER_PATH)) or not is_instance_valid(script):
 		return
 
-	if format_on_save:
+	if do_format_on_save:
 		var formatted_code := format_code(script, false)
 		if formatted_code.is_empty():
 			return
@@ -463,6 +470,78 @@ func has_editor_setting(setting_name: String) -> bool:
 	var editor_settings := EditorInterface.get_editor_settings()
 	var full_setting_key := EDITOR_SETTINGS_CATEGORY + setting_name
 	return editor_settings.has_setting(full_setting_key)
+
+
+## Returns true if this script should be formatted automatically on save, based
+## on the project's .editorconfig file. Returns false if the config says not to
+## format on save. Returns null if no rule matches (then it's the user editor
+## settings that take over).
+func get_editorconfig_format_on_save(script_path: String) -> Variant:
+	var editorconfig_path := ProjectSettings.globalize_path("res://.editorconfig")
+	var modified_time := FileAccess.get_modified_time(editorconfig_path)
+	if modified_time != _editorconfig_last_modified_time:
+		_editorconfig_last_modified_time = modified_time
+		_editorconfig_format_on_save_rules.clear()
+		load_editorconfig_format_on_save_rules(editorconfig_path)
+
+	var relative_script_path := script_path.trim_prefix("res://")
+	var format_on_save = null
+	for rule: Dictionary in _editorconfig_format_on_save_rules:
+		var pattern := rule["pattern"] as String
+		if pattern.is_empty() or editorconfig_section_matches(pattern, relative_script_path):
+			format_on_save = rule["format_on_save"]
+
+	return format_on_save
+
+
+## Loads the project editorconfig file and parses format on save rules.
+func load_editorconfig_format_on_save_rules(editorconfig_path: String) -> void:
+	var editorconfig_file := FileAccess.open(editorconfig_path, FileAccess.READ)
+	if editorconfig_file == null:
+		return
+
+	var pattern := ""
+
+	while not editorconfig_file.eof_reached():
+		var line := editorconfig_file.get_line().strip_edges()
+		if line.is_empty() or line.begins_with("#") or line.begins_with(";"):
+			continue
+
+		if line.begins_with("[") and line.ends_with("]"):
+			pattern = line.trim_prefix("[").trim_suffix("]")
+			continue
+
+		if not line.contains("="):
+			continue
+
+		var key_and_value := line.split("=", true, 1)
+		if key_and_value[0].strip_edges().to_lower() != "gdscript_formatter_format_on_save":
+			continue
+
+		match key_and_value[1].strip_edges().to_lower():
+			"true":
+				_editorconfig_format_on_save_rules.append({"pattern": pattern, "format_on_save": true})
+			"false":
+				_editorconfig_format_on_save_rules.append({"pattern": pattern, "format_on_save": false})
+
+	editorconfig_file.close()
+
+
+## Returns true if an EditorConfig section applies to a saved script.
+## pattern: The EditorConfig pattern to match against.
+## relative_script_path: The path of the script relative to the project root.
+func editorconfig_section_matches(pattern: String, relative_script_path: String) -> bool:
+	if pattern.is_empty():
+		return false
+
+	var normalized_pattern := pattern.trim_prefix("/")
+	var matching_path := relative_script_path
+	# If there's no / in the pattern it means this pattern targets a filename.
+	# It's not a folder/path glob pattern.
+	if not normalized_pattern.contains("/"):
+		matching_path = relative_script_path.get_file()
+
+	return matching_path.match(normalized_pattern)
 
 
 ## Formats GDScript code using the GDScript Formatter and returns it as a string.
