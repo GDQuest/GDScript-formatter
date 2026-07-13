@@ -138,44 +138,59 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
 
     // Pass 1b: find class docstring: `##` comments in the header zone
     // (after class_name/extends/annotations, before first signal/enum/etc).
-    let docstring_indices: Vec<usize> = {
-        let mut first_non_header = None;
-        let mut item_index = 0;
-        while item_index < items.len() {
-            if !matches!(
-                items[item_index].classification,
-                DeclarationKind::ClassAnnotation
-                    | DeclarationKind::ClassName
-                    | DeclarationKind::Extends
-            ) {
-                first_non_header = Some(item_index);
+    let mut docstring_indices = Vec::new();
+    let mut last_header_child_index: Option<usize> = None;
+    let mut last_header_end_byte: Option<usize> = None;
+    let mut item_index = 0;
+    while item_index < declaration_count {
+        let item = &items[item_index];
+        if !matches!(
+            item.classification,
+            DeclarationKind::ClassAnnotation
+                | DeclarationKind::ClassName
+                | DeclarationKind::Extends
+        ) {
+            break;
+        }
+        if let Some(header_child) = parent.child(item.child_index as u32) {
+            last_header_child_index = Some(item.child_index);
+            last_header_end_byte = Some(header_child.end_byte());
+        }
+        item_index += 1;
+    }
+    if let (Some(header_child_index), Some(header_end_byte)) =
+        (last_header_child_index, last_header_end_byte)
+    {
+        let mut previous_end_byte = header_end_byte;
+        let mut scan_index = header_child_index + 1;
+        while scan_index < child_count {
+            let Some(child) = parent.child(scan_index as u32) else {
+                scan_index += 1;
+                continue;
+            };
+            if !is_comment[scan_index] || !node_text(child, content).trim_start().starts_with("##")
+            {
                 break;
             }
-            item_index += 1;
-        }
-        let header_end: usize = match first_non_header {
-            Some(position) => match items.get(position) {
-                Some(declaration_item) => declaration_item.child_index,
-                None => child_count,
-            },
-            None => child_count,
-        };
-
-        let mut result = Vec::new();
-        let mut scan_index = 0;
-        while scan_index < header_end {
-            if is_comment[scan_index] {
-                if let Some(child) = parent.child(scan_index as u32) {
-                    let text = node_text(child, content);
-                    if text.trim_start().starts_with("##") {
-                        result.push(scan_index);
-                    }
+            let mut newline_count = 0;
+            let mut byte_index = previous_end_byte;
+            while byte_index < child.start_byte() {
+                if content.as_bytes()[byte_index] == b'\n' {
+                    newline_count += 1;
                 }
+                byte_index += 1;
             }
+            // As soon as we found multiple consecutive newlines, it means the
+            // next docstring belong to the first declaration in the script so
+            // we stop collecting the class-level docstring.
+            if newline_count != 1 {
+                break;
+            }
+            docstring_indices.push(scan_index);
+            previous_end_byte = child.end_byte();
             scan_index += 1;
         }
-        result
-    };
+    }
 
     // Mark docstring comments as consumed.
     let mut docstring_index = 0;

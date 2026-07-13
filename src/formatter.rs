@@ -1371,7 +1371,19 @@ fn process_container(
     // for a forced line break.
     const MIN_CHILD_COUNT_BEYOND_SINGLE_ELEMENT: usize = 4;
     let contains_more_than_one_element = child_count >= MIN_CHILD_COUNT_BEYOND_SINGLE_ELEMENT;
-    if contains_more_than_one_element && !trailing_comma_handled && !last_was_comment {
+    // A single lambda in a collection will cause a syntax error unless we wrap
+    // it in parentheses or insert a trailing comma on the last line
+    let mut is_array_with_single_lambda = false;
+    if node_kind == GDScriptNodeKind::Array && child_count == 3 {
+        if let Some(child) = node.child(1) {
+            is_array_with_single_lambda =
+                GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Lambda;
+        }
+    }
+    if (contains_more_than_one_element || is_array_with_single_lambda)
+        && !trailing_comma_handled
+        && !last_was_comment
+    {
         let text_index = render_elements.len() + 1;
         render_elements.push(RenderElement::Branch {
             if_single_line: None,
@@ -1684,20 +1696,17 @@ fn process_binary_operator(
         process_node(input, left, render_elements);
     }
 
-    render_elements.push(RenderElement::SoftLine);
-    let space_index = render_elements.len() + 1;
-    render_elements.push(RenderElement::Branch {
-        if_single_line: Some(RangeRenderElement {
-            start: space_index,
-            end: space_index + 1,
-        }),
-        if_multiline: None,
-    });
     render_elements.push(RenderElement::Space);
 
-    // Process the right side of this binary expression
-    if let Some(op) = node.child(1) {
-        process_node(input, op, render_elements);
+    // Keep an operator with its left operand. Before, we inserted a softline, but it can turn the
+    // operator into an invalid standalone statement. For example in `name in array` could become
+    // ```
+    // name
+    // in array
+    // ```
+    // Which is not valid.
+    if let Some(operator) = node.child(1) {
+        process_node(input, operator, render_elements);
     }
 
     if let Some(right) = node.child(2) {
@@ -2283,6 +2292,7 @@ fn process_separator_between_sibling_nodes(
     if current_kind == GDScriptNodeKind::TokenParen
         || current_kind == GDScriptNodeKind::TokenBracket
         || current_kind == GDScriptNodeKind::TokenBrace
+        || current_kind == GDScriptNodeKind::SubscriptArguments
     {
         return;
     }
@@ -2304,8 +2314,7 @@ fn process_separator_between_sibling_nodes(
         || previous_kind == GDScriptNodeKind::NameSet
         || previous_kind == GDScriptNodeKind::NameGet)
         && (current_kind == GDScriptNodeKind::Parameters
-            || current_kind == GDScriptNodeKind::Arguments
-            || current_kind == GDScriptNodeKind::SubscriptArguments)
+            || current_kind == GDScriptNodeKind::Arguments)
     {
         return;
     }
@@ -2369,6 +2378,12 @@ fn process_source_reorder(
 ) {
     let source = input.source;
     let plan = reorder::build_reorder_plan(node, source);
+    if plan.items.is_empty() {
+        // Without a declaration, standalone annotations have nothing to attach
+        // to.
+        process_children_with_spacing(input, node, render_elements);
+        return;
+    }
     let mut previous_classification: Option<DeclarationKind> = None;
     let mut previous_is_double_spaced = false;
     let mut is_first = true;
