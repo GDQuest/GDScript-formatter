@@ -122,17 +122,12 @@ jobs:
           path: artifacts
           merge-multiple: true
 
+      - name: Generate release notes
+        run: python .github/generate_release_notes.py > release-notes.md
+
       - name: Create Release
         run: |
-          gh release create "${{ github.ref_name }}" \
-            --verify-tag \
-            --draft \
-            --title "GDScript formatter ${{ github.ref_name }}" \
-            --notes "A fast code formatter for GDScript in Godot 4.
-
-            You can learn how to install, use, configure, and integrate the formatter into your workflow on this page:
-
-            https://www.gdquest.com/library/gdscript_formatter/"
+          gh release create "${{ github.ref_name }}" --verify-tag --draft --title "GDScript formatter ${{ github.ref_name }}" --notes-file release-notes.md
 
           gh release upload "${{ github.ref_name }}" artifacts/*.zip
           gh release edit "${{ github.ref_name }}" --draft=false
