@@ -42,7 +42,11 @@ enum Foo2 {
 	C, # comment
 }
 
-enum Foo3 { A, B, C }
+enum Foo3 {
+	A,
+	B,
+	C,
+}
 
 
 func foo(

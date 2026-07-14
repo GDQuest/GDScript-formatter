@@ -21,6 +21,7 @@ This file documents the changes made to the formatter with each release.
 - Remove all `unwrap()` calls from the project and follow stricter linting rules (#145)
 - Remove multiple third-party dependencies and greatly improve compilation speed
 - Improve performance by an order of magnitude (10x to over 50x speedup depending on the case)
+- Always lay enums vertically (one member per line) (#266)
 
 ### Fixed
 

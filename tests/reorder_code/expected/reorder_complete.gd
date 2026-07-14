@@ -6,8 +6,15 @@ extends Node
 
 signal test_signal(value: int)
 
-enum TestEnum { OPTION_A, OPTION_B, OPTION_C }
-enum { UNNAMED_A, UNNAMED_B }
+enum TestEnum {
+	OPTION_A,
+	OPTION_B,
+	OPTION_C,
+}
+enum {
+	UNNAMED_A,
+	UNNAMED_B,
+}
 
 const TEST_CONSTANT = 42
 const _PRIVATE_CONSTANT = "hidden"

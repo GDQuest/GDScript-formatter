@@ -1238,7 +1238,9 @@ fn process_container(
 ) {
     let node_kind = GDScriptNodeKind::get_kind_from_ast_node(node);
     let child_count = node.child_count();
-    if child_count < 3 {
+    // The style guide requires enum members to be written vertically, even
+    // when the list would fit on one line. Empty enums are the only exception.
+    if child_count < 3 && node_kind != GDScriptNodeKind::EnumeratorList {
         if let Some(open) = node.child(0) {
             process_node(input, open, render_elements);
         }
@@ -1371,6 +1373,7 @@ fn process_container(
     // for a forced line break.
     const MIN_CHILD_COUNT_BEYOND_SINGLE_ELEMENT: usize = 4;
     let contains_more_than_one_element = child_count >= MIN_CHILD_COUNT_BEYOND_SINGLE_ELEMENT;
+    let is_non_empty_enum = node_kind == GDScriptNodeKind::EnumeratorList;
     // A single lambda in a collection will cause a syntax error unless we wrap
     // it in parentheses or insert a trailing comma on the last line
     let mut is_array_with_single_lambda = false;
@@ -1395,12 +1398,20 @@ fn process_container(
         render_elements.push(RenderElement::TextStatic(","));
     }
 
-    if contains_more_than_one_element && let Some(open) = node.child(0) {
+    // A single enum member also needs a trailing comma in its mandatory
+    // multiline layout.
+    if is_non_empty_enum && !contains_more_than_one_element && !trailing_comma_handled {
+        render_elements.push(RenderElement::TextStatic(","));
+    }
+
+    if (contains_more_than_one_element || is_non_empty_enum)
+        && let Some(open) = node.child(0)
+    {
         let close_byte = node
             .child((child_count - 1) as u32)
             .expect("container node has close delimiter")
             .start_byte();
-        if has_newline(input.source, open.end_byte(), close_byte) {
+        if is_non_empty_enum || has_newline(input.source, open.end_byte(), close_byte) {
             render_elements.push(RenderElement::ForceBreakingParent);
         }
     }

@@ -1,9 +1,16 @@
 # Enum spacing and wrapping
-# Single line enum get spaces between members, multi-line enums get 1 indent and
-# trailing commas.
-enum { A, B, C }
+# Enums are always vertical, with one indent and trailing commas.
+enum {
+	A,
+	B,
+	C,
+}
 
-enum Named { A, B, C }
+enum Named {
+	A,
+	B,
+	C,
+}
 
 enum ThirdEnum {
 	Aaaaaaaaaaaaaaaaaaaaaa,
@@ -24,4 +31,8 @@ func foo():
 enum Test {
 	A,
 	B,
+}
+
+enum Single {
+	ONLY,
 }
