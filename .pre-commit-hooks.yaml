@@ -1,0 +1,6 @@
+- id: gdscript-formatter
+  name: GDScript Formatter
+  description: Format GDScript files with gdscript-formatter
+  entry: gdscript-formatter --safe
+  language: unsupported
+  files: \.gd$
