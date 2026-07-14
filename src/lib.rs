@@ -25,6 +25,28 @@ pub mod safe_mode;
 
 pub use renderer::{PrinterConfiguration, RenderElement};
 
+/// Selects which delimiters the formatter prefers for string literals.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum QuoteStyle {
+    /// Keep the delimiters from the source code.
+    Preserve,
+    /// Prefer single quote delimiters.
+    Single,
+    /// Prefer double quote delimiters.
+    Double,
+}
+
+impl QuoteStyle {
+    pub fn from_name(value: &str) -> Option<Self> {
+        match value {
+            "preserve" => Some(Self::Preserve),
+            "single" => Some(Self::Single),
+            "double" => Some(Self::Double),
+            _ => None,
+        }
+    }
+}
+
 /// Holds all the formatter configuration. The printer field stores the max line
 /// width, indent, and any other rendering config the renderer needs. `safe` and
 /// future formatter-only feature flags should be added here.
@@ -37,6 +59,9 @@ pub struct FormatterConfiguration {
     /// declarations. We apply 2 by default following the GDScript style guide,
     /// set this to 1 to reduce the number of blank lines.
     pub blank_lines_around_definitions: u16,
+    /// If set to `single` or `double`, the formatter will try to use that quote
+    /// style for strings.
+    pub quote_style: QuoteStyle,
 }
 
 impl Default for FormatterConfiguration {
@@ -46,6 +71,7 @@ impl Default for FormatterConfiguration {
             safe: false,
             reorder_code: false,
             blank_lines_around_definitions: 2,
+            quote_style: QuoteStyle::Preserve,
         }
     }
 }

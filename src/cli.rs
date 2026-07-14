@@ -5,6 +5,7 @@
 //!
 //! NB: do not replace with a dependency like clap: it brings too many
 //! dependencies only to save a little straightforward code.
+use gdscript_formatter::QuoteStyle;
 use std::path::PathBuf;
 
 const HELP_FORMATTER: &str = "\
@@ -27,6 +28,7 @@ const HELP_FORMATTER: &str = "\
 	      --max-line-length <NUM>                Maximum line length before wrapping (default: 100)
 	        --blank-lines-around-definitions <NUM>  Blank lines between top-level definitions (default: 2)
 	      --continuation-indent-level <NUM>      Extra indent for line continuations (default: 2)
+	      --quote-style <STYLE>                  String quotes: preserve, single, or double (default: preserve)
 	  -h, --help                                 Print help
 	  -V, --version                              Print version
 
@@ -91,6 +93,9 @@ pub enum Command {
         blank_lines_around_definitions: Option<u16>,
         /// Extra indent level for continuation lines.
         continuation_indent_level: Option<u16>,
+        /// If set to `single` or `double`, the formatter will try to use that
+        /// quote style for strings.
+        quote_style: Option<QuoteStyle>,
     },
     /// Lint GDScript files for style and convention issues.
     Lint {
@@ -128,6 +133,7 @@ pub fn parse_args() -> CliArguments {
     let mut format_max_line_length: Option<usize> = None;
     let mut format_blank_lines_around_definitions: Option<u16> = None;
     let mut format_continuation_indent_level: Option<u16> = None;
+    let mut format_quote_style: Option<QuoteStyle> = None;
 
     let mut lint_disabled_rules: Option<String> = None;
     let mut lint_max_line_length: usize = 100;
@@ -253,6 +259,21 @@ pub fn parse_args() -> CliArguments {
                             )),
                         };
                     }
+                    "quote-style" => {
+                        let value = consume_flag_value(
+                            assigned_value,
+                            &argument_list,
+                            &mut current_argument_index,
+                            "--quote-style",
+                        );
+                        format_quote_style = match QuoteStyle::from_name(&value) {
+                            Some(quote_style) => Some(quote_style),
+                            None => print_error_invalid_argument(&format!(
+                                "--quote-style expects preserve, single, or double, got '{}'",
+                                value
+                            )),
+                        };
+                    }
                     _ => print_error_invalid_argument(&format!(
                         "unexpected argument '--{}'",
                         flag_name
@@ -338,6 +359,7 @@ pub fn parse_args() -> CliArguments {
                 max_line_length: format_max_line_length,
                 blank_lines_around_definitions: format_blank_lines_around_definitions,
                 continuation_indent_level: format_continuation_indent_level,
+                quote_style: format_quote_style,
             },
         },
         ActiveCommand::Lint => CliArguments {

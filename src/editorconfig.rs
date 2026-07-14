@@ -5,7 +5,7 @@
 //! editorconfig's features. Custom keys are read as plain strings and parsed
 //! manually.
 
-use crate::FormatterConfiguration;
+use crate::{FormatterConfiguration, QuoteStyle};
 use ec4rs::property::{FinalNewline, IndentSize, IndentStyle, MaxLineLen, TrimTrailingWs};
 use std::path::Path;
 
@@ -70,6 +70,13 @@ pub fn apply_editorconfig_to_formatter_config(
             config.printer.indent_blank_lines = true;
         } else if found_value == "false" {
             config.printer.indent_blank_lines = false;
+        }
+    }
+
+    let raw = properties.get_raw_for_key("gdscript_formatter_quote_style");
+    if let Some(found_value) = raw.into_option() {
+        if let Some(quote_style) = QuoteStyle::from_name(found_value) {
+            config.quote_style = quote_style;
         }
     }
 }

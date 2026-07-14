@@ -3,6 +3,7 @@
 //! and determine the code's formatting. Across the formatter we try hard to
 //! only read text and only copy it when it's time to render the formatted code.
 
+use crate::QuoteStyle;
 use crate::node_kind::GDScriptNodeKind;
 use tree_sitter;
 
@@ -17,6 +18,7 @@ pub struct ParseInput<'src> {
     /// Maximum line length the renderer targets (default 100). Used by the
     /// formatter to decide when to wrap long expressions etc. on multiple lines.
     pub max_line_length: usize,
+    pub quote_style: QuoteStyle,
     /// Byte ranges where formatting is disabled by `# fmt: off` / `# fmt: on`
     /// marker comments. Sorted, non-overlapping.
     pub disabled_regions: Vec<RegionWithDisabledFormatting>,
@@ -245,6 +247,7 @@ impl<'src> ParseInput<'src> {
             blank_lines_around_definitions: config.blank_lines_around_definitions,
             continuation_indent_level: config.printer.continuation_indent_level,
             max_line_length: config.printer.max_line_length,
+            quote_style: config.quote_style,
             disabled_regions,
         })
     }

@@ -11,8 +11,8 @@ use gdscript_formatter::linter::rule_config::{
     get_all_rule_names, parse_disabled_rules, validate_rule_names,
 };
 use gdscript_formatter::{
-    FormatterConfiguration, RenderElement, format_gdscript, format_gdscript_with_buffers,
-    linter::LinterConfig,
+    FormatterConfiguration, QuoteStyle, RenderElement, format_gdscript,
+    format_gdscript_with_buffers, linter::LinterConfig,
 };
 use std::collections::HashSet;
 
@@ -33,6 +33,7 @@ struct FormatterConfigOverrides {
     max_line_length: Option<usize>,
     blank_lines_around_definitions: Option<u16>,
     continuation_indent_level: Option<u16>,
+    quote_style: Option<QuoteStyle>,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -84,6 +85,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         max_line_length,
         blank_lines_around_definitions,
         continuation_indent_level,
+        quote_style,
     } = args.command
     else {
         unreachable!();
@@ -95,11 +97,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     config.printer.use_spaces = use_spaces;
     config.safe = use_safe_mode;
     config.reorder_code = do_reorder_code;
+    if let Some(quote_style) = quote_style {
+        config.quote_style = quote_style;
+    }
 
     let config_overrides = FormatterConfigOverrides {
         max_line_length,
         blank_lines_around_definitions,
         continuation_indent_level,
+        quote_style,
     };
 
     if args.input_file_paths.is_empty() && !io::stdin().is_terminal() {
@@ -261,6 +267,9 @@ fn format_one_file(
     }
     if let Some(continuation_indent_level) = config_overrides.continuation_indent_level {
         file_config.printer.continuation_indent_level = continuation_indent_level;
+    }
+    if let Some(quote_style) = config_overrides.quote_style {
+        file_config.quote_style = quote_style;
     }
 
     format_gdscript_with_buffers(&input_content, &file_config, render_elements, output)

@@ -32,6 +32,10 @@ pub enum RenderElement {
         range: RangeSourceBytes,
     },
     TextStatic(&'static str),
+    /// Text produced or edited by the formatter rather than copied from the
+    /// source. Used if the user set the option to change quote style, to edit
+    /// the quotes of input strings.
+    TextProducedByFormatter(String),
     /// Represents a single space character.
     Space,
     /// Represents an optional line return that may be output at render time (if
@@ -184,6 +188,10 @@ impl<'a> Printer<'a> {
                     self.emit_text(text);
                     index += 1;
                 }
+                RenderElement::TextProducedByFormatter(text) => {
+                    self.emit_text(text);
+                    index += 1;
+                }
                 RenderElement::Space => {
                     self.emit_text(" ");
                     index += 1;
@@ -307,6 +315,12 @@ impl<'a> Printer<'a> {
                     index += 1;
                 }
                 RenderElement::TextStatic(text) => {
+                    if !self.measure_text(text, column) {
+                        return false;
+                    }
+                    index += 1;
+                }
+                RenderElement::TextProducedByFormatter(text) => {
                     if !self.measure_text(text, column) {
                         return false;
                     }

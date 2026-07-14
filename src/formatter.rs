@@ -10,6 +10,7 @@
 //! All formatting decisions (where to put spaces, where the code is allowed to
 //! have blank lines, whether a container fits on one line or wraps) live here.
 
+use crate::QuoteStyle;
 use crate::node_kind::GDScriptNodeKind;
 use crate::parser::{ParseInput, RegionWithDisabledFormatting};
 use crate::renderer::{RangeRenderElement, RangeSourceBytes, RenderElement};
@@ -212,8 +213,8 @@ fn process_node(
         return;
     }
 
-    // These nodes should always be output as-is, without any changes applied
-    // (we shouldn't trim whitespace or anything else in strings etc.)
+    // These nodes should always be output as-is (unless the user has enabled
+    // string quote normalization).
     if matches!(
         kind,
         GDScriptNodeKind::String
@@ -224,6 +225,21 @@ fn process_node(
             | GDScriptNodeKind::RegionEnd
             | GDScriptNodeKind::Error
     ) {
+        if input.quote_style != QuoteStyle::Preserve
+            && matches!(
+                kind,
+                GDScriptNodeKind::String
+                    | GDScriptNodeKind::StringName
+                    | GDScriptNodeKind::NodePath
+            )
+        {
+            let string_source = &input.source[node.start_byte()..node.end_byte()];
+            if let Some(formatted_string) = format_string_literal(string_source, input.quote_style)
+            {
+                render_elements.push(RenderElement::TextProducedByFormatter(formatted_string));
+                return;
+            }
+        }
         render_elements.push(RenderElement::UnformattedSource {
             range: RangeSourceBytes {
                 start_byte: node.start_byte(),
@@ -253,6 +269,59 @@ fn process_node(
         GDScriptNodeKind::Attribute => process_attribute(input, node, render_elements),
         _ => process_children_with_spacing(input, node, render_elements),
     }
+}
+
+/// Returns the string with the preferred string delimiters if the user used the
+/// option to prefer a specific quote style (' or "). Returns `None` when the
+/// original string already uses the preferred quote style to avoid unnecessary
+/// processing.
+fn format_string_literal(source: &str, quote_style: QuoteStyle) -> Option<String> {
+    let preferred_quote = match quote_style {
+        QuoteStyle::Single => b'\'',
+        QuoteStyle::Double => b'"',
+        QuoteStyle::Preserve => return None,
+    };
+    let prefix_length = if source.starts_with('&') || source.starts_with('^') {
+        1
+    } else {
+        0
+    };
+    let source_quote = source.as_bytes()[prefix_length];
+    if source_quote == preferred_quote {
+        return None;
+    }
+
+    let delimiter_length = if source[prefix_length..].starts_with("\"\"\"")
+        || source[prefix_length..].starts_with("'''")
+    {
+        3
+    } else {
+        1
+    };
+    let preferred_delimiter = match (preferred_quote, delimiter_length) {
+        (b'\'', 1) => "'",
+        (b'\'', 3) => "'''",
+        (b'"', 1) => "\"",
+        (b'"', 3) => "\"\"\"",
+        _ => unreachable!(),
+    };
+    let content_start = prefix_length + delimiter_length;
+    let content_end = source.len() - delimiter_length;
+    let content = &source[content_start..content_end];
+
+    // For now we don't switch delimiters when the contents include the
+    // preferred quote signs. This would require parsing and editing the string
+    // to rewrite escapes. Can be implemented later if users need it.
+    if content.contains(preferred_delimiter) {
+        return None;
+    }
+
+    let mut output = String::with_capacity(source.len());
+    output.push_str(&source[..prefix_length]);
+    output.push_str(preferred_delimiter);
+    output.push_str(content);
+    output.push_str(preferred_delimiter);
+    Some(output)
 }
 
 /// When the node's child located at start_index onward are annotations, this
@@ -1398,8 +1467,8 @@ fn process_container(
         render_elements.push(RenderElement::TextStatic(","));
     }
 
-    // A single enum member also needs a trailing comma in its mandatory
-    // multiline layout.
+    // A single enum member also needs a trailing comma as it's always multiline
+    // (even if it fits on one line).
     if is_non_empty_enum && !contains_more_than_one_element && !trailing_comma_handled {
         render_elements.push(RenderElement::TextStatic(","));
     }

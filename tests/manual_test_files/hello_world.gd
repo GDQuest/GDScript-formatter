@@ -6,4 +6,8 @@ extends Node
 func _ready():
 	print("Hello, world!")
 
-	print("Hello again!")
+	print("'Hello' again!")
+
+	var test = """
+	Multiline "string" here
+	"""

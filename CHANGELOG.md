@@ -13,6 +13,7 @@ This file documents the changes made to the formatter with each release.
 - Allow configuring the number of blank lines between functions (#249)
 - Allow configuring the number of extra indents in continuation lines
 - Add support for files using Unicode identifiers (accents, Japanese, Chinese, Hebrew, etc.) (#255)
+- Add an option to prefer a single or double quotes for strings (#193)
 
 ### Changed
 

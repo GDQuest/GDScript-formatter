@@ -3,7 +3,7 @@
 /// matches the expected output file. See files in the ./input and ./expected
 /// folders.
 use gdscript_formatter::linter::{GDScriptLinter, LinterConfig};
-use gdscript_formatter::{FormatterConfiguration, format_gdscript};
+use gdscript_formatter::{FormatterConfiguration, QuoteStyle, format_gdscript};
 use similar::{ChangeTag, TextDiff};
 use std::fs;
 use std::path::Path;
@@ -137,4 +137,68 @@ fn test_file_with_config(
             "Idempotence check failed, formatting a second time gave different results",
         );
     }
+}
+
+#[test]
+fn quote_style_changes_compatible_string_literals() {
+    let input = r#"var double = "double"
+var single = 'already single'
+var escaped = "line\n"
+var contains_preferred_quote = "don't change"
+var multiline = """multiple
+lines"""
+var multiline_with_preferred_quote = """has ''' inside"""
+var string_name = &"Name"
+var node_path = ^"Node/Path"
+"#;
+    let expected = r#"var double = 'double'
+var single = 'already single'
+var escaped = 'line\n'
+var contains_preferred_quote = "don't change"
+var multiline = '''multiple
+lines'''
+var multiline_with_preferred_quote = """has ''' inside"""
+var string_name = &'Name'
+var node_path = ^'Node/Path'
+"#;
+    let config = FormatterConfiguration {
+        quote_style: QuoteStyle::Single,
+        safe: true,
+        ..Default::default()
+    };
+
+    let output = format_gdscript(input, &config).unwrap();
+    assert_eq!(output, expected);
+    assert_eq!(format_gdscript(&output, &config).unwrap(), output);
+}
+
+#[test]
+fn quote_style_prefers_double_quotes() {
+    let input = r#"var single = 'single'
+var contains_preferred_quote = 'keep "double"'
+var multiline = '''multiple
+lines'''
+"#;
+    let expected = r#"var single = "single"
+var contains_preferred_quote = 'keep "double"'
+var multiline = """multiple
+lines"""
+"#;
+    let config = FormatterConfiguration {
+        quote_style: QuoteStyle::Double,
+        ..Default::default()
+    };
+
+    assert_eq!(format_gdscript(input, &config).unwrap(), expected);
+}
+
+#[test]
+fn editorconfig_applies_quote_style() {
+    let mut config = FormatterConfiguration::default();
+    gdscript_formatter::editorconfig::apply_editorconfig_to_formatter_config(
+        &mut config,
+        Path::new("tests/manual_test_files/hello_world.gd"),
+    );
+
+    assert_eq!(config.quote_style, QuoteStyle::Single);
 }

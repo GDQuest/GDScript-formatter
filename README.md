@@ -81,6 +81,8 @@ To see other possible options, run `gdscript-formatter --help`.
 
 You can also configure the formatter with an [EditorConfig](https://editorconfig.org/) file at the root of your project. This is a good way to share the same formatting settings with your whole team. The formatter supports the standard keys `indent_style`, `indent_size`, `max_line_length`, `insert_final_newline`, and `trim_trailing_whitespace`, plus custom keys prefixed with `gdscript_formatter_`. See the [GDScript Formatter docs](https://www.gdquest.com/library/gdscript_formatter/) for the complete list. Note that command line flags override `.editorconfig` values.
 
+Use `--quote-style preserve/single/double` to automatically normalize the string quote style. You can also set the style in your `.editorconfig` file using the key `gdscript_formatter_quote_style`. The default value, `preserve`, leaves existing quotes unchanged.
+
 The Godot add-on also reads `gdscript_formatter_format_on_save` from the `.editorconfig` file. This key only affects the add-on and enables or disables format on save for the whole project and overrides each user's add-on setting. For example:
 
 ```ini
