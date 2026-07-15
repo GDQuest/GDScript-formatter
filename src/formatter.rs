@@ -351,8 +351,8 @@ fn next_declaration_after_annotations_needs_two_blank_lines(
 }
 
 /// Returns true when the series of comments starting at start_index is directly above
-/// a declaration, which means the comment leads (i.e. documents) that declaration and should
-/// inherit the blank line rules of the following declaration.
+/// a definition, which means the comment leads (i.e. documents) that definition and should
+/// inherit its blank line rules.
 ///
 /// For example in this code:
 ///
@@ -361,7 +361,7 @@ fn next_declaration_after_annotations_needs_two_blank_lines(
 ///
 /// Here the comment leads function x(), so we use the function's blank line
 /// configuration (e.g. 2 blank lines between functions by default).
-fn comment_block_leads_declaration(
+fn comment_block_leads_definition(
     source: &str,
     node: tree_sitter::Node,
     start_index: usize,
@@ -396,12 +396,69 @@ fn comment_block_leads_declaration(
                     source,
                     last_comment_end_byte,
                     comment_scan_child.start_byte(),
-                ) == 1;
+                ) == 1
+                    && needs_two_blank_lines(comment_kind);
             }
         }
         break;
     }
     false
+}
+
+/// Returns true when the comment block immediately before start_index directly
+/// follows a definition. This comment block should remain attached to the
+/// definition and not get pushed down by blank line rules.
+///
+/// NB: this may not be useful very often for end users but it's something we
+/// need at GDQuest because we use comments for special processing unsupported
+/// by GDScript syntax (a bit like code regions but for custom uses).
+fn previous_comment_block_follows_definition(
+    source: &str,
+    node: tree_sitter::Node,
+    start_index: usize,
+) -> bool {
+    if start_index == 0 {
+        return false;
+    }
+
+    let mut first_comment_index = start_index - 1;
+    let Some(mut first_comment) = node.child(first_comment_index as u32) else {
+        return false;
+    };
+    if GDScriptNodeKind::get_kind_from_ast_node(first_comment) != GDScriptNodeKind::Comment {
+        return false;
+    }
+
+    while first_comment_index > 0 {
+        let Some(previous_comment) = node.child((first_comment_index - 1) as u32) else {
+            break;
+        };
+        if GDScriptNodeKind::get_kind_from_ast_node(previous_comment) != GDScriptNodeKind::Comment
+            || count_newlines(
+                source,
+                previous_comment.end_byte(),
+                first_comment.start_byte(),
+            ) != 1
+        {
+            break;
+        }
+        first_comment_index -= 1;
+        first_comment = previous_comment;
+    }
+
+    if first_comment_index == 0 {
+        return false;
+    }
+    let Some(previous_declaration) = node.child((first_comment_index - 1) as u32) else {
+        return false;
+    };
+    needs_two_blank_lines(GDScriptNodeKind::get_kind_from_ast_node(
+        previous_declaration,
+    )) && count_newlines(
+        source,
+        previous_declaration.end_byte(),
+        first_comment.start_byte(),
+    ) == 1
 }
 
 /// Formats a code block or definition's body (i.e. function body, class body,
@@ -510,15 +567,27 @@ fn process_body(
                     }
                 } else if last_processed_child_kind == Some(GDScriptNodeKind::Comment) {
                     if current_child_kind == GDScriptNodeKind::Comment {
-                        add_spacing_between_body_children(
-                            previous_end,
-                            child.start_byte(),
-                            input,
-                            render_elements,
-                            last_processed_child_kind,
-                            current_child_kind,
-                            false,
-                        );
+                        let comment_block_leads_definition =
+                            comment_block_leads_definition(source, node, current_index);
+                        if comment_block_leads_definition
+                            && previous_comment_block_follows_definition(
+                                source,
+                                node,
+                                current_index,
+                            )
+                        {
+                            push_blank_lines(render_elements, input.blank_lines_around_definitions);
+                        } else {
+                            add_spacing_between_body_children(
+                                previous_end,
+                                child.start_byte(),
+                                input,
+                                render_elements,
+                                last_processed_child_kind,
+                                current_child_kind,
+                                false,
+                            );
+                        }
                     } else if statement_has_inline_comment && current_is_declaration {
                         let needs_two_blank_lines = needs_two_blank_lines(current_child_kind);
                         add_spacing_between_body_children(
@@ -541,7 +610,7 @@ fn process_body(
                             current_index + 1,
                         )
                     } else if current_child_kind == GDScriptNodeKind::Comment {
-                        comment_block_leads_declaration(source, node, current_index)
+                        comment_block_leads_definition(source, node, current_index)
                     } else {
                         needs_two_blank_lines(current_child_kind)
                     };
@@ -551,7 +620,13 @@ fn process_body(
                         let previous_needs_two_blank = needs_two_blank_lines(
                             last_processed_child_kind.unwrap_or(GDScriptNodeKind::Other),
                         );
-                        previous_needs_two_blank || current_target_needs_two_blank_lines
+                        if current_child_kind == GDScriptNodeKind::Comment
+                            && !current_target_needs_two_blank_lines
+                        {
+                            false
+                        } else {
+                            previous_needs_two_blank || current_target_needs_two_blank_lines
+                        }
                     } else {
                         current_target_needs_two_blank_lines
                     };
