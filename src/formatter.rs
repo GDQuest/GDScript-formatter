@@ -376,6 +376,16 @@ fn comment_block_leads_declaration(
         };
         let comment_kind = GDScriptNodeKind::get_kind_from_ast_node(comment_scan_child);
         if comment_kind == GDScriptNodeKind::Comment {
+            if let Some(last_comment_end_byte) = last_comment_end {
+                if count_newlines(
+                    source,
+                    last_comment_end_byte,
+                    comment_scan_child.start_byte(),
+                ) != 1
+                {
+                    return false;
+                }
+            }
             last_comment_end = Some(comment_scan_child.end_byte());
             comment_scan_index += 1;
             continue;
