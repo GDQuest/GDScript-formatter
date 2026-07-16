@@ -2551,6 +2551,7 @@ fn process_source_reorder(
     }
     let mut previous_classification: Option<DeclarationKind> = None;
     let mut previous_is_double_spaced = false;
+    let mut previous_child_index: Option<usize> = None;
     let mut is_first = true;
 
     let mut item_index = 0;
@@ -2560,6 +2561,10 @@ fn process_source_reorder(
             item.classification,
             DeclarationKind::Method | DeclarationKind::InnerClass
         );
+        let is_in_source_order = match previous_child_index {
+            Some(index) => index < item.child_index,
+            None => false,
+        };
         if !is_first {
             if let Some(ref previous_child) = previous_classification {
                 if previous_child == &item.classification
@@ -2567,6 +2572,9 @@ fn process_source_reorder(
                     && !current_needs_two_blank
                 {
                     render_elements.push(RenderElement::HardLine);
+                    if item.has_blank_line_before && is_in_source_order {
+                        render_elements.push(RenderElement::BlankLine);
+                    }
                 } else if previous_is_double_spaced || current_needs_two_blank {
                     let count = if current_needs_two_blank {
                         input.blank_lines_around_definitions
@@ -2597,6 +2605,7 @@ fn process_source_reorder(
         is_first = false;
         previous_classification = Some(item.classification);
         previous_is_double_spaced = current_needs_two_blank;
+        previous_child_index = Some(item.child_index);
 
         // output leading comments/annotations.
         if item.classification != DeclarationKind::Docstring {

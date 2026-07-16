@@ -29,6 +29,11 @@ pub struct ReorderItem<'a> {
     pub leading_indices: Vec<usize>,
     /// Indices of trailing children (e.g. #endregion) glued to this decl.
     pub trailing_indices: Vec<usize>,
+    /// Whether this declaration or its leading comments had a blank line before
+    /// it in the source. This preserves blanks lines input by the user in their
+    /// source code, up to 1. For example, blank lines used to separate groups
+    /// of variables.
+    pub has_blank_line_before: bool,
     /// Classification category (determines sort order).
     pub classification: DeclarationKind,
     /// Declaration name for tie-breaking within same category, borrowed from
@@ -70,6 +75,53 @@ pub enum MethodType {
     Custom,             // all other user methods
 }
 
+/// Checks whether a single `annotation` node's `identifier` child has text
+/// equal to `expected_name`.
+fn annotation_identifier_matches(
+    annotation_node: Node,
+    content: &str,
+    expected_name: &str,
+) -> bool {
+    let count = annotation_node.child_count();
+    let mut child_index = 0;
+    while child_index < count {
+        if let Some(child) = annotation_node.child(child_index as u32) {
+            if GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Identifier {
+                return get_node_text(child, content) == expected_name;
+            }
+        }
+        child_index += 1;
+    }
+    false
+}
+
+/// Slice the source string at a node's byte range.
+/// Tree-sitter byte offsets are always on UTF-8 char boundaries.
+fn get_node_text<'a>(node: Node<'a>, content: &'a str) -> &'a str {
+    &content[node.start_byte()..node.end_byte()]
+}
+
+/// Returns true when there are at least two line breaks between two byte
+/// offsets.
+fn has_blank_line(content: &str, from: usize, to: usize) -> bool {
+    if to <= from {
+        return false;
+    }
+
+    let mut newline_count = 0;
+    let mut byte_index = from;
+    while byte_index < to {
+        if content.as_bytes()[byte_index] == b'\n' {
+            newline_count += 1;
+            if newline_count == 2 {
+                return true;
+            }
+        }
+        byte_index += 1;
+    }
+    false
+}
+
 /// Builds a `ReorderPlan` for the children of `parent` (typically a `source`
 /// node). `content` is the source string used for name extraction.
 pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan<'a> {
@@ -105,6 +157,7 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
                 sub_child: None,
                 leading_indices: Vec::new(),
                 trailing_indices: Vec::new(),
+                has_blank_line_before: false,
                 classification: child_classification.classification,
                 name: child_classification.name,
                 is_private,
@@ -119,6 +172,7 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
                         sub_child: Some(extends_index),
                         leading_indices: Vec::new(),
                         trailing_indices: Vec::new(),
+                        has_blank_line_before: false,
                         classification: DeclarationKind::Extends,
                         name: "",
                         is_private: false,
@@ -168,7 +222,8 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
                 scan_index += 1;
                 continue;
             };
-            if !is_comment[scan_index] || !node_text(child, content).trim_start().starts_with("##")
+            if !is_comment[scan_index]
+                || !get_node_text(child, content).trim_start().starts_with("##")
             {
                 break;
             }
@@ -205,6 +260,7 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
             sub_child: None,
             leading_indices: docstring_indices,
             trailing_indices: Vec::new(),
+            has_blank_line_before: false,
             classification: DeclarationKind::Docstring,
             name: "",
             is_private: false,
@@ -239,6 +295,27 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
             scan_index += 1;
         }
         items[declaration_index].leading_indices = leading;
+
+        // Determine if there is a blank line before the current declaration
+        // that we need to preserve after reordering.
+        if let Some(previous_declaration_child_index) = previous_declaration_end {
+            let previous_declaration = parent.child(previous_declaration_child_index as u32);
+            let first_item_child_index = if items[declaration_index].leading_indices.is_empty() {
+                declaration_child_index
+            } else {
+                items[declaration_index].leading_indices[0]
+            };
+            let first_item_child = parent.child(first_item_child_index as u32);
+            if let (Some(previous_declaration), Some(first_item_child)) =
+                (previous_declaration, first_item_child)
+            {
+                items[declaration_index].has_blank_line_before = has_blank_line(
+                    content,
+                    previous_declaration.end_byte(),
+                    first_item_child.start_byte(),
+                );
+            }
+        }
 
         // Trailing: region-end between this decl and the next one, or all remaining comments.
         let mut trailing = Vec::new();
@@ -297,7 +374,7 @@ fn classify_child<'a>(node: Node<'a>, content: &'a str) -> ChildClassification<'
     let kind = GDScriptNodeKind::get_kind_from_ast_node(node);
     match kind {
         GDScriptNodeKind::Annotation => {
-            let name = node_text(node, content);
+            let name = get_node_text(node, content);
             ChildClassification::new(DeclarationKind::ClassAnnotation, name)
         }
         GDScriptNodeKind::ClassName => {
@@ -311,7 +388,7 @@ fn classify_child<'a>(node: Node<'a>, content: &'a str) -> ChildClassification<'
             }
         }
         GDScriptNodeKind::Extends => {
-            let text = node_text(node, content).trim();
+            let text = get_node_text(node, content).trim();
             ChildClassification::new(DeclarationKind::Extends, text)
         }
         GDScriptNodeKind::Signal => {
@@ -366,7 +443,7 @@ fn classify_child<'a>(node: Node<'a>, content: &'a str) -> ChildClassification<'
             ChildClassification::new(DeclarationKind::InnerClass, name)
         }
         // This ensures the node is preserved during reorder.
-        _ => ChildClassification::new(DeclarationKind::Unknown, node_text(node, content)),
+        _ => ChildClassification::new(DeclarationKind::Unknown, get_node_text(node, content)),
     }
 }
 
@@ -391,7 +468,7 @@ fn extract_name<'a>(node: Node<'a>, content: &'a str) -> Option<&'a str> {
         if node.field_name_for_child(child_index as u32) == Some("name") {
             return node
                 .child(child_index as u32)
-                .map(|child_node| node_text(child_node, content));
+                .map(|child_node| get_node_text(child_node, content));
         }
     }
     None
@@ -467,33 +544,6 @@ fn annotations_contain_name(annotations_node: Node, content: &str, name: &str) -
     }
     false
 }
-
-/// Checks whether a single `annotation` node's `identifier` child has text
-/// equal to `expected_name`.
-fn annotation_identifier_matches(
-    annotation_node: Node,
-    content: &str,
-    expected_name: &str,
-) -> bool {
-    let count = annotation_node.child_count();
-    let mut child_index = 0;
-    while child_index < count {
-        if let Some(child) = annotation_node.child(child_index as u32) {
-            if GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Identifier {
-                return node_text(child, content) == expected_name;
-            }
-        }
-        child_index += 1;
-    }
-    false
-}
-
-/// Slice the source string at a node's byte range.
-/// Tree-sitter byte offsets are always on UTF-8 char boundaries.
-fn node_text<'a>(node: Node<'a>, content: &'a str) -> &'a str {
-    &content[node.start_byte()..node.end_byte()]
-}
-
 /// Maps built-in virtual method names to Godot lifecycle priority.
 fn get_builtin_virtual_priority(method_name: &str) -> u8 {
     match method_name {

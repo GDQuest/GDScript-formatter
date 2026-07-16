@@ -35,6 +35,7 @@ This file documents the changes made to the formatter with each release.
 - Fix formatting with vs without `--reorder-code` not being idempotent in some situations (#207)
 - Fix code inside dedented region comments getting dedented too: region comments will now indent into the code (#172)
 - Fix dedented comment in a block's body (function body, loop body, if statement body...) causing following lines in the block to be dedented too (#252)
+- Preserve up to 1 blank line between consecutive declarations when reordering (#268)
 - Godot addon fixes:
   - Fix formatter undoes any changes in script if they have not been saved (#243)
   - Fix "Uninstall Formatter" command doesn't exist message (#189)
