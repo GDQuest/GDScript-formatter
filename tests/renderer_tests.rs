@@ -22,6 +22,12 @@ fn group(start: usize, end: usize) -> RenderElement {
     }
 }
 
+fn balanced_group(start: usize, end: usize) -> RenderElement {
+    RenderElement::BalancedGroup {
+        children: RangeRenderElement { start, end },
+    }
+}
+
 fn indent(level: u16, start: usize, end: usize) -> RenderElement {
     RenderElement::Indent {
         level,
@@ -99,6 +105,93 @@ fn break_group_when_too_long() {
     let mut out = String::new();
     render(&render_elements, "", &config, &mut out);
     assert_eq!(out, "aaaa\nbbbb\ncccc\ndddd\n");
+}
+
+#[test]
+fn balanced_group_distributes_segments_evenly() {
+    let render_elements = vec![
+        balanced_group(1, 6),
+        RenderElement::TextStatic("aaaaaaa"),
+        RenderElement::BalancedLine,
+        RenderElement::TextStatic("+b"),
+        RenderElement::BalancedLine,
+        RenderElement::TextStatic("+ ccc"),
+    ];
+    let config = PrinterConfiguration {
+        max_line_length: 10,
+        ..get_default_printer_configuration()
+    };
+    let mut out = String::new();
+    render(&render_elements, "", &config, &mut out);
+    assert_eq!(out, "aaaaaaa\n+b + ccc\n");
+}
+
+#[test]
+fn balanced_group_accounts_for_the_current_column() {
+    let render_elements = vec![
+        RenderElement::TextStatic("xxxx "),
+        balanced_group(2, 7),
+        RenderElement::TextStatic("aaaa"),
+        RenderElement::BalancedLine,
+        RenderElement::TextStatic("+bb"),
+        RenderElement::BalancedLine,
+        RenderElement::TextStatic("+cc"),
+    ];
+    let config = PrinterConfiguration {
+        max_line_length: 10,
+        ..get_default_printer_configuration()
+    };
+    let mut out = String::new();
+    render(&render_elements, "", &config, &mut out);
+    assert_eq!(out, "xxxx aaaa\n+bb +cc\n");
+}
+
+#[test]
+fn balanced_group_distributes_segments_across_three_lines() {
+    let render_elements = vec![
+        balanced_group(1, 12),
+        RenderElement::TextStatic("aaaa"),
+        RenderElement::BalancedLine,
+        RenderElement::TextStatic("+bbb"),
+        RenderElement::BalancedLine,
+        RenderElement::TextStatic("+ccc"),
+        RenderElement::BalancedLine,
+        RenderElement::TextStatic("+ddd"),
+        RenderElement::BalancedLine,
+        RenderElement::TextStatic("+eee"),
+        RenderElement::BalancedLine,
+        RenderElement::TextStatic("+fff"),
+    ];
+    let config = PrinterConfiguration {
+        max_line_length: 10,
+        ..get_default_printer_configuration()
+    };
+    let mut out = String::new();
+    render(&render_elements, "", &config, &mut out);
+    assert_eq!(out, "aaaa +bbb\n+ccc +ddd\n+eee +fff\n");
+}
+
+#[test]
+fn balanced_group_isolates_forced_multiline_segment() {
+    let render_elements = vec![
+        balanced_group(1, 9),
+        RenderElement::TextStatic("a"),
+        RenderElement::BalancedLine,
+        group(4, 7),
+        RenderElement::TextStatic("nested"),
+        RenderElement::SoftLine,
+        RenderElement::ForceBreakingParent,
+        RenderElement::BalancedLine,
+        RenderElement::TextStatic("+ c"),
+    ];
+    let mut out = String::new();
+    render(
+        &render_elements,
+        "",
+        &get_default_printer_configuration(),
+        &mut out,
+    );
+    assert_eq!(out, "a\nnested\n+ c\n");
 }
 
 #[test]

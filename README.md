@@ -402,6 +402,27 @@ To run the formatter's test suite, use this command:
 cargo test
 ```
 
+### Benchmarking and profiling
+
+Run the timing benchmark to compare total formatter runtime between revisions:
+
+```bash
+cargo run --bin benchmark --release
+```
+
+The output result is the median time of multiple batches of formatter runs over the same files.
+
+To profile the run and see which functions use the most CPU time, I use the sampling profiler [samply](https://github.com/mstange/samply). Install it like this, then I've prepared a script to run the formatter while running the profiler:
+
+```bash
+cargo install --locked samply
+./benchmarks/profile.sh
+```
+
+Samply allows you to view the profiling results in Firefox's profiler UI.
+
+The script runs 5000 iterations by default, but you can pass a different count as an argument, for example `./benchmarks/profile.sh 10000`.
+
 ### Debugging and visualizing the tree structure
 
 You can use the tree-sitter command line tool to parse GDScript files and visualize the syntax tree. This shows you the structure that the tree-sitter parser generates, which you can then use to write formatting rules:

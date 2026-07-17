@@ -16,11 +16,6 @@ use crate::parser::{ParseInput, RegionWithDisabledFormatting};
 use crate::renderer::{RangeRenderElement, RangeSourceBytes, RenderElement};
 use crate::reorder::{self, DeclarationKind};
 
-/// Returns the number of bytes a tree-sitter node spans in the source code.
-fn node_byte_length(node: tree_sitter::Node) -> usize {
-    node.end_byte() - node.start_byte()
-}
-
 fn begin_indent(render_elements: &mut Vec<RenderElement>, level: u16) -> usize {
     let index = render_elements.len();
     render_elements.push(RenderElement::Indent {
@@ -1359,7 +1354,7 @@ fn process_setget(
     if child_count > 1 {
         render_elements.push(RenderElement::HardLine);
         let indent_index = begin_indent(render_elements, 1);
-        let mut inner = 1usize;
+        let mut inner = 1;
         let mut previous: Option<tree_sitter::Node> = None;
         while inner < child_count {
             if let Some(inner_child) = node.child(inner as u32) {
@@ -1421,19 +1416,15 @@ fn process_container(
     }
     render_elements.push(RenderElement::SoftLine);
 
-    let uses_double_hanging_indent =
-        node_kind == GDScriptNodeKind::Parameters || node_kind == GDScriptNodeKind::Arguments;
-    let indent_level: u16 = if uses_double_hanging_indent {
-        input.continuation_indent_level
-    } else {
-        1
-    };
-    let indent_index = begin_indent(render_elements, indent_level);
+    // When we have delimiters like in a function calls, we apply just one
+    // indent. Before, we applied double indents by default, treating them as
+    // continuation lines.
+    let indent_index = begin_indent(render_elements, 1);
 
     let mut has_comment = false;
     let mut last_was_comment = false;
     let mut trailing_comma_handled = false;
-    let mut index = 1usize;
+    let mut index = 1;
     let mut previous: Option<tree_sitter::Node> = None;
     let mut skip_next_separator = false;
     while index < child_count - 1 {
@@ -1667,177 +1658,32 @@ fn process_parenthesized_expression(
     finish_group(render_elements, group_index);
 }
 
-/// Formats BinaryOperator nodes. For and/or chains, flattens left-associative
-/// operators into balanced chunks to avoid deep nesting. For other operators,
-/// wraps the expression in a Group that breaks on newlines.
+/// Formats BinaryOperator nodes. Homogeneous operator chains use balanced
+/// groups to distribute operands and wrap before operators. Standalone boolean
+/// expressions gain parentheses when they wrap, as GDScript otherwise has no
+/// implicit line continuation.
 fn process_binary_operator(
     input: &ParseInput,
     node: tree_sitter::Node,
     render_elements: &mut Vec<RenderElement>,
 ) {
+    struct BinaryChainSegment<'a> {
+        operator: Option<tree_sitter::Node<'a>>,
+        expression: tree_sitter::Node<'a>,
+    }
+
     let child_count = node.child_count();
     if child_count < 3 {
         process_children_with_spacing(input, node, render_elements);
         return;
     }
 
-    let is_and_or = if let Some(operator_node) = node.child(1) {
-        let text = &input.source[operator_node.start_byte()..operator_node.end_byte()];
-        text == "and" || text == "or"
+    let operator_text = if let Some(operator) = node.child(1) {
+        &input.source[operator.start_byte()..operator.end_byte()]
     } else {
-        false
+        ""
     };
-
-    if is_and_or {
-        // Flatten left-associative and/or chain into segments.
-        // Each segment = (optional_operator_node, expression_node).
-        let mut segments: Vec<(Option<tree_sitter::Node>, tree_sitter::Node)> =
-            Vec::with_capacity(child_count);
-        let mut current = node;
-        let mut levels: Vec<tree_sitter::Node> = Vec::with_capacity(child_count);
-
-        while let Some(left) = current.child(0) {
-            if GDScriptNodeKind::get_kind_from_ast_node(left) == GDScriptNodeKind::BinaryOperator {
-                let left_operator_text = if let Some(operator_node) = left.child(1) {
-                    &input.source[operator_node.start_byte()..operator_node.end_byte()]
-                } else {
-                    ""
-                };
-                let current_operator_text = if let Some(operator_node) = current.child(1) {
-                    &input.source[operator_node.start_byte()..operator_node.end_byte()]
-                } else {
-                    ""
-                };
-                if left_operator_text == current_operator_text {
-                    levels.push(current);
-                    current = left;
-                    continue;
-                }
-            }
-            break;
-        }
-
-        if let Some(left_expr) = current.child(0) {
-            segments.push((None, left_expr));
-        }
-        if let Some(right_expr) = current.child(2) {
-            segments.push((current.child(1), right_expr));
-        }
-        let mut level_index = levels.len();
-        while level_index > 0 {
-            level_index -= 1;
-            if let Some(right_expr) = levels[level_index].child(2) {
-                segments.push((levels[level_index].child(1), right_expr));
-            }
-        }
-
-        if segments.len() >= 2 {
-            // Estimate total rendered width from source spans.
-            let mut total = 0usize;
-            let mut segment_index = 0;
-            while segment_index < segments.len() {
-                let (operator_node, expr) = &segments[segment_index];
-                if segment_index > 0 {
-                    if let Some(op) = operator_node {
-                        total += node_byte_length(*op);
-                    }
-                    total += 1;
-                }
-                total += node_byte_length(*expr);
-                segment_index += 1;
-            }
-
-            if total > input.max_line_length {
-                // Try 2 segments per line, else fall back to 1.
-                let chunk_size = {
-                    let available = input.max_line_length;
-                    let segment_count = segments.len();
-                    let mut fits = true;
-                    let mut chunk_start = 0;
-                    while chunk_start < segment_count {
-                        let chunk_end = (chunk_start + 2).min(segment_count);
-                        let mut chunk_width = 0usize;
-                        let mut segment_index = chunk_start;
-                        while segment_index < chunk_end {
-                            let (operator, expression) = &segments[segment_index];
-                            if segment_index > 0 {
-                                if let Some(op) = operator {
-                                    chunk_width += node_byte_length(*op);
-                                }
-                                chunk_width += 1;
-                            }
-                            chunk_width += node_byte_length(*expression);
-                            if segment_index < chunk_end - 1 {
-                                chunk_width += 1;
-                            }
-                            segment_index += 1;
-                        }
-                        if chunk_width > available {
-                            fits = false;
-                            break;
-                        }
-                        chunk_start = chunk_end;
-                    }
-                    if fits { 2 } else { 1 }
-                };
-
-                // Build doc with balanced chunks. Only wrap in parens when
-                // not already inside a parenthesized_expression.
-                let parent_is_paren = if let Some(parent_node) = node.parent() {
-                    GDScriptNodeKind::get_kind_from_ast_node(parent_node)
-                        == GDScriptNodeKind::ParenthesizedExpression
-                } else {
-                    false
-                };
-                if !parent_is_paren {
-                    render_elements.push(RenderElement::TextStatic("("));
-                    render_elements.push(RenderElement::HardLine);
-                }
-                let indent_index = if !parent_is_paren {
-                    Some(begin_indent(render_elements, 1))
-                } else {
-                    None
-                };
-                let segment_count = segments.len();
-                let mut chunk_start = 0;
-                while chunk_start < segment_count {
-                    let chunk_end = (chunk_start + chunk_size).min(segment_count);
-                    let mut segment_index = chunk_start;
-                    while segment_index < chunk_end {
-                        let (operator_node, expr) = &segments[segment_index];
-                        if segment_index > 0 {
-                            if let Some(op) = operator_node {
-                                render_elements.push(RenderElement::Text {
-                                    range: RangeSourceBytes {
-                                        start_byte: op.start_byte(),
-                                        end_byte: op.end_byte(),
-                                    },
-                                });
-                            }
-                            render_elements.push(RenderElement::Space);
-                        }
-                        process_node(input, *expr, render_elements);
-                        if segment_index < chunk_end - 1 {
-                            render_elements.push(RenderElement::Space);
-                        }
-                        segment_index += 1;
-                    }
-                    chunk_start = chunk_end;
-                    if chunk_start < segment_count {
-                        render_elements.push(RenderElement::HardLine);
-                    }
-                }
-                if let Some(indent_position) = indent_index {
-                    finish_indent(render_elements, indent_position);
-                }
-                if !parent_is_paren {
-                    render_elements.push(RenderElement::HardLine);
-                    render_elements.push(RenderElement::TextStatic(")"));
-                }
-                return;
-            }
-        }
-    }
+    let is_and_or = operator_text == "and" || operator_text == "or";
 
     let mut has_line_continuation = false;
     let mut current_index = 0;
@@ -1850,36 +1696,180 @@ fn process_binary_operator(
         }
         current_index += 1;
     }
-    if has_line_continuation || !has_newline(input.source, node.start_byte(), node.end_byte()) {
+    let is_in_single_indent_container = expression_is_in_single_indent_container(node);
+    if has_line_continuation || (!is_and_or && !is_in_single_indent_container) {
         process_children_with_spacing(input, node, render_elements);
         return;
     }
 
-    let group_index = begin_group(render_elements);
-
-    if let Some(left) = node.child(0) {
-        process_node(input, left, render_elements);
-    }
-
-    render_elements.push(RenderElement::Space);
-
-    // Keep an operator with its left operand. Before, we inserted a softline, but it can turn the
-    // operator into an invalid standalone statement. For example in `name in array` could become
+    // Flattens a chain of the same binary operator expressions (like a and b
+    // and c or a + b + c) into a list of segments so the renderer can balance
+    // all of its line-break choices in one group. This is a layout
+    // transformation; the AST structure still determines the expression's
+    // precedence and evaluation order.
+    //
+    // The tree sitter parser represents a left-associative chain like
+    // `a and b and c` as nested binary operator nodes. Concretely, it gives
+    // you an AST like this:
+    //
+    // ```text
+    // (binary_operator
+    //     left: (binary_operator
+    //         left: (identifier)
+    //         right: (identifier))
+    //     right: (identifier))
     // ```
-    // name
-    // in array
-    // ```
-    // Which is not valid.
-    if let Some(operator) = node.child(1) {
-        process_node(input, operator, render_elements);
+    //
+    // To format the whole chain as a balanced group, we walk down the
+    // left-hand side while the operator text matches (for example, all `+`),
+    // and we collect nodes into the `levels` list. We don't flatten mixed
+    // operators like as `a and b or c` together because their nested structure
+    // reflects the language's precedence and associativity rules for operators
+    // and lets each expression be formatted by its own group. Then we build
+    // segments from the deepest child going up: the leftmost operand has no
+    // operator, and each following segment pairs an operator with its
+    // right-hand side operand AST node.
+    //
+    // NOTE (Nathan): It's limited right now, maybe later we can handle mixed
+    // operators somehow.
+    let mut segments = Vec::with_capacity(child_count);
+    let mut levels: Vec<tree_sitter::Node> = Vec::with_capacity(child_count);
+    let mut current_node = node;
+    while let Some(left) = current_node.child(0) {
+        if GDScriptNodeKind::get_kind_from_ast_node(left) == GDScriptNodeKind::BinaryOperator {
+            let left_operator_text = if let Some(operator) = left.child(1) {
+                &input.source[operator.start_byte()..operator.end_byte()]
+            } else {
+                ""
+            };
+            if left_operator_text == operator_text {
+                levels.push(current_node);
+                current_node = left;
+                continue;
+            }
+        }
+        break;
+    }
+    if let Some(left) = current_node.child(0) {
+        segments.push(BinaryChainSegment {
+            operator: None,
+            expression: left,
+        });
+    }
+    if let Some(right) = current_node.child(2) {
+        segments.push(BinaryChainSegment {
+            operator: current_node.child(1),
+            expression: right,
+        });
+    }
+    let mut level_index = levels.len();
+    while level_index > 0 {
+        level_index -= 1;
+        if let Some(right) = levels[level_index].child(2) {
+            segments.push(BinaryChainSegment {
+                operator: levels[level_index].child(1),
+                expression: right,
+            });
+        }
     }
 
-    if let Some(right) = node.child(2) {
-        render_elements.push(RenderElement::Space);
-        process_node(input, right, render_elements);
+    let needs_parentheses_when_broken = is_and_or && !is_in_single_indent_container;
+    let outer_group_index = if needs_parentheses_when_broken {
+        let group_index = begin_group(render_elements);
+        let branch_start = render_elements.len() + 1;
+        render_elements.push(RenderElement::Branch {
+            if_single_line: None,
+            if_multiline: Some(RangeRenderElement {
+                start: branch_start,
+                end: branch_start + 2,
+            }),
+        });
+        render_elements.push(RenderElement::TextStatic("("));
+        render_elements.push(RenderElement::HardLine);
+        Some(group_index)
+    } else {
+        None
+    };
+    let indent_index = if needs_parentheses_when_broken {
+        Some(begin_indent(render_elements, 1))
+    } else {
+        None
+    };
+
+    let balanced_group_index = render_elements.len();
+    render_elements.push(RenderElement::BalancedGroup {
+        children: RangeRenderElement { start: 0, end: 0 },
+    });
+    let mut segment_index = 0;
+    while segment_index < segments.len() {
+        let segment = &segments[segment_index];
+        if let Some(operator) = segment.operator {
+            render_elements.push(RenderElement::BalancedLine);
+            process_node(input, operator, render_elements);
+            render_elements.push(RenderElement::Space);
+        }
+        process_node(input, segment.expression, render_elements);
+        segment_index += 1;
+    }
+    let balanced_group_end = render_elements.len();
+    if let RenderElement::BalancedGroup { children } = &mut render_elements[balanced_group_index] {
+        *children = RangeRenderElement {
+            start: balanced_group_index + 1,
+            end: balanced_group_end,
+        };
     }
 
-    finish_group(render_elements, group_index);
+    if let Some(indent_index) = indent_index {
+        finish_indent(render_elements, indent_index);
+    }
+    if let Some(group_index) = outer_group_index {
+        let branch_start = render_elements.len() + 1;
+        render_elements.push(RenderElement::Branch {
+            if_single_line: None,
+            if_multiline: Some(RangeRenderElement {
+                start: branch_start,
+                end: branch_start + 2,
+            }),
+        });
+        render_elements.push(RenderElement::HardLine);
+        render_elements.push(RenderElement::TextStatic(")"));
+        finish_group(render_elements, group_index);
+    }
+}
+
+/// Returns whether an expression belongs to a delimited layout that uses one
+/// structural indent when it wraps. Statement-like ancestors stop the search
+/// so an outer call does not affect expressions inside a lambda body.
+fn expression_is_in_single_indent_container(node: tree_sitter::Node) -> bool {
+    let mut ancestor = node.parent();
+    while let Some(current) = ancestor {
+        let kind = GDScriptNodeKind::get_kind_from_ast_node(current);
+        if matches!(
+            kind,
+            GDScriptNodeKind::Array
+                | GDScriptNodeKind::Dictionary
+                | GDScriptNodeKind::EnumeratorList
+                | GDScriptNodeKind::Parameters
+                | GDScriptNodeKind::Arguments
+                | GDScriptNodeKind::SubscriptArguments
+                | GDScriptNodeKind::ParenthesizedExpression
+        ) {
+            return true;
+        }
+        if matches!(
+            kind,
+            GDScriptNodeKind::Assignment
+                | GDScriptNodeKind::AugmentedAssignment
+                | GDScriptNodeKind::ExpressionStatement
+                | GDScriptNodeKind::ReturnStatement
+                | GDScriptNodeKind::Lambda
+                | GDScriptNodeKind::Body
+        ) {
+            return false;
+        }
+        ancestor = current.parent();
+    }
+    false
 }
 
 /// Formats Condition nodes (ternary if/else expressions) with a Group. Each
@@ -2185,8 +2175,8 @@ fn process_method_call_flat(
 }
 
 /// Formats Lambda nodes with a Group for flat/break layout. Uses
-/// emit_lambda_separator between lambda children. Applies ForceBreak when the
-/// lambda body spans multiple lines.
+/// emit_lambda_separator between lambda children. Lambda bodies always use a
+/// multiline layout.
 fn process_lambda(
     input: &ParseInput,
     node: tree_sitter::Node,
@@ -2229,18 +2219,14 @@ fn process_lambda(
         index += 1;
     }
 
-    // A lambda's body spans multiple lines exactly when its source range
-    // contains a newline, so a single scan can drive both decisions below:
-    // forcing the enclosing group to break, and (when the lambda sits inside
-    // parentheses) adding a trailing hard line after the body.
-    let mut body_is_multiline = false;
+    // Always break lambda bodies, even when the input wrote the body inline.
+    // This also forces the surrounding collection or argument group to break.
+    let mut has_body = false;
     let mut current_index: u32 = 0;
     while current_index < child_count as u32 {
         if let Some(child) = node.child(current_index) {
-            if GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Body
-                && has_newline(input.source, child.start_byte(), child.end_byte())
-            {
-                body_is_multiline = true;
+            if GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Body {
+                has_body = true;
                 render_elements.push(RenderElement::ForceBreakingParent);
                 break;
             }
@@ -2254,7 +2240,7 @@ fn process_lambda(
     } else {
         false
     };
-    if body_is_multiline && parent_is_paren {
+    if has_body && parent_is_paren {
         render_elements.push(RenderElement::HardLine);
     }
 

@@ -67,3 +67,10 @@ path = "src/main.rs"
 [profile.release]
 strip = true
 lto = true
+
+# For the profiler, we want optimizations but also debug symbols so we can see
+# function names in the profiler UI.
+[profile.profiling]
+inherits = "release"
+debug = true
+strip = false

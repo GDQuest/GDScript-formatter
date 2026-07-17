@@ -26,9 +26,8 @@ func foo():
 
 	var position = Vector2(250, 350)
 	if (
-		position.x > 200 and position.x < 400
-		and position.y > 300 and position.y < 400
-		and position.z > 0 and position.z < 100
+		position.x > 200 and position.x < 400 and position.y > 300
+		and position.y < 400 and position.z > 0 and position.z < 100
 	):
 		pass
 

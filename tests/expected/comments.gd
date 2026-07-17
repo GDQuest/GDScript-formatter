@@ -123,16 +123,16 @@ func foo(): # func comment
 		pass
 
 	bar(
-			a, # function call inline comment
-			b,
+		a, # function call inline comment
+		b,
 	)
 
 	return # function trailing comment at end
 
 
 func comment_after_parameter(
-		a,
-		b, # should stay attached to parameter
-		c,
+	a,
+	b, # should stay attached to parameter
+	c,
 ):
 	pass

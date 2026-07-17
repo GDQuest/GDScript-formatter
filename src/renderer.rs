@@ -42,6 +42,9 @@ pub enum RenderElement {
     /// needed, e.g. if a line is too long, a line return can be applied at this
     /// token).
     SoftLine,
+    /// A space between segments in a `BalancedGroup`. Selected balanced lines
+    /// become line returns when the group breaks.
+    BalancedLine,
     /// Represents a mandatory line return that should always be applied (a single \n).
     HardLine,
     /// Represents a blank (empty) line that should be output (a double line return: \n\n).
@@ -60,6 +63,14 @@ pub enum RenderElement {
     },
     /// Groups a set of tokens together for the line wrapping algorithm.
     Group {
+        children: RangeRenderElement,
+    },
+    /// Groups segments separated by `BalancedLine` and distributes them across
+    /// lines when they don't fit a flat layout. The renderer tries to
+    /// distribute the contents of a balanced group across multiple lines so
+    /// that lines are roughly the same length. Currently used mainly for
+    /// long chains of binary operator expressions.
+    BalancedGroup {
         children: RangeRenderElement,
     },
     /// Describes two possible sequences of tokens to render: one if the
@@ -152,15 +163,23 @@ pub fn render(
         column: 0,
         pending_newlines: 0u16,
         indent_level: 0,
+        balanced_break_plans: Vec::new(),
     };
     printer.render_range(0, render_elements.len(), Mode::Flat);
-    *output = printer.finish();
+    *output = printer.add_to_output_finish();
 }
 
 #[derive(Clone, Copy, PartialEq)]
 enum Mode {
     Flat,
     Break,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum ForceBreakMode {
+    Ignore,
+    DirectChildren,
+    AnyDepth,
 }
 
 struct Printer<'a> {
@@ -172,6 +191,7 @@ struct Printer<'a> {
     column: usize,
     pending_newlines: u16,
     indent_level: u16,
+    balanced_break_plans: Vec<Vec<usize>>,
 }
 
 impl<'a> Printer<'a> {
@@ -181,30 +201,49 @@ impl<'a> Printer<'a> {
             match &self.render_elements[index] {
                 RenderElement::Text { range } => {
                     let text = slice(self.source, range);
-                    self.emit_text(text);
+                    self.add_to_output(text);
                     index += 1;
                 }
                 RenderElement::TextStatic(text) => {
-                    self.emit_text(text);
+                    self.add_to_output(text);
                     index += 1;
                 }
                 RenderElement::TextProducedByFormatter(text) => {
-                    self.emit_text(text);
+                    self.add_to_output(text);
                     index += 1;
                 }
                 RenderElement::Space => {
-                    self.emit_text(" ");
+                    self.add_to_output(" ");
                     index += 1;
                 }
                 RenderElement::SpaceSingleLineOnly => {
                     if mode == Mode::Flat {
-                        self.emit_text(" ");
+                        self.add_to_output(" ");
                     }
                     index += 1;
                 }
                 RenderElement::SoftLine => {
                     if mode == Mode::Break {
                         self.request_newline(1);
+                    }
+                    index += 1;
+                }
+                RenderElement::BalancedLine => {
+                    if mode == Mode::Flat {
+                        self.add_to_output(" ");
+                    } else {
+                        let mut should_break = false;
+                        if let Some(breaks) = self.balanced_break_plans.last_mut()
+                            && breaks.last() == Some(&index)
+                        {
+                            breaks.pop();
+                            should_break = true;
+                        }
+                        if should_break {
+                            self.request_newline(1);
+                        } else if self.pending_newlines == 0 {
+                            self.add_to_output(" ");
+                        }
                     }
                     index += 1;
                 }
@@ -231,8 +270,29 @@ impl<'a> Printer<'a> {
                     index = child.end;
                 }
                 RenderElement::Group { children } => {
-                    let child_mode = self.decide_group_render_mode(children.start, children.end);
+                    let child_mode = self.decide_group_render_mode(
+                        children.start,
+                        children.end,
+                        ForceBreakMode::DirectChildren,
+                    );
                     self.render_range(children.start, children.end, child_mode);
+                    index = children.end;
+                }
+                RenderElement::BalancedGroup { children } => {
+                    let child_mode = self.decide_group_render_mode(
+                        children.start,
+                        children.end,
+                        ForceBreakMode::AnyDepth,
+                    );
+                    if child_mode == Mode::Flat {
+                        self.render_range(children.start, children.end, Mode::Flat);
+                    } else {
+                        let mut breaks = self.plan_balanced_breaks(children.start, children.end);
+                        breaks.reverse();
+                        self.balanced_break_plans.push(breaks);
+                        self.render_range(children.start, children.end, Mode::Break);
+                        self.balanced_break_plans.pop();
+                    }
                     index = children.end;
                 }
                 RenderElement::Branch {
@@ -253,7 +313,7 @@ impl<'a> Printer<'a> {
                     // Insert raw text to the output without any formatting
                     // while tracking the current column and pending newlines to
                     // keep track of indentation.
-                    self.flush_newlines();
+                    self.add_to_output_process_newlines();
                     for c in text.chars() {
                         if c == '\n' {
                             self.output.push('\n');
@@ -280,14 +340,19 @@ impl<'a> Printer<'a> {
         }
     }
 
-    fn decide_group_render_mode(&self, start: usize, end: usize) -> Mode {
+    fn decide_group_render_mode(
+        &self,
+        start: usize,
+        end: usize,
+        force_break_mode: ForceBreakMode,
+    ) -> Mode {
         let column = if self.pending_newlines > 0 {
             self.indent_level as usize * self.config.indent_size
         } else {
             self.column
         };
         let mut current_column = column;
-        if self.does_group_fit_on_one_line(start, end, &mut current_column, true) {
+        if self.does_group_fit_on_one_line(start, end, &mut current_column, force_break_mode) {
             Mode::Flat
         } else {
             Mode::Break
@@ -295,15 +360,28 @@ impl<'a> Printer<'a> {
     }
 
     /// Checks whether a range of node's contents fit on a single line (recursively).
-    /// `check_force_break` controls whether a `ForceBreakingParent` element
-    /// aborts the check: when true (the direct parent group), encountering one
-    /// returns false; when false (a nested group being measured), it is ignored.
+    /// `force_break_mode` controls whether `ForceBreakingParent` aborts the
+    /// check for direct children, at any depth, or not at all.
     fn does_group_fit_on_one_line(
         &self,
         start: usize,
         end: usize,
         column: &mut usize,
-        check_force_break: bool,
+        force_break_mode: ForceBreakMode,
+    ) -> bool {
+        self.does_range_fit_flat_layout(start, end, column, force_break_mode)
+            && *column <= self.config.max_line_length
+    }
+
+    /// Measures the width of a range of render elements on a single line and
+    /// returns true if the content would fit the line. Returns false when the
+    /// range contains content that cannot render on one physical line.
+    fn does_range_fit_flat_layout(
+        &self,
+        start: usize,
+        end: usize,
+        column: &mut usize,
+        force_break_mode: ForceBreakMode,
     ) -> bool {
         let mut index = start;
         while index < end {
@@ -326,29 +404,37 @@ impl<'a> Printer<'a> {
                     }
                     index += 1;
                 }
-                RenderElement::Space | RenderElement::SpaceSingleLineOnly => {
-                    *column += 1;
-                    if *column > self.config.max_line_length {
-                        return false;
-                    }
+                RenderElement::Space
+                | RenderElement::SpaceSingleLineOnly
+                | RenderElement::BalancedLine => {
+                    *column = column.saturating_add(1);
                     index += 1;
                 }
                 RenderElement::SoftLine => index += 1,
                 RenderElement::HardLine | RenderElement::BlankLine => return false,
                 RenderElement::Indent { child, .. } => {
-                    if !self.does_group_fit_on_one_line(
+                    if !self.does_range_fit_flat_layout(
                         child.start,
                         child.end,
                         column,
-                        check_force_break,
+                        force_break_mode,
                     ) {
                         return false;
                     }
                     index = child.end;
                 }
-                RenderElement::Group { children } => {
-                    if !self.does_group_fit_on_one_line(children.start, children.end, column, false)
-                    {
+                RenderElement::Group { children } | RenderElement::BalancedGroup { children } => {
+                    let nested_force_break_mode = if force_break_mode == ForceBreakMode::AnyDepth {
+                        ForceBreakMode::AnyDepth
+                    } else {
+                        ForceBreakMode::Ignore
+                    };
+                    if !self.does_range_fit_flat_layout(
+                        children.start,
+                        children.end,
+                        column,
+                        nested_force_break_mode,
+                    ) {
                         return false;
                     }
                     index = children.end;
@@ -358,11 +444,11 @@ impl<'a> Printer<'a> {
                     if_multiline: break_,
                 } => {
                     if let Some(range) = flat
-                        && !self.does_group_fit_on_one_line(
+                        && !self.does_range_fit_flat_layout(
                             range.start,
                             range.end,
                             column,
-                            check_force_break,
+                            force_break_mode,
                         )
                     {
                         return false;
@@ -370,7 +456,7 @@ impl<'a> Printer<'a> {
                     index = skip_past_branch(index, flat, break_);
                 }
                 RenderElement::ForceBreakingParent => {
-                    if check_force_break {
+                    if force_break_mode != ForceBreakMode::Ignore {
                         return false;
                     }
                     index += 1;
@@ -386,23 +472,171 @@ impl<'a> Printer<'a> {
                 return false;
             }
             if c == '\t' {
-                *column += self.config.indent_size;
+                *column = column.saturating_add(self.config.indent_size);
             } else {
-                *column += 1;
-            }
-            if *column > self.config.max_line_length {
-                return false;
+                *column = column.saturating_add(1);
             }
         }
         true
     }
 
-    fn emit_text(&mut self, text: &str) {
+    fn plan_balanced_breaks(&self, start: usize, end: usize) -> Vec<usize> {
+        let boundaries = {
+            let mut found_boundaries = Vec::new();
+            let mut index = start;
+            while index < end {
+                match &self.render_elements[index] {
+                    RenderElement::BalancedLine => {
+                        found_boundaries.push(index);
+                        index += 1;
+                    }
+                    RenderElement::Indent { child, .. } => index = child.end,
+                    RenderElement::Group { children }
+                    | RenderElement::BalancedGroup { children } => index = children.end,
+                    RenderElement::Branch {
+                        if_single_line,
+                        if_multiline,
+                    } => index = skip_past_branch(index, if_single_line, if_multiline),
+                    _ => index += 1,
+                }
+            }
+            found_boundaries
+        };
+
+        if boundaries.is_empty() {
+            return Vec::new();
+        }
+
+        let segment_count = boundaries.len() + 1;
+        let mut widths = Vec::with_capacity(segment_count);
+        let mut multiline = Vec::with_capacity(segment_count);
+        let mut segment_index = 0;
+        while segment_index < segment_count {
+            let segment_start = if segment_index == 0 {
+                start
+            } else {
+                boundaries[segment_index - 1] + 1
+            };
+            let segment_end = if segment_index < boundaries.len() {
+                boundaries[segment_index]
+            } else {
+                end
+            };
+            let mut width = 0;
+            let fits_one_line = self.does_range_fit_flat_layout(
+                segment_start,
+                segment_end,
+                &mut width,
+                ForceBreakMode::AnyDepth,
+            );
+            widths.push(width);
+            multiline.push(!fits_one_line);
+            segment_index += 1;
+        }
+
+        let continuation_column = self.indent_level as usize * self.config.indent_size;
+        let first_column = if self.pending_newlines > 0 {
+            continuation_column
+        } else {
+            self.column
+        };
+
+        // First find the minimum line count by filling each line to its limit.
+        let mut line_count = 1usize;
+        let mut column = first_column;
+        let mut line_has_segment = false;
+        let mut previous_was_multiline = false;
+        segment_index = 0;
+        while segment_index < segment_count {
+            if multiline[segment_index] {
+                if line_has_segment {
+                    line_count += 1;
+                }
+                line_has_segment = true;
+                previous_was_multiline = true;
+            } else {
+                if previous_was_multiline {
+                    line_count += 1;
+                    column = continuation_column;
+                    line_has_segment = false;
+                    previous_was_multiline = false;
+                }
+                let separator_width = usize::from(line_has_segment);
+                let next_column = column
+                    .saturating_add(separator_width)
+                    .saturating_add(widths[segment_index]);
+                if line_has_segment && next_column > self.config.max_line_length {
+                    line_count += 1;
+                    column = continuation_column.saturating_add(widths[segment_index]);
+                } else {
+                    column = next_column;
+                }
+                line_has_segment = true;
+            }
+            segment_index += 1;
+        }
+
+        // Then try to place each break so that it gives an even share of the
+        // remaining text. It's just a heuristic, we don't explore all possible
+        // break points to find the best solution.
+        let mut breaks = Vec::with_capacity(line_count.saturating_sub(1));
+        let mut first_segment = 0;
+        let mut remaining_lines = line_count;
+        while remaining_lines > 1 && first_segment < segment_count {
+            let line_start_column = if first_segment == 0 {
+                first_column
+            } else {
+                continuation_column
+            };
+            let available_width = self
+                .config
+                .max_line_length
+                .saturating_sub(line_start_column);
+            let mut remaining_width = segment_count - first_segment - 1;
+            let mut segment_index = first_segment;
+            while segment_index < segment_count {
+                remaining_width = remaining_width.saturating_add(widths[segment_index]);
+                segment_index += 1;
+            }
+            let target_width = remaining_width
+                .div_ceil(remaining_lines)
+                .min(available_width);
+            let last_allowed_segment = segment_count - remaining_lines;
+            let mut next_segment = first_segment + 1;
+            let mut line_width = widths[first_segment];
+
+            if !multiline[first_segment] {
+                while next_segment <= last_allowed_segment && !multiline[next_segment] {
+                    let candidate_width = line_width
+                        .saturating_add(1)
+                        .saturating_add(widths[next_segment]);
+                    let worsens_balance =
+                        candidate_width.abs_diff(target_width) > line_width.abs_diff(target_width);
+                    if candidate_width > available_width || worsens_balance {
+                        break;
+                    }
+                    line_width = candidate_width;
+                    next_segment += 1;
+                }
+            }
+
+            breaks.push(boundaries[next_segment - 1]);
+            first_segment = next_segment;
+            remaining_lines -= 1;
+        }
+        breaks
+    }
+
+    /// Adds the given text to the output buffer, keeping track of the current
+    /// column, but also processing line returns depending on the user config.
+    /// We support optional trimming trailing whitespace and reconstructing
+    /// indentation on empty lines between statements.
+    fn add_to_output(&mut self, text: &str) {
         for c in text.chars() {
             if c == '\n' {
                 self.pending_newlines += 1;
             } else {
-                self.flush_newlines();
+                self.add_to_output_process_newlines();
                 self.output.push(c);
                 if c == '\t' {
                     self.column += self.config.indent_size;
@@ -413,7 +647,7 @@ impl<'a> Printer<'a> {
         }
     }
 
-    fn flush_newlines(&mut self) {
+    fn add_to_output_process_newlines(&mut self) {
         if self.pending_newlines == 0 {
             return;
         }
@@ -456,7 +690,7 @@ impl<'a> Printer<'a> {
         self.pending_newlines = 0;
     }
 
-    fn finish(mut self) -> String {
+    fn add_to_output_finish(mut self) -> String {
         if !self.config.insert_final_newline {
             return self.output;
         }

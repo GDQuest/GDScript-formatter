@@ -11,9 +11,9 @@
 //!    (class_name_statement with inline extends child) becomes
 //!    `class_name Foo` + `extends Bar` (two siblings).
 //!
-//! 3. **Condition wrapping**: the formatter may add parentheses around a long
-//!    `if`/`elif`/`while`/`for` condition for readability. Both forms normalize
-//!    equivalently.
+//! 3. **Expression wrapping**: the formatter may add parentheses around a long
+//!    expression so it can wrap safely. Parenthesized expressions normalize to
+//!    their inner expression.
 //!
 //! Normalization walks both trees recursively, applies these canonical forms,
 //! then compares the normalized trees structurally (kind + children match).
@@ -56,35 +56,28 @@ fn is_annotation_like(kind: GDScriptNodeKind) -> bool {
     kind == GDScriptNodeKind::Annotation || kind == GDScriptNodeKind::Annotations
 }
 
-fn has_condition_child(kind: GDScriptNodeKind) -> bool {
-    matches!(
-        kind,
-        GDScriptNodeKind::IfStatement
-            | GDScriptNodeKind::ElifStatement
-            | GDScriptNodeKind::ForStatement
-    )
-}
-
 fn normalize_node(node: Node, lookup: &[GDScriptNodeKind; 256]) -> NormalizedNode {
     let kind = GDScriptNodeKind::get_kind_from_ast_node(node);
+    if kind == GDScriptNodeKind::ParenthesizedExpression && node.named_child_count() == 1 {
+        let inner = node
+            .named_child(0)
+            .expect("parenthesized expression with one named child has that child");
+        return normalize_node(inner, lookup);
+    }
     let canonical_kind = match kind {
         GDScriptNodeKind::ExportVariable | GDScriptNodeKind::OnReadyVariable => {
             GDScriptNodeKind::Variable
         }
         other => other,
     };
-    let children = build_normalized_children(node, canonical_kind, lookup);
+    let children = build_normalized_children(node, lookup);
     NormalizedNode {
         kind: canonical_kind,
         children,
     }
 }
 
-fn build_normalized_children(
-    node: Node,
-    parent_kind: GDScriptNodeKind,
-    lookup: &[GDScriptNodeKind; 256],
-) -> Vec<NormalizedNode> {
+fn build_normalized_children(node: Node, lookup: &[GDScriptNodeKind; 256]) -> Vec<NormalizedNode> {
     let named_count = node.named_child_count();
     let mut out = Vec::with_capacity(named_count);
     let mut current_child_index: usize = 0;
@@ -95,20 +88,6 @@ fn build_normalized_children(
             continue;
         };
         let kind = GDScriptNodeKind::get_kind_from_ast_node(child);
-
-        // Unwrap parenthesized condition: if the formatter added parens around
-        // a condition for readability, treat the inner expression as equivalent.
-        if has_condition_child(parent_kind)
-            && current_child_index == 0
-            && kind == GDScriptNodeKind::ParenthesizedExpression
-            && child.named_child_count() == 1
-        {
-            if let Some(inner) = child.named_child(0) {
-                out.push(normalize_node(inner, lookup));
-                current_child_index += 1;
-                continue;
-            }
-        }
 
         // Merge consecutive annotations before a declaration. When the formatter
         // moves an annotation from being a sibling to being a child of the
@@ -378,6 +357,22 @@ mod tests {
         assert!(structurally_equal(
             "if position.x > 200 and position.x < 400:\n\tpass",
             "if (position.x > 200 and position.x < 400):\n\tpass"
+        ));
+    }
+
+    #[test]
+    fn assignment_bare_vs_parenthesized_expression() {
+        assert!(structurally_equal(
+            "var is_attacking := Input.is_action_pressed(\"attack\") and not animation.is_playing()",
+            "var is_attacking := (Input.is_action_pressed(\"attack\") and not animation.is_playing())"
+        ));
+    }
+
+    #[test]
+    fn parentheses_that_change_operator_grouping_are_not_equal() {
+        assert!(!structurally_equal(
+            "var result = a * (b + c)",
+            "var result = a * b + c"
         ));
     }
 }

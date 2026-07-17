@@ -2,6 +2,22 @@
 
 This file documents the changes made to the formatter with each release.
 
+## Unreleased: 0.22.0
+
+### Added
+
+- Added a profiling option to the benchmark script compatible with the samply profiler
+
+### Changed
+
+- Implemented new balanced line wrapping algorithm for long chains of expressions, including operations and boolean expressions
+- Specified the definition for continuation lines and changed function calls and other statements and expressions to use a single extra indent instead of two by default
+- Always force lambda functions to have a line return after the function declaration, like regular functions
+
+### Fixed
+
+- Conditions that exceed max-line-length by only a few columns get backslash + attribute-dot wrapping instead of the parenthesized and-wrap used for larger overflows (#270)
+
 ## Release 0.21.0 (2026-07-16)
 
 ### Added
