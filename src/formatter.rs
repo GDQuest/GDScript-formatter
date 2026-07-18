@@ -2593,40 +2593,48 @@ fn process_source_reorder(
         previous_is_double_spaced = current_needs_two_blank;
         previous_child_index = Some(item.child_index);
 
-        // output leading comments/annotations.
+        // Output source children attached before the declaration.
         if item.classification != DeclarationKind::Docstring {
-            let declaration_start = match node.child(item.child_index as u32) {
+            let declaration_start_byte = match node.child(item.child_index as u32) {
                 Some(child) => child.start_byte(),
                 None => 0,
             };
-            let mut leading_index = 0;
-            while leading_index < item.leading_indices.len() {
-                let leading_child_index = item.leading_indices[leading_index];
-                if let Some(child) = node.child(leading_child_index as u32) {
+            let mut attached_before_declaration_index = 0;
+            while attached_before_declaration_index
+                < item.child_indices_attached_before_declaration.len()
+            {
+                let child_index_attached_before_declaration = item
+                    .child_indices_attached_before_declaration[attached_before_declaration_index];
+                if let Some(child) = node.child(child_index_attached_before_declaration as u32) {
                     process_node(input, child, render_elements);
-                    let next_start = if leading_index + 1 < item.leading_indices.len() {
-                        let lookahead_index = item.leading_indices[leading_index + 1];
-                        match node.child(lookahead_index as u32) {
+                    let next_child_start_byte = if attached_before_declaration_index + 1
+                        < item.child_indices_attached_before_declaration.len()
+                    {
+                        let next_child_index_attached_before_declaration = item
+                            .child_indices_attached_before_declaration
+                            [attached_before_declaration_index + 1];
+                        match node.child(next_child_index_attached_before_declaration as u32) {
                             Some(next_child) => next_child.start_byte(),
-                            None => declaration_start,
+                            None => declaration_start_byte,
                         }
                     } else {
-                        declaration_start
+                        declaration_start_byte
                     };
-                    if has_newline(source, child.end_byte(), next_start) {
+                    if has_newline(source, child.end_byte(), next_child_start_byte) {
                         render_elements.push(RenderElement::HardLine);
                     } else {
                         render_elements.push(RenderElement::Space);
                     }
                 }
-                leading_index += 1;
+                attached_before_declaration_index += 1;
             }
         }
 
         if item.classification == DeclarationKind::Docstring {
             let mut docstring_index = 0;
-            while docstring_index < item.leading_indices.len() {
-                let docstring_child_index = item.leading_indices[docstring_index];
+            while docstring_index < item.child_indices_attached_before_declaration.len() {
+                let docstring_child_index =
+                    item.child_indices_attached_before_declaration[docstring_index];
                 if let Some(child) = node.child(docstring_child_index as u32) {
                     process_node(input, child, render_elements);
                     render_elements.push(RenderElement::HardLine);
@@ -2673,22 +2681,25 @@ fn process_source_reorder(
             }
         }
 
-        let declaration_end: usize = match node.child(item.child_index as u32) {
+        let declaration_end_byte: usize = match node.child(item.child_index as u32) {
             Some(child) => child.end_byte(),
             None => 0,
         };
-        let mut trailing_index = 0;
-        while trailing_index < item.trailing_indices.len() {
-            let trailing_child_index = item.trailing_indices[trailing_index];
-            if let Some(child) = node.child(trailing_child_index as u32) {
-                if has_newline(source, declaration_end, child.start_byte()) {
+        let mut attached_after_declaration_index = 0;
+        while attached_after_declaration_index
+            < item.child_indices_attached_after_declaration.len()
+        {
+            let child_index_attached_after_declaration = item
+                .child_indices_attached_after_declaration[attached_after_declaration_index];
+            if let Some(child) = node.child(child_index_attached_after_declaration as u32) {
+                if has_newline(source, declaration_end_byte, child.start_byte()) {
                     render_elements.push(RenderElement::HardLine);
                 } else {
                     render_elements.push(RenderElement::Space);
                 }
                 process_node(input, child, render_elements);
             }
-            trailing_index += 1;
+            attached_after_declaration_index += 1;
         }
         item_index += 1;
     }

@@ -24,11 +24,12 @@ pub struct ReorderItem<'a> {
     /// `child_index`. Used for split inline extends: the extends_statement
     /// is a child of class_name_statement, not a sibling.
     pub sub_child: Option<usize>,
-    /// Indices of comment/annotation children that precede this declaration
-    /// in source order (they move with it during reorder).
-    pub leading_indices: Vec<usize>,
-    /// Indices of trailing children (e.g. #endregion) glued to this decl.
-    pub trailing_indices: Vec<usize>,
+    /// Indices of source children that precede and move with this declaration,
+    /// such as comments, annotations, and region starts.
+    pub child_indices_attached_before_declaration: Vec<usize>,
+    /// Indices of source children that follow and move with this declaration,
+    /// such as end-of-line comments and region ends.
+    pub child_indices_attached_after_declaration: Vec<usize>,
     /// Whether this declaration or its leading comments had a blank line before
     /// it in the source. This preserves blanks lines input by the user in their
     /// source code, up to 1. For example, blank lines used to separate groups
@@ -129,7 +130,9 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
     let mut items = Vec::with_capacity(child_count);
 
     // Pass 1: classify each child.
-    let mut is_comment = vec![false; child_count];
+    // These source children move with a nearby declaration. They include
+    // comments, annotations, and region markers.
+    let mut is_child_attached_to_declaration = vec![false; child_count];
     let mut is_region_end = vec![false; child_count];
 
     let mut child_index = 0;
@@ -143,9 +146,9 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
             || kind == GDScriptNodeKind::Annotation
             || kind == GDScriptNodeKind::RegionStart
         {
-            is_comment[child_index] = true;
+            is_child_attached_to_declaration[child_index] = true;
         } else if kind == GDScriptNodeKind::RegionEnd {
-            is_comment[child_index] = true;
+            is_child_attached_to_declaration[child_index] = true;
             is_region_end[child_index] = true;
         } else if kind == GDScriptNodeKind::SemiColon {
             // skip; handled by builder spacing
@@ -155,8 +158,8 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
             items.push(ReorderItem {
                 child_index,
                 sub_child: None,
-                leading_indices: Vec::new(),
-                trailing_indices: Vec::new(),
+                child_indices_attached_before_declaration: Vec::new(),
+                child_indices_attached_after_declaration: Vec::new(),
                 has_blank_line_before: false,
                 classification: child_classification.classification,
                 name: child_classification.name,
@@ -170,8 +173,8 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
                     items.push(ReorderItem {
                         child_index,
                         sub_child: Some(extends_index),
-                        leading_indices: Vec::new(),
-                        trailing_indices: Vec::new(),
+                        child_indices_attached_before_declaration: Vec::new(),
+                        child_indices_attached_after_declaration: Vec::new(),
                         has_blank_line_before: false,
                         classification: DeclarationKind::Extends,
                         name: "",
@@ -222,7 +225,7 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
                 scan_index += 1;
                 continue;
             };
-            if !is_comment[scan_index]
+            if !is_child_attached_to_declaration[scan_index]
                 || !get_node_text(child, content).trim_start().starts_with("##")
             {
                 break;
@@ -250,7 +253,7 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
     // Mark docstring comments as consumed.
     let mut docstring_index = 0;
     while docstring_index < docstring_indices.len() {
-        is_comment[docstring_indices[docstring_index]] = false;
+        is_child_attached_to_declaration[docstring_indices[docstring_index]] = false;
         docstring_index += 1;
     }
 
@@ -258,8 +261,8 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
         items.push(ReorderItem {
             child_index: docstring_indices[0],
             sub_child: None,
-            leading_indices: docstring_indices,
-            trailing_indices: Vec::new(),
+            child_indices_attached_before_declaration: docstring_indices,
+            child_indices_attached_after_declaration: Vec::new(),
             has_blank_line_before: false,
             classification: DeclarationKind::Docstring,
             name: "",
@@ -269,8 +272,8 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
         });
     }
 
-    // Pass 2: assign leading/trailing children to each declaration.
-    let mut previous_declaration_end: Option<usize> = None;
+    // Pass 2: assign source children before and after each declaration.
+    let mut previous_declaration_child_index: Option<usize> = None;
     let mut declaration_index = 0;
     while declaration_index < declaration_count {
         let declaration_child_index = items[declaration_index].child_index;
@@ -281,29 +284,36 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
                 None
             };
 
-        // Leading: all comments (non-region-end) between previous_child decl and this one.
-        let start: usize = match previous_declaration_end {
-            Some(previous_end) => previous_end + 1,
+        // Attach every eligible source child between the previous declaration
+        // and this one before the current declaration.
+        let first_possible_attachment_child_index: usize = match previous_declaration_child_index {
+            Some(previous_declaration_child_index) => previous_declaration_child_index + 1,
             None => 0,
         };
-        let mut leading = Vec::new();
-        let mut scan_index = start;
-        while scan_index < declaration_child_index {
-            if is_comment[scan_index] && !is_region_end[scan_index] {
-                leading.push(scan_index);
+        let mut child_indices_attached_before_declaration = Vec::new();
+        let mut current_child_index = first_possible_attachment_child_index;
+        while current_child_index < declaration_child_index {
+            if is_child_attached_to_declaration[current_child_index]
+                && !is_region_end[current_child_index]
+            {
+                child_indices_attached_before_declaration.push(current_child_index);
             }
-            scan_index += 1;
+            current_child_index += 1;
         }
-        items[declaration_index].leading_indices = leading;
+        items[declaration_index].child_indices_attached_before_declaration =
+            child_indices_attached_before_declaration;
 
         // Determine if there is a blank line before the current declaration
         // that we need to preserve after reordering.
-        if let Some(previous_declaration_child_index) = previous_declaration_end {
+        if let Some(previous_declaration_child_index) = previous_declaration_child_index {
             let previous_declaration = parent.child(previous_declaration_child_index as u32);
-            let first_item_child_index = if items[declaration_index].leading_indices.is_empty() {
+            let first_item_child_index = if items[declaration_index]
+                .child_indices_attached_before_declaration
+                .is_empty()
+            {
                 declaration_child_index
             } else {
-                items[declaration_index].leading_indices[0]
+                items[declaration_index].child_indices_attached_before_declaration[0]
             };
             let first_item_child = parent.child(first_item_child_index as u32);
             if let (Some(previous_declaration), Some(first_item_child)) =
@@ -317,28 +327,49 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
             }
         }
 
-        // Trailing: region-end between this decl and the next one, or all remaining comments.
-        let mut trailing = Vec::new();
-        let mut scan_index = declaration_child_index + 1;
-        if let Some(next) = next_declaration_child_index {
-            while scan_index < next {
-                if is_region_end[scan_index] {
-                    trailing.push(scan_index);
+        // Attach region ends and an inline comment after the declaration to
+        // that declaration.
+        let mut indices_of_children_attached_after_declaration = Vec::new();
+        let mut next_child_index = declaration_child_index + 1;
+        if let Some(next_declaration_child_index) = next_declaration_child_index {
+            let current_declaration = parent
+                .child(declaration_child_index as u32)
+                .expect("declaration child index came from this parent");
+            while next_child_index < next_declaration_child_index {
+                if is_region_end[next_child_index] {
+                    indices_of_children_attached_after_declaration.push(next_child_index);
+                } else if is_child_attached_to_declaration[next_child_index] {
+                    if let Some(following_attached_child) = parent.child(next_child_index as u32) {
+                        // This checks mainly for inline comments after the
+                        // declaration. They appear as siblings in the AST even
+                        // if on the same line so that's why we check for a
+                        // newline.
+                        let has_newline_before_following_child = content
+                            [current_declaration.end_byte()..following_attached_child.start_byte()]
+                            .contains('\n');
+                        if !has_newline_before_following_child {
+                            indices_of_children_attached_after_declaration.push(next_child_index);
+                            // Prevent the later declaration from also treating
+                            // this source child as preceding content.
+                            is_child_attached_to_declaration[next_child_index] = false;
+                        }
+                    }
                 }
-                scan_index += 1;
+                next_child_index += 1;
             }
         } else {
-            // After last declaration: trailing = all remaining comments.
-            while scan_index < child_count {
-                if is_comment[scan_index] {
-                    trailing.push(scan_index);
+            // After the last declaration, attach all remaining source children.
+            while next_child_index < child_count {
+                if is_child_attached_to_declaration[next_child_index] {
+                    indices_of_children_attached_after_declaration.push(next_child_index);
                 }
-                scan_index += 1;
+                next_child_index += 1;
             }
         }
-        items[declaration_index].trailing_indices = trailing;
+        items[declaration_index].child_indices_attached_after_declaration =
+            indices_of_children_attached_after_declaration;
 
-        previous_declaration_end = Some(declaration_child_index);
+        previous_declaration_child_index = Some(declaration_child_index);
         declaration_index += 1;
     }
 
