@@ -145,6 +145,24 @@ fn main() {
     fs::write("Cargo.toml", updated_cargo_toml).expect("Failed to write Cargo.toml");
     println!("Updated Cargo.toml");
 
+    let godot_addon_cfg_file_path = "addons/GDQuest_GDScript_formatter/plugin.cfg";
+    let godot_addon_cfg_content =
+        fs::read_to_string(godot_addon_cfg_file_path).expect("Failed to read plugin.cfg");
+    let updated_addon_cfg_content = godot_addon_cfg_content.replace(
+        &format!("version=\"{}\"", current_version),
+        &format!("version=\"{}\"", new_version),
+    );
+    if godot_addon_cfg_content != updated_addon_cfg_content {
+        fs::write(godot_addon_cfg_file_path, updated_addon_cfg_content)
+            .expect("Failed to write plugin.cfg");
+        println!("Updated plugin.cfg");
+    } else {
+        println!(
+            "WARNING: plugin.cfg version was not '{}'. Did you update it manually?",
+            current_version
+        );
+    }
+
     println!("\nRunning cargo update...");
     run("cargo", &["update"]);
     println!("cargo update finished");
@@ -154,7 +172,16 @@ fn main() {
     println!("cargo build --release finished");
 
     println!("\nAdding files to git...");
-    run("git", &["add", "Cargo.toml", "Cargo.lock", changelog_path]);
+    run(
+        "git",
+        &[
+            "add",
+            "Cargo.toml",
+            "Cargo.lock",
+            changelog_path,
+            godot_addon_cfg_file_path,
+        ],
+    );
 
     let commit_msg = format!("Release {}", new_version);
     run("git", &["commit", "-m", &commit_msg]);
