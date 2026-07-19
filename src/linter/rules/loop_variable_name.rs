@@ -18,11 +18,7 @@ impl Rule for LoopVariableNameRule {
         &[GDScriptNodeKind::ForStatement]
     }
 
-    fn check_node(
-        &mut self,
-        node: &Node,
-        source_code: &str,
-    ) -> Vec<LintIssue> {
+    fn check_node(&mut self, node: &Node, source_code: &str) -> Vec<LintIssue> {
         let mut issues = Vec::new();
 
         // Look for the loop variable

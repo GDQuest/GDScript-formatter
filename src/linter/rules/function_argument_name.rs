@@ -18,11 +18,7 @@ impl Rule for FunctionArgumentNameRule {
         &[GDScriptNodeKind::Function]
     }
 
-    fn check_node(
-        &mut self,
-        node: &Node,
-        source_code: &str,
-    ) -> Vec<LintIssue> {
+    fn check_node(&mut self, node: &Node, source_code: &str) -> Vec<LintIssue> {
         let mut issues = Vec::new();
 
         // Check function parameters

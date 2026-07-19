@@ -14,11 +14,7 @@ impl Rule for DuplicatedLoadRule {
         &[GDScriptNodeKind::Call]
     }
 
-    fn check_node(
-        &mut self,
-        node: &Node,
-        source_code: &str,
-    ) -> Vec<LintIssue> {
+    fn check_node(&mut self, node: &Node, source_code: &str) -> Vec<LintIssue> {
         if let Some(function_node) = node.child(0) {
             let function_name = get_node_text(&function_node, source_code);
             if (function_name == "load" || function_name == "preload")

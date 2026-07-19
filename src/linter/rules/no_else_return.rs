@@ -40,11 +40,7 @@ impl Rule for NoElseReturnRule {
         &[GDScriptNodeKind::IfStatement]
     }
 
-    fn check_node(
-        &mut self,
-        node: &Node,
-        source_code: &str,
-    ) -> Vec<LintIssue> {
+    fn check_node(&mut self, node: &Node, source_code: &str) -> Vec<LintIssue> {
         let mut issues = Vec::new();
 
         let mut if_body_ends_with_return = false;

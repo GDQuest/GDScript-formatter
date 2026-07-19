@@ -17,11 +17,7 @@ impl Rule for EnumMemberNameRule {
         &[GDScriptNodeKind::Enum]
     }
 
-    fn check_node(
-        &mut self,
-        node: &Node,
-        source_code: &str,
-    ) -> Vec<LintIssue> {
+    fn check_node(&mut self, node: &Node, source_code: &str) -> Vec<LintIssue> {
         let mut issues = Vec::new();
 
         // Check enum element names
@@ -36,7 +32,8 @@ impl Rule for EnumMemberNameRule {
                     {
                         let element_name = get_node_text(&element_name_node, source_code);
                         // Skip empty enum member names (happens with empty enums)
-                        if !element_name.is_empty() && !Self::is_valid_enum_member_name(element_name)
+                        if !element_name.is_empty()
+                            && !Self::is_valid_enum_member_name(element_name)
                         {
                             let (line, column) = get_line_column(&element_name_node);
                             issues.push(LintIssue::new(

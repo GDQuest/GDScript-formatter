@@ -11,11 +11,7 @@ impl Rule for ComparisonWithItselfRule {
         &[GDScriptNodeKind::BinaryOperator]
     }
 
-    fn check_node(
-        &mut self,
-        node: &Node,
-        source_code: &str,
-    ) -> Vec<LintIssue> {
+    fn check_node(&mut self, node: &Node, source_code: &str) -> Vec<LintIssue> {
         let mut issues = Vec::new();
 
         if let (Some(left_node), Some(op_node), Some(right_node)) = (

@@ -17,11 +17,7 @@ impl Rule for EnumNameRule {
         &[GDScriptNodeKind::Enum]
     }
 
-    fn check_node(
-        &mut self,
-        node: &Node,
-        source_code: &str,
-    ) -> Vec<LintIssue> {
+    fn check_node(&mut self, node: &Node, source_code: &str) -> Vec<LintIssue> {
         let mut issues = Vec::new();
 
         // Check enum name

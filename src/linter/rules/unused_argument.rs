@@ -51,11 +51,7 @@ impl Rule for UnusedArgumentRule {
         &[GDScriptNodeKind::Function]
     }
 
-    fn check_node(
-        &mut self,
-        node: &Node,
-        source_code: &str,
-    ) -> Vec<LintIssue> {
+    fn check_node(&mut self, node: &Node, source_code: &str) -> Vec<LintIssue> {
         let mut issues = Vec::new();
         let mut parameters = Vec::new();
 

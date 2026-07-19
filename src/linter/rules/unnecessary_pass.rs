@@ -10,11 +10,7 @@ impl Rule for UnnecessaryPassRule {
         &[GDScriptNodeKind::Body, GDScriptNodeKind::ClassBody]
     }
 
-    fn check_node(
-        &mut self,
-        node: &Node,
-        _source_code: &str,
-    ) -> Vec<LintIssue> {
+    fn check_node(&mut self, node: &Node, _source_code: &str) -> Vec<LintIssue> {
         let mut issues = Vec::new();
         let mut has_other_statements = false;
         let mut pass_nodes = Vec::new();

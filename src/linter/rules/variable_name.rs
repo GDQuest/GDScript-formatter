@@ -35,11 +35,7 @@ impl Rule for VariableNameRule {
         ]
     }
 
-    fn check_node(
-        &mut self,
-        node: &Node,
-        source_code: &str,
-    ) -> Vec<LintIssue> {
+    fn check_node(&mut self, node: &Node, source_code: &str) -> Vec<LintIssue> {
         let mut issues = Vec::new();
 
         if let Some(name_node) = node.child_by_field_name("name") {

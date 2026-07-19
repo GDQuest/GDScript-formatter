@@ -11,11 +11,7 @@ impl Rule for StandaloneExpressionRule {
         &[GDScriptNodeKind::ExpressionStatement]
     }
 
-    fn check_node(
-        &mut self,
-        node: &Node,
-        source_code: &str,
-    ) -> Vec<LintIssue> {
+    fn check_node(&mut self, node: &Node, source_code: &str) -> Vec<LintIssue> {
         let mut issues = Vec::new();
 
         if let Some(expr_child) = node.child(0) {

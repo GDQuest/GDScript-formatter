@@ -10,11 +10,7 @@ impl Rule for PrivateAccessRule {
         &[GDScriptNodeKind::Attribute]
     }
 
-    fn check_node(
-        &mut self,
-        node: &Node,
-        source_code: &str,
-    ) -> Vec<LintIssue> {
+    fn check_node(&mut self, node: &Node, source_code: &str) -> Vec<LintIssue> {
         let mut issues = Vec::new();
 
         let mut attr_cursor = node.walk();

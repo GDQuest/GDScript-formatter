@@ -2689,11 +2689,10 @@ fn process_source_reorder(
             None => 0,
         };
         let mut attached_after_declaration_index = 0;
-        while attached_after_declaration_index
-            < item.child_indices_attached_after_declaration.len()
+        while attached_after_declaration_index < item.child_indices_attached_after_declaration.len()
         {
-            let child_index_attached_after_declaration = item
-                .child_indices_attached_after_declaration[attached_after_declaration_index];
+            let child_index_attached_after_declaration =
+                item.child_indices_attached_after_declaration[attached_after_declaration_index];
             if let Some(child) = node.child(child_index_attached_after_declaration as u32) {
                 if has_newline(source, declaration_end_byte, child.start_byte()) {
                     render_elements.push(RenderElement::HardLine);
