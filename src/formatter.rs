@@ -13,7 +13,7 @@
 use crate::QuoteStyle;
 use crate::node_kind::GDScriptNodeKind;
 use crate::parser::{ParseInput, RegionWithDisabledFormatting};
-use crate::renderer::{RangeRenderElement, RangeSourceBytes, RenderElement};
+use crate::renderer::{GroupParentFit, RangeRenderElement, RangeSourceBytes, RenderElement};
 use crate::reorder::{self, DeclarationKind};
 
 fn begin_indent(render_elements: &mut Vec<RenderElement>, level: u16) -> usize {
@@ -40,6 +40,7 @@ fn begin_group(render_elements: &mut Vec<RenderElement>) -> usize {
     let index = render_elements.len();
     render_elements.push(RenderElement::Group {
         children: RangeRenderElement { start: 0, end: 0 },
+        parent_fit: GroupParentFit::Full,
     });
     index
 }
@@ -53,6 +54,14 @@ fn finish_group(render_elements: &mut [RenderElement], group_index: usize) {
             end,
         };
     }
+}
+
+fn begin_group_until_first_line_break(render_elements: &mut Vec<RenderElement>) -> usize {
+    let group_index = begin_group(render_elements);
+    if let RenderElement::Group { parent_fit, .. } = &mut render_elements[group_index] {
+        *parent_fit = GroupParentFit::UntilFirstLineBreak;
+    }
+    group_index
 }
 
 /// Returns the number of blank lines to output before a declaration of the given
@@ -2031,7 +2040,6 @@ fn process_attribute(
     } else {
         input.continuation_indent_level
     };
-    let continuation_indent_index = begin_indent(render_elements, chain_indent_level);
     let mut attribute_index: u32 = 1;
     while attribute_index < child_count as u32 {
         let child = node.child(attribute_index);
@@ -2061,18 +2069,28 @@ fn process_attribute(
                     if GDScriptNodeKind::get_kind_from_ast_node(call_node)
                         == GDScriptNodeKind::AttributeCall
                     {
-                        process_method_call_flat(input, call_node, render_elements);
+                        process_method_call_name(input, call_node, render_elements);
+                        finish_indent(render_elements, continuation_indent_index);
+                        process_method_call_arguments(
+                            input,
+                            call_node,
+                            attribute_index + 2 >= child_count as u32,
+                            render_elements,
+                        );
                     } else {
                         process_node(input, call_node, render_elements);
+                        finish_indent(render_elements, continuation_indent_index);
                     }
+                } else {
+                    finish_indent(render_elements, continuation_indent_index);
                 }
-                finish_indent(render_elements, continuation_indent_index);
             }
             attribute_index += 2;
             continue;
         }
 
         if !allows_implicit_continuation && !has_explicit_line_continuation {
+            let continuation_indent_index = begin_indent(render_elements, chain_indent_level);
             let continuation_index = render_elements.len() + 1;
             render_elements.push(RenderElement::Branch {
                 if_single_line: None,
@@ -2083,6 +2101,31 @@ fn process_attribute(
             });
             render_elements.push(RenderElement::Space);
             render_elements.push(RenderElement::TextStatic("\\"));
+            render_elements.push(RenderElement::SoftLine);
+            if let Some(dot_node) = child {
+                process_node(input, dot_node, render_elements);
+            }
+            if let Some(call_node) = next {
+                if GDScriptNodeKind::get_kind_from_ast_node(call_node)
+                    == GDScriptNodeKind::AttributeCall
+                {
+                    process_method_call_name(input, call_node, render_elements);
+                    finish_indent(render_elements, continuation_indent_index);
+                    process_method_call_arguments(
+                        input,
+                        call_node,
+                        attribute_index + 2 >= child_count as u32,
+                        render_elements,
+                    );
+                } else {
+                    process_node(input, call_node, render_elements);
+                    finish_indent(render_elements, continuation_indent_index);
+                }
+            } else {
+                finish_indent(render_elements, continuation_indent_index);
+            }
+            attribute_index += 2;
+            continue;
         }
         if !has_explicit_line_continuation {
             render_elements.push(RenderElement::SoftLine);
@@ -2095,7 +2138,12 @@ fn process_attribute(
             if GDScriptNodeKind::get_kind_from_ast_node(call_node)
                 == GDScriptNodeKind::AttributeCall
             {
-                process_method_call_flat(input, call_node, render_elements);
+                process_method_call_flat(
+                    input,
+                    call_node,
+                    attribute_index + 2 >= child_count as u32,
+                    render_elements,
+                );
             } else {
                 process_node(input, call_node, render_elements);
             }
@@ -2103,14 +2151,22 @@ fn process_attribute(
 
         attribute_index += 2;
     }
-    finish_indent(render_elements, continuation_indent_index);
     finish_group(render_elements, group_index);
 }
 
-/// Builds a method call (name + arguments) inline without extra indentation.
-/// Used inside a dot-access chain. Uses emit_inter_child_separator between
-/// arguments and between the last argument and the closing parenthesis.
+/// Builds a method call inside a dot-access chain. Its argument container is
+/// isolated so that long arguments do not force the whole chain to break.
 fn process_method_call_flat(
+    input: &ParseInput,
+    attribute_call: tree_sitter::Node,
+    is_last_chain_call: bool,
+    render_elements: &mut Vec<RenderElement>,
+) {
+    process_method_call_name(input, attribute_call, render_elements);
+    process_method_call_arguments(input, attribute_call, is_last_chain_call, render_elements);
+}
+
+fn process_method_call_name(
     input: &ParseInput,
     attribute_call: tree_sitter::Node,
     render_elements: &mut Vec<RenderElement>,
@@ -2118,59 +2174,82 @@ fn process_method_call_flat(
     if let Some(method_name) = attribute_call.child(0) {
         process_node(input, method_name, render_elements);
     }
+}
+
+fn process_method_call_arguments(
+    input: &ParseInput,
+    attribute_call: tree_sitter::Node,
+    is_last_chain_call: bool,
+    render_elements: &mut Vec<RenderElement>,
+) {
     if let Some(args) = attribute_call.child(1) {
-        let argument_child_count = args.child_count();
-        if argument_child_count >= 2 {
-            if let Some(open) = args.child(0) {
-                process_node(input, open, render_elements);
-            }
-            let close_parenthesis_index = (argument_child_count - 1) as u32;
-            let args_kind = GDScriptNodeKind::get_kind_from_ast_node(args);
-            let has_trailing_comma = if close_parenthesis_index >= 2 {
-                if let Some(node_before_close_paren) = args.child(close_parenthesis_index - 1) {
-                    GDScriptNodeKind::get_kind_from_ast_node(node_before_close_paren)
-                        == GDScriptNodeKind::TokenComma
-                } else {
-                    false
-                }
-            } else {
-                false
-            };
-            let body_end = if has_trailing_comma {
-                close_parenthesis_index - 1
-            } else {
-                close_parenthesis_index
-            };
-            let mut previous_child: Option<tree_sitter::Node> =
-                Some(args.child(0).expect("argument_child_count>=2"));
-            let mut argument_index: u32 = 1;
-            while argument_index < body_end {
-                if let Some(child_argument) = args.child(argument_index) {
-                    if let Some(ref previous_node) = previous_child {
-                        process_separator_between_sibling_nodes(
-                            args_kind,
-                            previous_node,
-                            &child_argument,
-                            render_elements,
-                        );
-                    }
-                    process_node(input, child_argument, render_elements);
-                    previous_child = Some(child_argument);
-                }
-                argument_index += 1;
-            }
-            if let Some(close) = args.child(close_parenthesis_index) {
-                if let Some(ref previous_node) = previous_child {
-                    process_separator_between_sibling_nodes(
-                        args_kind,
-                        previous_node,
-                        &close,
-                        render_elements,
-                    );
-                }
-                process_node(input, close, render_elements);
-            }
+        if is_last_chain_call {
+            let group_index = begin_group_until_first_line_break(render_elements);
+            process_node(input, args, render_elements);
+            finish_group(render_elements, group_index);
+        } else {
+            process_method_arguments_flat(input, args, render_elements);
         }
+    }
+}
+
+fn process_method_arguments_flat(
+    input: &ParseInput,
+    args: tree_sitter::Node,
+    render_elements: &mut Vec<RenderElement>,
+) {
+    let argument_child_count = args.child_count();
+    if argument_child_count < 2 {
+        return;
+    }
+    if let Some(open) = args.child(0) {
+        process_node(input, open, render_elements);
+    }
+    let close_parenthesis_index = (argument_child_count - 1) as u32;
+    let args_kind = GDScriptNodeKind::get_kind_from_ast_node(args);
+    let has_trailing_comma = if close_parenthesis_index >= 2 {
+        if let Some(node_before_close_paren) = args.child(close_parenthesis_index - 1) {
+            GDScriptNodeKind::get_kind_from_ast_node(node_before_close_paren)
+                == GDScriptNodeKind::TokenComma
+        } else {
+            false
+        }
+    } else {
+        false
+    };
+    let body_end = if has_trailing_comma {
+        close_parenthesis_index - 1
+    } else {
+        close_parenthesis_index
+    };
+    let mut previous_child: Option<tree_sitter::Node> =
+        Some(args.child(0).expect("argument_child_count >= 2"));
+    let mut argument_index: u32 = 1;
+    while argument_index < body_end {
+        if let Some(child_argument) = args.child(argument_index) {
+            if let Some(ref previous_node) = previous_child {
+                process_separator_between_sibling_nodes(
+                    args_kind,
+                    previous_node,
+                    &child_argument,
+                    render_elements,
+                );
+            }
+            process_node(input, child_argument, render_elements);
+            previous_child = Some(child_argument);
+        }
+        argument_index += 1;
+    }
+    if let Some(close) = args.child(close_parenthesis_index) {
+        if let Some(ref previous_node) = previous_child {
+            process_separator_between_sibling_nodes(
+                args_kind,
+                previous_node,
+                &close,
+                render_elements,
+            );
+        }
+        process_node(input, close, render_elements);
     }
 }
 

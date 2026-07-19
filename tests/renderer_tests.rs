@@ -4,7 +4,8 @@
 /// various kinds of intermediate representations of code, notably around line
 /// wrapping.
 use gdscript_formatter::renderer::{
-    PrinterConfiguration, RangeRenderElement, RangeSourceBytes, RenderElement, render,
+    GroupParentFit, PrinterConfiguration, RangeRenderElement, RangeSourceBytes, RenderElement,
+    render,
 };
 
 fn text(start_byte: usize, end_byte: usize) -> RenderElement {
@@ -19,6 +20,7 @@ fn text(start_byte: usize, end_byte: usize) -> RenderElement {
 fn group(start: usize, end: usize) -> RenderElement {
     RenderElement::Group {
         children: RangeRenderElement { start, end },
+        parent_fit: GroupParentFit::Full,
     }
 }
 

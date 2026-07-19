@@ -11,6 +11,7 @@ This file documents the changes made to the formatter with each release.
 ### Changed
 
 - Implemented new balanced line wrapping algorithm for long chains of expressions, including operations and boolean expressions
+- In chains of properties and method calls, the formatter will now try to preserve chains like a.b.c with long argument lists or nested lambdas. It will favor breaking the arguments in parentheses over breaking the chain into multiple lines
 - Specified the definition for continuation lines and changed function calls and other statements and expressions to use a single extra indent instead of two by default
 - Always force lambda functions to have a line return after the function declaration, like regular functions
 

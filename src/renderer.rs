@@ -27,6 +27,32 @@ pub struct RangeRenderElement {
     pub end: usize,
 }
 
+/// Controls how an enclosing group includes this child group's contents in its
+/// flat-layout fit check. This affects whether the enclosing group uses flat
+/// or broken layout; the child group always chooses its own layout separately.
+pub enum GroupParentFit {
+    /// Include this group's complete flat layout in the parent group's flat
+    /// layout measurement.
+    Full,
+    /// Stop including this group's contents after its first potential line
+    /// break: a soft line, hard line, or blank line. This group still
+    /// independently chooses and renders its complete layout.
+    ///
+    /// This keeps a property or method chain together when a method argument
+    /// must be multiline, like a lambda:
+    ///
+    /// ```gdscript
+    /// f.args.map(
+    ///     func(arg):
+    ///         arg.erase("name")
+    /// )
+    /// ```
+    ///
+    /// The parent chain stays flat through `f.args.map(`. The `map()` argument
+    /// group then breaks and formats the lambda normally.
+    UntilFirstLineBreak,
+}
+
 pub enum RenderElement {
     Text {
         range: RangeSourceBytes,
@@ -64,6 +90,7 @@ pub enum RenderElement {
     /// Groups a set of tokens together for the line wrapping algorithm.
     Group {
         children: RangeRenderElement,
+        parent_fit: GroupParentFit,
     },
     /// Groups segments separated by `BalancedLine` and distributes them across
     /// lines when they don't fit a flat layout. The renderer tries to
@@ -269,7 +296,7 @@ impl<'a> Printer<'a> {
                     self.indent_level -= *level;
                     index = child.end;
                 }
-                RenderElement::Group { children } => {
+                RenderElement::Group { children, .. } => {
                     let child_mode = self.decide_group_render_mode(
                         children.start,
                         children.end,
@@ -423,7 +450,11 @@ impl<'a> Printer<'a> {
                     }
                     index = child.end;
                 }
-                RenderElement::Group { children } | RenderElement::BalancedGroup { children } => {
+                RenderElement::Group {
+                    children,
+                    parent_fit: GroupParentFit::Full,
+                }
+                | RenderElement::BalancedGroup { children } => {
                     let nested_force_break_mode = if force_break_mode == ForceBreakMode::AnyDepth {
                         ForceBreakMode::AnyDepth
                     } else {
@@ -435,6 +466,15 @@ impl<'a> Printer<'a> {
                         column,
                         nested_force_break_mode,
                     ) {
+                        return false;
+                    }
+                    index = children.end;
+                }
+                RenderElement::Group {
+                    children,
+                    parent_fit: GroupParentFit::UntilFirstLineBreak,
+                } => {
+                    if !self.does_group_prefix_fit(children.start, children.end, column) {
                         return false;
                     }
                     index = children.end;
@@ -466,6 +506,70 @@ impl<'a> Printer<'a> {
         true
     }
 
+    /// Measures a child group's contents until its first possible line break
+    /// for its enclosing group's flat-layout fit check. The child group still
+    /// chooses its complete layout independently.
+    fn does_group_prefix_fit(&self, start: usize, end: usize, column: &mut usize) -> bool {
+        let mut index = start;
+        while index < end {
+            match &self.render_elements[index] {
+                RenderElement::Text { range } | RenderElement::UnformattedSource { range } => {
+                    if !self.measure_text(slice(self.source, range), column) {
+                        return false;
+                    }
+                    index += 1;
+                }
+                RenderElement::TextStatic(text) => {
+                    if !self.measure_text(text, column) {
+                        return false;
+                    }
+                    index += 1;
+                }
+                RenderElement::TextProducedByFormatter(text) => {
+                    if !self.measure_text(text, column) {
+                        return false;
+                    }
+                    index += 1;
+                }
+                RenderElement::Space
+                | RenderElement::SpaceSingleLineOnly
+                | RenderElement::BalancedLine => {
+                    *column = column.saturating_add(1);
+                    index += 1;
+                }
+                RenderElement::SoftLine | RenderElement::HardLine | RenderElement::BlankLine => {
+                    return *column <= self.config.max_line_length;
+                }
+                RenderElement::Indent { child, .. }
+                | RenderElement::Group {
+                    children: child, ..
+                }
+                | RenderElement::BalancedGroup { children: child } => {
+                    if !self.does_group_prefix_fit(child.start, child.end, column) {
+                        return false;
+                    }
+                    index = child.end;
+                }
+                RenderElement::Branch {
+                    if_single_line: flat,
+                    if_multiline: break_,
+                } => {
+                    if let Some(range) = flat
+                        && !self.does_group_prefix_fit(range.start, range.end, column)
+                    {
+                        return false;
+                    }
+                    index = skip_past_branch(index, flat, break_);
+                }
+                RenderElement::ForceBreakingParent => index += 1,
+            }
+            if *column > self.config.max_line_length {
+                return false;
+            }
+        }
+        true
+    }
+
     fn measure_text(&self, text: &str, column: &mut usize) -> bool {
         for c in text.chars() {
             if c == '\n' {
@@ -491,7 +595,7 @@ impl<'a> Printer<'a> {
                         index += 1;
                     }
                     RenderElement::Indent { child, .. } => index = child.end,
-                    RenderElement::Group { children }
+                    RenderElement::Group { children, .. }
                     | RenderElement::BalancedGroup { children } => index = children.end,
                     RenderElement::Branch {
                         if_single_line,
