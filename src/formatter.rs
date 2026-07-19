@@ -1667,6 +1667,52 @@ fn process_parenthesized_expression(
     finish_group(render_elements, group_index);
 }
 
+/// Finds and returns the unnamed operator token between a binary expression's
+/// operands.
+///
+/// Tree-sitter gives every `binary_operator` node a named `left` field and a
+/// named `right` field. Each field contains the parsed expression on that side
+/// of the operator and the operator is an unnamed token child of the enclosing
+/// binary expression. For example:
+///
+/// ```gdscript
+/// (
+///     a
+///     # Explain the next condition.
+///     || b
+/// ):
+/// ```
+///
+/// The AST for this may look like:
+///
+/// (parenthesized_expression
+///   (binary_operator
+///     left: (identifier)      ; a
+///     (comment)               ; # Explain the next condition.
+///     right: (identifier)))   ; b
+/// ```
+///
+/// Here, left is just a and right is b. The comment is before the || operator,
+/// but we could also have cases where it's after the || operator. That's why we
+/// need to look for the operator itself.
+fn binary_operator_token(node: tree_sitter::Node) -> Option<tree_sitter::Node> {
+    let left = node.child_by_field_name("left")?;
+    let right = node.child_by_field_name("right")?;
+    let mut child_index = 0;
+    while child_index < node.child_count() {
+        if let Some(child) = node.child(child_index as u32) {
+            if child.start_byte() >= left.end_byte()
+                && child.end_byte() <= right.start_byte()
+                && GDScriptNodeKind::get_kind_from_ast_node(child) != GDScriptNodeKind::Comment
+            {
+                return Some(child);
+            }
+        }
+        child_index += 1;
+    }
+    None
+}
+
 /// Formats BinaryOperator nodes. Homogeneous operator chains use balanced
 /// groups to distribute operands and wrap before operators. Standalone boolean
 /// expressions gain parentheses when they wrap, as GDScript otherwise has no
@@ -1687,7 +1733,7 @@ fn process_binary_operator(
         return;
     }
 
-    let operator_text = if let Some(operator) = node.child(1) {
+    let operator_text = if let Some(operator) = binary_operator_token(node) {
         &input.source[operator.start_byte()..operator.end_byte()]
     } else {
         ""
@@ -1744,9 +1790,9 @@ fn process_binary_operator(
     let mut segments = Vec::with_capacity(child_count);
     let mut levels: Vec<tree_sitter::Node> = Vec::with_capacity(child_count);
     let mut current_node = node;
-    while let Some(left) = current_node.child(0) {
+    while let Some(left) = current_node.child_by_field_name("left") {
         if GDScriptNodeKind::get_kind_from_ast_node(left) == GDScriptNodeKind::BinaryOperator {
-            let left_operator_text = if let Some(operator) = left.child(1) {
+            let left_operator_text = if let Some(operator) = binary_operator_token(left) {
                 &input.source[operator.start_byte()..operator.end_byte()]
             } else {
                 ""
@@ -1759,24 +1805,52 @@ fn process_binary_operator(
         }
         break;
     }
-    if let Some(left) = current_node.child(0) {
+    if let Some(left) = current_node.child_by_field_name("left") {
         segments.push(BinaryChainSegment {
             operator: None,
             expression: left,
         });
     }
-    if let Some(right) = current_node.child(2) {
+    let mut has_comment = false;
+    let mut child_index = 0;
+    while child_index < current_node.child_count() {
+        if let Some(child) = current_node.child(child_index as u32) {
+            if GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Comment {
+                segments.push(BinaryChainSegment {
+                    operator: None,
+                    expression: child,
+                });
+                has_comment = true;
+            }
+        }
+        child_index += 1;
+    }
+    if let Some(right) = current_node.child_by_field_name("right") {
         segments.push(BinaryChainSegment {
-            operator: current_node.child(1),
+            operator: binary_operator_token(current_node),
             expression: right,
         });
     }
     let mut level_index = levels.len();
     while level_index > 0 {
         level_index -= 1;
-        if let Some(right) = levels[level_index].child(2) {
+        let level = levels[level_index];
+        let mut child_index = 0;
+        while child_index < level.child_count() {
+            if let Some(child) = level.child(child_index as u32) {
+                if GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Comment {
+                    segments.push(BinaryChainSegment {
+                        operator: None,
+                        expression: child,
+                    });
+                    has_comment = true;
+                }
+            }
+            child_index += 1;
+        }
+        if let Some(right) = level.child_by_field_name("right") {
             segments.push(BinaryChainSegment {
-                operator: levels[level_index].child(1),
+                operator: binary_operator_token(level),
                 expression: right,
             });
         }
@@ -1812,8 +1886,17 @@ fn process_binary_operator(
     let mut segment_index = 0;
     while segment_index < segments.len() {
         let segment = &segments[segment_index];
+        let is_comment = GDScriptNodeKind::get_kind_from_ast_node(segment.expression)
+            == GDScriptNodeKind::Comment;
+        if is_comment && segment_index > 0 {
+            render_elements.push(RenderElement::HardLine);
+        }
         if let Some(operator) = segment.operator {
-            render_elements.push(RenderElement::BalancedLine);
+            if has_comment {
+                render_elements.push(RenderElement::HardLine);
+            } else {
+                render_elements.push(RenderElement::BalancedLine);
+            }
             process_node(input, operator, render_elements);
             render_elements.push(RenderElement::Space);
         }
@@ -2557,7 +2640,9 @@ fn process_separator_between_sibling_nodes(
     }
 
     if parent_kind == GDScriptNodeKind::UnaryOperator
-        && (previous_child.kind() == "~" || previous_kind == GDScriptNodeKind::Operator)
+        && (previous_child.kind() == "~"
+            || previous_child.kind() == "!"
+            || previous_kind == GDScriptNodeKind::Operator)
     {
         return;
     }

@@ -21,6 +21,8 @@ This file documents the changes made to the formatter with each release.
 - Fixed --reorder-code detaches trailing comments from top-level declarations and re-attaches them above the following declaration (#271)
 - Fix empty lines removed between conditional blocks (#276)
 - Fix editorconfig ignored when running from stdin (#275)
+- Fix code getting modified/comments getting mangled with operators in multiline chains of binary operator expressions (#278)
+- Fix Extra space is added after ! in if statements (#277)
 
 ## Release 0.21.0 (2026-07-16)
 
