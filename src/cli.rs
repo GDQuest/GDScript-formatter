@@ -75,10 +75,10 @@ pub enum Command {
         /// them. Returns error code ERROR_CODE_NOT_FORMATTED if any of the input
         /// files are not formatted.
         do_check_formatted_only: bool,
-        /// If true, uses spaces for indentation instead of tabs.
-        use_spaces: bool,
-        /// Number of spaces to use for indentation when use_spaces is true.
-        indent_size: usize,
+        /// If set, uses spaces for indentation instead of tabs.
+        use_spaces: Option<bool>,
+        /// Number of spaces to use for indentation.
+        indent_size: Option<usize>,
         /// If true, the formatter will re-parse the formatted code to ensure it
         /// matches the original code semantics before writing it to files.
         use_safe_mode: bool,
@@ -126,8 +126,8 @@ pub fn parse_args() -> CliArguments {
     let mut input_file_paths: Vec<PathBuf> = Vec::new();
     let mut format_do_print_to_stdout = false;
     let mut format_do_check_formatted_only = false;
-    let mut format_use_spaces = false;
-    let mut format_indent_size: usize = 4;
+    let mut format_use_spaces: Option<bool> = None;
+    let mut format_indent_size: Option<usize> = None;
     let mut format_use_safe_mode = false;
     let mut format_do_reorder_code = false;
     let mut format_max_line_length: Option<usize> = None;
@@ -189,7 +189,7 @@ pub fn parse_args() -> CliArguments {
                     }
                     "use-spaces" => {
                         require_no_value(assigned_value, "--use-spaces");
-                        format_use_spaces = true;
+                        format_use_spaces = Some(true);
                     }
                     "safe" => {
                         require_no_value(assigned_value, "--safe");
@@ -207,7 +207,7 @@ pub fn parse_args() -> CliArguments {
                             "--indent-size",
                         );
                         format_indent_size = match value.parse::<usize>() {
-                            Ok(n) => n,
+                            Ok(n) => Some(n),
                             Err(_) => print_error_invalid_argument(&format!(
                                 "--indent-size expects a number, got '{}'",
                                 value

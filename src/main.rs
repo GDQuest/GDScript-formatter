@@ -1,3 +1,19 @@
+//! Command-line entry point for the GDScript formatter and linter.
+//!
+//! Formatting settings come from three places. The formatter starts with its
+//! built-in defaults, applies the `.editorconfig` properties that match each
+//! input file, and then applies any CLI option flags explicitly provided on the
+//! command line. Command line flags override editorconfig settings which
+//! override built-in defaults.
+//!
+//! Stdin input uses the current directory to find `.editorconfig`. It uses a
+//! synthetic `stdin.gd` path so filename sections such as `[*.gd]` also match.
+//!
+//! The formatter keeps both batch implementations below. The sequential path
+//! is the normal path because it is easier to follow in stack traces. The
+//! parallel path remains available for performance-sensitive callers and uses
+//! the same per-file configuration logic.
+
 mod cli;
 
 use std::{
@@ -30,21 +46,29 @@ struct FormatterOutput {
 
 #[derive(Clone, Copy)]
 struct FormatterConfigOverrides {
+    /// Explicitly requested tab or space indentation.
+    use_spaces: Option<bool>,
+    /// Explicitly requested indentation width.
+    indent_size: Option<usize>,
+    /// Explicitly requested maximum line length.
     max_line_length: Option<usize>,
+    /// Explicitly requested blank lines between top-level definitions.
     blank_lines_around_definitions: Option<u16>,
+    /// Explicitly requested continuation indentation depth.
     continuation_indent_level: Option<u16>,
+    /// Explicitly requested string quote style.
     quote_style: Option<QuoteStyle>,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args = parse_args();
+    let parsed_cli_args = parse_args();
 
     if let Command::Lint {
         disabled_linter_rules,
         max_line_length,
         do_list_rules,
         do_pretty_print,
-    } = args.command
+    } = parsed_cli_args.command
     {
         if do_list_rules {
             println!("Available linting rules:");
@@ -71,7 +95,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             max_line_length,
         };
 
-        let input_gdscript_files = find_gdscript_files(&args.input_file_paths)?;
+        let input_gdscript_files = find_gdscript_files(&parsed_cli_args.input_file_paths)?;
         return run_linter(&input_gdscript_files, linter_config, do_pretty_print);
     }
 
@@ -86,15 +110,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         blank_lines_around_definitions,
         continuation_indent_level,
         quote_style,
-    } = args.command
+    } = parsed_cli_args.command
     else {
         unreachable!();
     };
 
     let mut config = FormatterConfiguration::default();
 
-    config.printer.indent_size = indent_size;
-    config.printer.use_spaces = use_spaces;
     config.safe = use_safe_mode;
     config.reorder_code = do_reorder_code;
     if let Some(quote_style) = quote_style {
@@ -102,19 +124,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let config_overrides = FormatterConfigOverrides {
+        use_spaces,
+        indent_size,
         max_line_length,
         blank_lines_around_definitions,
         continuation_indent_level,
         quote_style,
     };
 
-    if args.input_file_paths.is_empty() && !io::stdin().is_terminal() {
+    if parsed_cli_args.input_file_paths.is_empty() && !io::stdin().is_terminal() {
         let mut input_content = String::new();
         io::stdin()
             .read_to_string(&mut input_content)
             .map_err(|error| format!("Failed to read from stdin: {}", error))?;
 
-        let formatted_content = format_gdscript(&input_content, &config)?;
+        let mut stdin_config = config.clone();
+        let current_directory = env::current_dir().expect("Failed to get current directory");
+        // When running from stdin users would still like to apply editorconfig
+        // settings. For the most part, you'd use a section like `[*.gd]`
+        // matching GDScript files. we fake running the formatter on a `.gd`
+        // file in the current directory to get user settings to apply.
+        config_apply_editorconfig_then_cli_overrides(
+            &mut stdin_config,
+            &current_directory.join("stdin.gd"),
+            config_overrides,
+        );
+        let formatted_content = format_gdscript(&input_content, &stdin_config)?;
 
         if do_check_formatted_only {
             if input_content != formatted_content {
@@ -130,13 +165,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    let input_paths = if args.input_file_paths.is_empty() {
+    let input_paths = if parsed_cli_args.input_file_paths.is_empty() {
         vec![
             env::current_dir()
                 .map_err(|error| format!("Failed to get current directory: {}", error))?,
         ]
     } else {
-        args.input_file_paths
+        parsed_cli_args.input_file_paths
     };
     let input_gdscript_files = find_gdscript_files(&input_paths)?;
 
@@ -241,6 +276,11 @@ fn run_linter(
     Ok(())
 }
 
+/// Formats one file after applying its matching editorconfig settings.
+///
+/// Different files can fall under different editorconfig settings so we clone
+/// the base configuration and apply file-specific settings individually.
+/// CLI options override editorconfig are applied last by [`apply_file_config`].
 fn format_one_file(
     index: usize,
     file_path: &PathBuf,
@@ -255,23 +295,7 @@ fn format_one_file(
     // We need to clone that config because files in nested directories can
     // match different EditorConfig files and rules.
     let mut file_config = config.clone();
-    gdscript_formatter::editorconfig::apply_editorconfig_to_formatter_config(
-        &mut file_config,
-        file_path,
-    );
-    if let Some(max_line_length) = config_overrides.max_line_length {
-        file_config.printer.max_line_length = max_line_length;
-    }
-    if let Some(blank_lines_around_definitions) = config_overrides.blank_lines_around_definitions {
-        file_config.blank_lines_around_definitions = blank_lines_around_definitions;
-    }
-    if let Some(continuation_indent_level) = config_overrides.continuation_indent_level {
-        file_config.printer.continuation_indent_level = continuation_indent_level;
-    }
-    if let Some(quote_style) = config_overrides.quote_style {
-        file_config.quote_style = quote_style;
-    }
-
+    config_apply_editorconfig_then_cli_overrides(&mut file_config, file_path, config_overrides);
     format_gdscript_with_buffers(&input_content, &file_config, render_elements, output)
         .map_err(|error| format!("Failed to format file {}: {}", file_path.display(), error))?;
 
@@ -285,6 +309,40 @@ fn format_one_file(
     })
 }
 
+/// Applies project editorconfig settings first and CLI settings second.
+///
+/// The override fields are `Option`s because `None` means that the user did
+/// not pass that flag. Without this distinction, a CLI default such as an
+/// indentation size of four would look like an explicit request and would
+/// incorrectly override `.editorconfig`.
+fn config_apply_editorconfig_then_cli_overrides(
+    config: &mut FormatterConfiguration,
+    config_path: &PathBuf,
+    config_overrides: FormatterConfigOverrides,
+) {
+    gdscript_formatter::editorconfig::apply_editorconfig_to_formatter_config(config, config_path);
+    if let Some(use_spaces) = config_overrides.use_spaces {
+        config.printer.use_spaces = use_spaces;
+    }
+    if let Some(indent_size) = config_overrides.indent_size {
+        config.printer.indent_size = indent_size;
+    }
+    if let Some(max_line_length) = config_overrides.max_line_length {
+        config.printer.max_line_length = max_line_length;
+    }
+    if let Some(blank_lines_around_definitions) = config_overrides.blank_lines_around_definitions {
+        config.blank_lines_around_definitions = blank_lines_around_definitions;
+    }
+    if let Some(continuation_indent_level) = config_overrides.continuation_indent_level {
+        config.printer.continuation_indent_level = continuation_indent_level;
+    }
+    if let Some(quote_style) = config_overrides.quote_style {
+        config.quote_style = quote_style;
+    }
+}
+
+/// Formats files concurrently but preserves their original order when
+/// outputting the results.
 fn format_files_parallel(
     files: &[PathBuf],
     config: &FormatterConfiguration,

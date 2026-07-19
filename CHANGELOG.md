@@ -18,7 +18,8 @@ This file documents the changes made to the formatter with each release.
 
 - Conditions that exceed max-line-length by only a few columns get backslash + attribute-dot wrapping instead of the parenthesized and-wrap used for larger overflows (#270)
 - Fixed --reorder-code detaches trailing comments from top-level declarations and re-attaches them above the following declaration (#271)
-- Fix: Allow newlines between conditional blocks (#276)
+- Fix empty lines removed between conditional blocks (#276)
+- Fix editorconfig ignored when running from stdin (#275)
 
 ## Release 0.21.0 (2026-07-16)
 
