@@ -13,3 +13,16 @@ func test2():
 	# second comment
 	elif false:
 		pass
+
+
+func test3():
+	# This test ensures that we preserve up to one empty line between
+	# conditional blocks.
+	if true:
+		pass
+
+	elif false:
+		pass
+
+	else:
+		pass

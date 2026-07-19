@@ -2411,6 +2411,9 @@ fn process_separator_between_sibling_nodes(
         || current_kind == GDScriptNodeKind::ElseStatement
     {
         render_elements.push(RenderElement::HardLine);
+        if current.start_position().row > previous_child.end_position().row + 1 {
+            render_elements.push(RenderElement::BlankLine);
+        }
         return;
     }
 
