@@ -26,7 +26,7 @@ const HELP_FORMATTER: &str = "\
 	      --indent-size <NUM>                    Spaces per indent level (default: 4)
 	      --reorder-code                         Reorder code to match the style guide
 	      --max-line-length <NUM>                Maximum line length before wrapping (default: 100)
-	        --blank-lines-around-definitions <NUM>  Blank lines between top-level definitions (default: 2)
+	      --blank-lines-around-definitions <NUM> Blank lines between top-level definitions (default: 2)
 	      --continuation-indent-level <NUM>      Extra indent for line continuations (default: 2)
 	      --quote-style <STYLE>                  String quotes: preserve, single, or double (default: preserve)
 	  -h, --help                                 Print help
