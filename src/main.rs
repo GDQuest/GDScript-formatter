@@ -19,7 +19,7 @@ mod cli;
 use std::{
     env, fs,
     io::{self, IsTerminal, Read, Write},
-    path::PathBuf,
+    path::{Path, PathBuf},
     thread,
 };
 
@@ -115,10 +115,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         unreachable!();
     };
 
-    let mut config = FormatterConfiguration::default();
+    let mut config = FormatterConfiguration {
+        safe: use_safe_mode,
+        reorder_code: do_reorder_code,
+        ..Default::default()
+    };
 
-    config.safe = use_safe_mode;
-    config.reorder_code = do_reorder_code;
     if let Some(quote_style) = quote_style {
         config.quote_style = quote_style;
     }
@@ -317,7 +319,7 @@ fn format_one_file(
 /// incorrectly override `.editorconfig`.
 fn config_apply_editorconfig_then_cli_overrides(
     config: &mut FormatterConfiguration,
-    config_path: &PathBuf,
+    config_path: &Path,
     config_overrides: FormatterConfigOverrides,
 ) {
     gdscript_formatter::editorconfig::apply_editorconfig_to_formatter_config(config, config_path);

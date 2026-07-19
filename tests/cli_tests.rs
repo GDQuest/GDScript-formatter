@@ -67,7 +67,10 @@ fn stdin_and_file_modes_apply_editorconfig_and_cli_overrides() {
         .wait_with_output()
         .expect("should collect formatter output");
     assert!(stdin_output.status.success());
-    assert_eq!(String::from_utf8(stdin_output.stdout).unwrap(), expected);
+    assert_eq!(
+        String::from_utf8(stdin_output.stdout).expect("stdin output should be valid UTF-8"),
+        expected,
+    );
 
     let input_path = directory.join("input.gd");
     fs::write(&input_path, input).expect("should write input file");
@@ -88,7 +91,10 @@ fn stdin_and_file_modes_apply_editorconfig_and_cli_overrides() {
     .output()
     .expect("should format file");
     assert!(file_output.status.success());
-    assert_eq!(String::from_utf8(file_output.stdout).unwrap(), expected);
+    assert_eq!(
+        String::from_utf8(file_output.stdout).expect("file output should be valid UTF-8"),
+        expected,
+    );
 
     fs::remove_dir_all(directory).expect("should remove temporary test directory");
 }
