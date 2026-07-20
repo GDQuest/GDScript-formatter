@@ -2,7 +2,7 @@
 
 This file documents the changes made to the formatter with each release.
 
-## Unreleased: 0.22.0
+## Release 0.22.0
 
 ### Added
 
