@@ -1763,6 +1763,7 @@ fn process_binary_operator(
 ) {
     struct BinaryChainSegment<'a> {
         operator: Option<tree_sitter::Node<'a>>,
+        binary_node: Option<tree_sitter::Node<'a>>,
         expression: tree_sitter::Node<'a>,
     }
 
@@ -1847,6 +1848,7 @@ fn process_binary_operator(
     if let Some(left) = current_node.child_by_field_name("left") {
         segments.push(BinaryChainSegment {
             operator: None,
+            binary_node: None,
             expression: left,
         });
     }
@@ -1857,6 +1859,7 @@ fn process_binary_operator(
             if GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Comment {
                 segments.push(BinaryChainSegment {
                     operator: None,
+                    binary_node: None,
                     expression: child,
                 });
                 has_comment = true;
@@ -1867,6 +1870,7 @@ fn process_binary_operator(
     if let Some(right) = current_node.child_by_field_name("right") {
         segments.push(BinaryChainSegment {
             operator: binary_operator_token(current_node),
+            binary_node: Some(current_node),
             expression: right,
         });
     }
@@ -1880,6 +1884,7 @@ fn process_binary_operator(
                 if GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Comment {
                     segments.push(BinaryChainSegment {
                         operator: None,
+                        binary_node: None,
                         expression: child,
                     });
                     has_comment = true;
@@ -1890,6 +1895,7 @@ fn process_binary_operator(
         if let Some(right) = level.child_by_field_name("right") {
             segments.push(BinaryChainSegment {
                 operator: binary_operator_token(level),
+                binary_node: Some(level),
                 expression: right,
             });
         }
@@ -1936,7 +1942,33 @@ fn process_binary_operator(
             } else {
                 render_elements.push(RenderElement::BalancedLine);
             }
-            process_node(input, operator, render_elements);
+            if let Some(binary_node) = segment.binary_node {
+                let left = binary_node
+                    .child_by_field_name("left")
+                    .expect("binary operator has a left operand");
+                let right = binary_node
+                    .child_by_field_name("right")
+                    .expect("binary operator has a right operand");
+                let mut child_index = 0;
+                let mut has_emitted_operator = false;
+                while child_index < binary_node.child_count() {
+                    if let Some(child) = binary_node.child(child_index as u32)
+                        && child.start_byte() >= left.end_byte()
+                        && child.end_byte() <= right.start_byte()
+                        && GDScriptNodeKind::get_kind_from_ast_node(child)
+                            != GDScriptNodeKind::Comment
+                    {
+                        if has_emitted_operator {
+                            render_elements.push(RenderElement::Space);
+                        }
+                        process_node(input, child, render_elements);
+                        has_emitted_operator = true;
+                    }
+                    child_index += 1;
+                }
+            } else {
+                process_node(input, operator, render_elements);
+            }
             render_elements.push(RenderElement::Space);
         }
         process_node(input, segment.expression, render_elements);
