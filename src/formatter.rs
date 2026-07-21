@@ -1685,6 +1685,7 @@ fn process_parenthesized_expression(
 ///
 /// The AST for this may look like:
 ///
+/// ```text
 /// (parenthesized_expression
 ///   (binary_operator
 ///     left: (identifier)      ; a
@@ -1692,8 +1693,8 @@ fn process_parenthesized_expression(
 ///     right: (identifier)))   ; b
 /// ```
 ///
-/// Here, left is just a and right is b. The comment is before the || operator,
-/// but we could also have cases where it's after the || operator. That's why we
+/// Here, left is just `a` and right is `b`. The comment is before the `||` operator,
+/// but we could also have cases where it is after the `||` operator. That is why we
 /// need to look for the operator itself.
 fn binary_operator_token(node: tree_sitter::Node) -> Option<tree_sitter::Node> {
     let left = node.child_by_field_name("left")?;
