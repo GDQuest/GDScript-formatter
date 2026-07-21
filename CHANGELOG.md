@@ -10,7 +10,7 @@ This file documents the changes made to the formatter with each release.
 - Fixed generic type parameters breaking across lines (#283)
 - Fixed is not being lost in a parenthesized expression (#284)
 
-## Release 0.22.0
+## Release 0.22.0 (2026-07-21)
 
 ### Added
 
