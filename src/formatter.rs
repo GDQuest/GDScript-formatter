@@ -258,8 +258,46 @@ fn process_node(
         | GDScriptNodeKind::Dictionary
         | GDScriptNodeKind::EnumeratorList
         | GDScriptNodeKind::Parameters
-        | GDScriptNodeKind::Arguments
-        | GDScriptNodeKind::SubscriptArguments => process_container(input, node, render_elements),
+        | GDScriptNodeKind::Arguments => process_container(input, node, render_elements),
+        GDScriptNodeKind::SubscriptArguments => {
+            // Anything like a[b] is parsed as a `subscript` node, but this may
+            // be a dictionary access which can wrap across lines or a type hint
+            // like `Dictionary[String, String]` which must stay on one line;
+            // Official GDScript parser cannot parse line returns in there. So
+            // we walk up the AST to check if we are inside a `type` node.
+            // The type hint `Dictionary[String, String]` is parsed like this:
+            //
+            // ```text
+            // (type
+            // (subscript
+            //   (identifier)              ; Dictionary
+            //   arguments: (subscript_arguments
+            //     (identifier)            ; String
+            //     (identifier)))          ; String
+            // ```
+            //
+            // Which is why we walk up the AST to check if we are inside a `type` node.
+            let mut is_type_with_subscript = false;
+            let mut ancestor = node.parent();
+            while let Some(current) = ancestor {
+                let current_kind = GDScriptNodeKind::get_kind_from_ast_node(current);
+                if current_kind == GDScriptNodeKind::Type {
+                    is_type_with_subscript = true;
+                    break;
+                }
+                if current_kind != GDScriptNodeKind::Subscript
+                    && current_kind != GDScriptNodeKind::Other
+                {
+                    break;
+                }
+                ancestor = current.parent();
+            }
+            if is_type_with_subscript {
+                process_children_with_spacing(input, node, render_elements);
+            } else {
+                process_container(input, node, render_elements);
+            }
+        }
         GDScriptNodeKind::Body | GDScriptNodeKind::ClassBody | GDScriptNodeKind::MatchBody => {
             process_body(input, node, render_elements)
         }

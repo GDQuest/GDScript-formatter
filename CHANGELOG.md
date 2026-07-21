@@ -7,6 +7,7 @@ This file documents the changes made to the formatter with each release.
 ### Fixed
 
 - Make sure to keep tool at the top of the script, above class_name and extends (#285)
+- Fixed generic type parameters breaking across lines (#283)
 
 ## Release 0.22.0
 

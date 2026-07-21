@@ -109,6 +109,8 @@ pub enum GDScriptNodeKind {
     KeywordStatic,
 
     // Type annotations
+    Type,
+    Subscript,
     InferredType,
 
     // Meta
@@ -237,6 +239,8 @@ const MAP_TREE_SITTER_TO_GDSCRIPT_NODE_KIND: &[(&str, GDScriptNodeKind)] = &[
     ("parameters", GDScriptNodeKind::Parameters),
     ("arguments", GDScriptNodeKind::Arguments),
     ("subscript_arguments", GDScriptNodeKind::SubscriptArguments),
+    ("subscript", GDScriptNodeKind::Subscript),
+    ("type", GDScriptNodeKind::Type),
     ("condition", GDScriptNodeKind::Condition),
     ("conditional_expression", GDScriptNodeKind::Condition),
     ("lambda", GDScriptNodeKind::Lambda),

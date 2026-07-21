@@ -3,7 +3,9 @@
 /// matches the expected output file. See files in the ./input and ./expected
 /// folders.
 use gdscript_formatter::linter::{GDScriptLinter, LinterConfig};
-use gdscript_formatter::{FormatterConfiguration, QuoteStyle, format_gdscript};
+use gdscript_formatter::{
+    FormatterConfiguration, PrinterConfiguration, QuoteStyle, format_gdscript,
+};
 use similar::{ChangeTag, TextDiff};
 use std::fs;
 use std::path::Path;
@@ -190,6 +192,30 @@ lines"""
     };
 
     assert_eq!(format_gdscript(input, &config).unwrap(), expected);
+}
+
+#[test]
+fn generic_type_parameters_never_break() {
+    // Type-level generic parameters like Dictionary[String, String] must
+    // stay on one line even when max_line_length would otherwise force a
+    // break. Splitting the brackets produces invalid GDScript.
+    let input = "func test() -> Dictionary[String, String]:\n    return {}\n";
+    let config = FormatterConfiguration {
+        printer: PrinterConfiguration {
+            max_line_length: 10,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let output = format_gdscript(input, &config).unwrap();
+    // The generic type must remain on a single line.
+    let expected_line_0 = "func test() -> Dictionary[String, String]:";
+    assert!(
+        output.lines().next() == Some(expected_line_0),
+        "Expected first line to be '{}' but got '{}'",
+        expected_line_0,
+        output.lines().next().unwrap_or("")
+    );
 }
 
 #[test]
