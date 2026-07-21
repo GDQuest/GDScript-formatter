@@ -2,6 +2,12 @@
 
 This file documents the changes made to the formatter with each release.
 
+## Development version - 0.22.1
+
+### Fixed
+
+- Make sure to keep tool at the top of the script, above class_name and extends (#285)
+
 ## Release 0.22.0
 
 ### Added

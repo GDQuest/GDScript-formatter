@@ -142,11 +142,28 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
             continue;
         };
         let kind = GDScriptNodeKind::get_kind_from_ast_node(child);
-        if kind == GDScriptNodeKind::Comment
-            || kind == GDScriptNodeKind::Annotation
-            || kind == GDScriptNodeKind::RegionStart
-        {
+        if kind == GDScriptNodeKind::Comment || kind == GDScriptNodeKind::RegionStart {
             is_child_attached_to_declaration[child_index] = true;
+        } else if kind == GDScriptNodeKind::Annotation {
+            // Make sure to keep tool at the top of the script, above class_name
+            // and extends. Otherwise it's a syntax error.
+            let annotation_name = get_node_text(child, content);
+            if annotation_name.starts_with("@tool") {
+                items.push(ReorderItem {
+                    child_index,
+                    sub_child: None,
+                    child_indices_attached_before_declaration: Vec::new(),
+                    child_indices_attached_after_declaration: Vec::new(),
+                    has_blank_line_before: false,
+                    classification: DeclarationKind::ClassAnnotation,
+                    name: annotation_name,
+                    is_private: false,
+                    method_type: None,
+                    split_extends: false,
+                });
+            } else {
+                is_child_attached_to_declaration[child_index] = true;
+            }
         } else if kind == GDScriptNodeKind::RegionEnd {
             is_child_attached_to_declaration[child_index] = true;
             is_region_end[child_index] = true;
