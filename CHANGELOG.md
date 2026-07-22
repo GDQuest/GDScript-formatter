@@ -10,6 +10,8 @@ This file documents the changes made to the formatter with each release.
 - Fixed generic type parameters breaking across lines (#283)
 - Fixed is not being lost in a parenthesized expression (#284)
 - Fixed conditional expression keyword detection to avoid breaking after `if`/`else` keywords (#291)
+- Fixed lambda functions inside parentheses inside an argument list resulting into invalid syntax (#287)
+- Fixed formatting not idempotent for this pattern: `await (call(lambda).chain(...))` (#281)
 - Godot addon: Fixed performance issues when typing on Steam version of Godot (#262)
 
 ## Release 0.22.0 (2026-07-21)

@@ -168,6 +168,26 @@ fn has_newline(source: &str, from: usize, to: usize) -> bool {
     false
 }
 
+/// Returns `true` if the node or any of its children has the given kind.
+fn contains_forced_multiline_node(node: tree_sitter::Node) -> bool {
+    if matches!(
+        GDScriptNodeKind::get_kind_from_ast_node(node),
+        GDScriptNodeKind::Lambda | GDScriptNodeKind::Condition
+    ) {
+        return true;
+    }
+    let mut child_index = 0;
+    while child_index < node.child_count() {
+        if let Some(child) = node.child(child_index as u32)
+            && contains_forced_multiline_node(child)
+        {
+            return true;
+        }
+        child_index += 1;
+    }
+    false
+}
+
 fn is_class_header(kind: GDScriptNodeKind) -> bool {
     matches!(
         kind,
@@ -1649,6 +1669,31 @@ fn process_parenthesized_expression(
         false
     };
     if inner_self_indents {
+        let is_lambda_argument = node.child(1).is_some_and(|first_inner| {
+            GDScriptNodeKind::get_kind_from_ast_node(first_inner) == GDScriptNodeKind::Lambda
+                && node.parent().is_some_and(|parent| {
+                    GDScriptNodeKind::get_kind_from_ast_node(parent) == GDScriptNodeKind::Arguments
+                })
+        });
+        let is_parenthesized_lambda = child_count == 3;
+        if is_lambda_argument && is_parenthesized_lambda {
+            // Lambda functions have a quirk when they're part of an argument
+            // list and surrounded by parentheses. The closing parenthesis
+            // should be indented like the lambda body, otherwise users will get
+            // a parse error.
+            if let Some(open) = node.child(0) {
+                process_node(input, open, render_elements);
+            }
+            if let Some(lambda) = node.child(1) {
+                process_node(input, lambda, render_elements);
+            }
+            if let Some(close) = node.child(2) {
+                let indent_index = begin_indent(render_elements, 1);
+                process_node(input, close, render_elements);
+                finish_indent(render_elements, indent_index);
+            }
+            return;
+        }
         process_children_with_spacing(input, node, render_elements);
         return;
     }
@@ -1662,7 +1707,8 @@ fn process_parenthesized_expression(
             false
         }
     };
-    if !body_has_newlines {
+    let contains_forced_multiline = contains_forced_multiline_node(node);
+    if !body_has_newlines && !contains_forced_multiline {
         process_children_with_spacing(input, node, render_elements);
         return;
     }
