@@ -1,6 +1,6 @@
 [package]
 name = "gdscript-formatter"
-version = "0.22.0"
+version = "0.22.1"
 edition = "2024"
 description = "A GDScript code formatter using Tree-sitter"
 license = "MIT"
