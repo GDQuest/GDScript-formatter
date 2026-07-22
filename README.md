@@ -38,6 +38,7 @@ You can find binaries for Windows, macOS, and Linux in the [releases tab](https:
 
 - **Arch Linux:** Community maintained AUR Package [gdscript-formatter-bin](https://aur.archlinux.org/packages/gdscript-formatter-bin).
 - **Windows:** Community maintained Scoop package (`scoop install` [`extras/gdscript-formatter`](https://github.com/ScoopInstaller/Extras/blob/master/bucket/gdscript-formatter.json))
+- **GitHub Actions:** Community maintained [setup-gdscript-formatter](https://github.com/Modern-Arts-Research-Stories-Next/setup-gdscript-formatter) action for installing the formatter in GitHub Actions workflows.
 
 To recursively format all GDScript files in the current folder, run:
 
