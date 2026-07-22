@@ -2,12 +2,13 @@
 
 This file documents the changes made to the formatter with each release.
 
-## UNRELEASED - Release 0.22.2 (2026-07-23)
+## Release 0.22.2 (2026-07-22)
 
 ### Fixed
 
 - Fix long ternaries without pre-existing backslashes or delimiters formatting in a way that GDScript doesn't parse (the formatter will now add parentheses around the expression and indent it) (#293)
 - Fix non-parenthesized lambda can lead to a parse error when not parenthesized or followed by other arguments (#292)
+- Fix max_line_length in .editorconfig ignored when linting (#272)
 
 
 ## Release 0.22.1 (2026-07-22)
