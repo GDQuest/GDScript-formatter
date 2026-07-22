@@ -2056,48 +2056,59 @@ fn process_conditional_expression(
     let group_index = begin_group(render_elements);
     render_elements.push(RenderElement::ForceBreakingParent);
 
-    if let Some(value) = node.child(0) {
-        process_node(input, value, render_elements);
-    }
+    // The conditional keywords or things like not are anonymous children in the
+    // syntax tree, so we have to walk every child in source order to find
+    // where's what.
+    let mut previous_child: Option<tree_sitter::Node> = None;
+    let mut child_index = 0;
+    while child_index < child_count {
+        let Some(child) = node.child(child_index as u32) else {
+            child_index += 1;
+            continue;
+        };
+        let child_kind = GDScriptNodeKind::get_kind_from_ast_node(child);
+        let is_current_conditional_keyword = child.kind() == "if" || child.kind() == "else";
 
-    render_elements.push(RenderElement::SoftLine);
-    let if_space_index = render_elements.len() + 1;
-    render_elements.push(RenderElement::Branch {
-        if_single_line: Some(RangeRenderElement {
-            start: if_space_index,
-            end: if_space_index + 1,
-        }),
-        if_multiline: None,
-    });
-    render_elements.push(RenderElement::Space);
+        if let Some(previous) = previous_child {
+            let previous_kind = GDScriptNodeKind::get_kind_from_ast_node(previous);
+            if is_current_conditional_keyword
+                && previous_kind != GDScriptNodeKind::LineContinuation
+                && previous_kind != GDScriptNodeKind::Comment
+            {
+                render_elements.push(RenderElement::SoftLine);
+            } else {
+                process_separator_between_sibling_nodes(
+                    GDScriptNodeKind::Condition,
+                    &previous,
+                    &child,
+                    render_elements,
+                );
+            }
 
-    if let Some(if_kw) = node.child(1) {
-        process_node(input, if_kw, render_elements);
-    }
+            if previous_kind == GDScriptNodeKind::LineContinuation {
+                let indent_index = begin_indent(render_elements, input.continuation_indent_level);
+                process_node(input, child, render_elements);
+                finish_indent(render_elements, indent_index);
+                previous_child = Some(child);
+                child_index += 1;
+                continue;
+            }
+        }
 
-    if let Some(cond) = node.child(2) {
-        render_elements.push(RenderElement::Space);
-        process_node(input, cond, render_elements);
-    }
-
-    render_elements.push(RenderElement::SoftLine);
-    let else_space_index = render_elements.len() + 1;
-    render_elements.push(RenderElement::Branch {
-        if_single_line: Some(RangeRenderElement {
-            start: else_space_index,
-            end: else_space_index + 1,
-        }),
-        if_multiline: None,
-    });
-    render_elements.push(RenderElement::Space);
-
-    if let Some(else_kw) = node.child(3) {
-        process_node(input, else_kw, render_elements);
-    }
-
-    if let Some(value) = node.child(4) {
-        render_elements.push(RenderElement::Space);
-        process_node(input, value, render_elements);
+        if child_kind == GDScriptNodeKind::LineContinuation {
+            let start_byte = child.start_byte();
+            render_elements.push(RenderElement::Text {
+                range: RangeSourceBytes {
+                    start_byte,
+                    end_byte: start_byte + 1,
+                },
+            });
+            render_elements.push(RenderElement::HardLine);
+        } else {
+            process_node(input, child, render_elements);
+        }
+        previous_child = Some(child);
+        child_index += 1;
     }
 
     finish_group(render_elements, group_index);

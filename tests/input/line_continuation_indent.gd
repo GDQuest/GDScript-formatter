@@ -37,3 +37,9 @@ func _get_message() -> String:
 	var greeting: String = "\
 	Hello world"
 	return greeting
+
+
+# Issue #291: would lose tokens, ensure they're preserved.
+var test = true \
+	if not false \
+	else false
