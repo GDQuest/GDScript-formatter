@@ -2,6 +2,12 @@
 
 This file documents the changes made to the formatter with each release.
 
+## UNRELEASED - Release 0.22.2 (2026-07-23)
+
+### Fixed
+
+- Fix long ternaries without pre-existing backslashes or delimiters formatting in a way that GDScript doesn't parse (the formatter will now add parentheses around the expression and indent it) (#293)
+
 ## Release 0.22.1 (2026-07-22)
 
 ### Fixed

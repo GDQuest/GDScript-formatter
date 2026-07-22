@@ -2099,6 +2099,50 @@ fn process_conditional_expression(
         return;
     }
 
+    // A multiline ternary needs parentheses to remain an expression when it
+    // spans multiple lines. GDScript can parse ternaries that already use
+    // parentheses or \ but not otherwise.
+    let mut has_line_continuation = false;
+    let mut is_inside_parenthesized_expression = false;
+
+    let mut child_index = 0;
+    while child_index < child_count {
+        if let Some(child) = node.child(child_index as u32)
+            && GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::LineContinuation
+        {
+            has_line_continuation = true;
+            break;
+        }
+        child_index += 1;
+    }
+
+    let mut ancestor = node.parent();
+    while let Some(current_ancestor) = ancestor {
+        if GDScriptNodeKind::get_kind_from_ast_node(current_ancestor)
+            == GDScriptNodeKind::ParenthesizedExpression
+        {
+            is_inside_parenthesized_expression = true;
+            break;
+        }
+        ancestor = current_ancestor.parent();
+    }
+
+    let needs_parentheses = !has_line_continuation && !is_inside_parenthesized_expression;
+    let outer_group_index = if needs_parentheses {
+        let group_index = begin_group(render_elements);
+        render_elements.push(RenderElement::TextStatic("("));
+        render_elements.push(RenderElement::ForceBreakingParent);
+        render_elements.push(RenderElement::SoftLine);
+        Some(group_index)
+    } else {
+        None
+    };
+    let outer_indent_index = if needs_parentheses {
+        Some(begin_indent(render_elements, 1))
+    } else {
+        None
+    };
+
     let group_index = begin_group(render_elements);
     render_elements.push(RenderElement::ForceBreakingParent);
 
@@ -2106,7 +2150,7 @@ fn process_conditional_expression(
     // syntax tree, so we have to walk every child in source order to find
     // where's what.
     let mut previous_child: Option<tree_sitter::Node> = None;
-    let mut child_index = 0;
+    child_index = 0;
     while child_index < child_count {
         let Some(child) = node.child(child_index as u32) else {
             child_index += 1;
@@ -2158,6 +2202,18 @@ fn process_conditional_expression(
     }
 
     finish_group(render_elements, group_index);
+
+    // If the ternary was wrapped in parentheses, it's indented, we end the
+    // indent and close the parentheses.
+    if let Some(indent_index) = outer_indent_index {
+        finish_indent(render_elements, indent_index);
+        render_elements.push(RenderElement::SoftLine);
+        render_elements.push(RenderElement::TextStatic(")"));
+        finish_group(
+            render_elements,
+            outer_group_index.expect("parenthesis group exists"),
+        );
+    }
 }
 
 /// Formats Attribute nodes (dot-access chains like a.b.c()). Handles line

@@ -24,6 +24,18 @@ func foo():
 		else "northwest"
 	)
 
+	# When the ternary expression does not already have surrounding parentheses
+	# or continuation lines and wraps, we need to surround it with parentheses
+	# for GDScript to parse it.
+	var pitch_input = (
+		Input.get_axis("ui_up", "ui_down")
+		if invert_pitch
+		else Input.get_axis(
+			"ui_down",
+			"ui_up",
+		)
+	)
+
 	var position = Vector2(250, 350)
 	if (
 		position.x > 200 and position.x < 400 and position.y > 300
