@@ -12,3 +12,14 @@ func test():
 		1.0,
 		2.0,
 	)
+
+
+# An unparenthesized multiline lambda argument needs a trailing comma so the
+# official parser accepts the closing call parenthesis.
+func test_single_lambda_argument():
+	var test: String = ", ".join(
+		[].map(
+			func(it: String) -> String:
+				return it,
+		)
+	)

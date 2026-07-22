@@ -5,5 +5,5 @@ func f9():
 		func():
 			print("THIS LINE IS CORRECT")
 
-			print("THIS LINE IS INCORRECT")
+			print("THIS LINE IS INCORRECT"),
 	)

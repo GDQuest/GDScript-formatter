@@ -25,10 +25,10 @@ var f6 = (func():
 # This regression tests that the formatter immediately settles on this result.
 func issue_281() -> void:
 	await (
-		check(func() -> void:
-				do_work()).report(
-			"some quite long message that pushes this line well past the limit"
-		)
+		check(
+			func() -> void:
+				do_work(),
+		).report("some quite long message that pushes this line well past the limit")
 	)
 
 

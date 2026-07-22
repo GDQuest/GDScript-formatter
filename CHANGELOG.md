@@ -7,6 +7,8 @@ This file documents the changes made to the formatter with each release.
 ### Fixed
 
 - Fix long ternaries without pre-existing backslashes or delimiters formatting in a way that GDScript doesn't parse (the formatter will now add parentheses around the expression and indent it) (#293)
+- Fix non-parenthesized lambda can lead to a parse error when not parenthesized or followed by other arguments (#292)
+
 
 ## Release 0.22.1 (2026-07-22)
 

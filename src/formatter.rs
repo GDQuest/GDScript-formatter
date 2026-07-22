@@ -1577,25 +1577,57 @@ fn process_container(
         index += 1;
     }
 
+    /// Returns true if the node or any of its children contains a lambda. Lambda
+    /// bodies force every enclosing delimiter to use a multiline layout.
+    fn contains_lambda_node(node: tree_sitter::Node) -> bool {
+        if GDScriptNodeKind::get_kind_from_ast_node(node) == GDScriptNodeKind::Lambda {
+            return true;
+        }
+        let mut child_index = 0;
+        while child_index < node.child_count() {
+            if let Some(child) = node.child(child_index as u32)
+                && contains_lambda_node(child)
+            {
+                return true;
+            }
+            child_index += 1;
+        }
+        false
+    }
+
     // A container's children are: [open_delimiter, elements_and_commas...,
     // close_delimiter]. The minimal single-element form is 3 children
     // ([open, element, close]); child_count >= 4 means there is either a
     // trailing comma on a single element or more than one element. In both
-    // cases we ensure a trailing comma in multiline layout and check the source
-    // for a forced line break.
+    // cases we ensure there is a trailing comma in broken layout and check
+    // the source for a forced line break.
     const MIN_CHILD_COUNT_BEYOND_SINGLE_ELEMENT: usize = 4;
     let contains_more_than_one_element = child_count >= MIN_CHILD_COUNT_BEYOND_SINGLE_ELEMENT;
     let is_non_empty_enum = node_kind == GDScriptNodeKind::EnumeratorList;
-    // A single lambda in a collection will cause a syntax error unless we wrap
-    // it in parentheses or insert a trailing comma on the last line
-    let mut is_array_with_single_lambda = false;
-    if node_kind == GDScriptNodeKind::Array && child_count == 3 {
-        if let Some(child) = node.child(1) {
-            is_array_with_single_lambda =
-                GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Lambda;
+    let mut contains_lambda = false;
+    let mut child_index = 1;
+    while child_index < child_count - 1 {
+        if let Some(child) = node.child(child_index as u32)
+            && contains_lambda_node(child)
+        {
+            contains_lambda = true;
+            break;
         }
+        child_index += 1;
     }
-    if (contains_more_than_one_element || is_array_with_single_lambda)
+    // A single lambda in an array, dict, or function call will cause a syntax
+    // error with a broken layout unless we wrap it in parentheses or insert a
+    // trailing comma on the last line. We use a trailing comma for now.
+    let is_single_lambda = child_count == 3
+        && node.child(1).is_some_and(|child| {
+            GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Lambda
+        });
+    let needs_lambda_trailing_comma = is_single_lambda
+        && matches!(
+            node_kind,
+            GDScriptNodeKind::Array | GDScriptNodeKind::Arguments
+        );
+    if (contains_more_than_one_element || needs_lambda_trailing_comma)
         && !trailing_comma_handled
         && !last_was_comment
     {
@@ -1616,14 +1648,17 @@ fn process_container(
         render_elements.push(RenderElement::TextStatic(","));
     }
 
-    if (contains_more_than_one_element || is_non_empty_enum)
+    if (contains_more_than_one_element || is_non_empty_enum || is_single_lambda || contains_lambda)
         && let Some(open) = node.child(0)
     {
         let close_byte = node
             .child((child_count - 1) as u32)
             .expect("container node has close delimiter")
             .start_byte();
-        if is_non_empty_enum || has_newline(input.source, open.end_byte(), close_byte) {
+        if is_non_empty_enum
+            || contains_lambda
+            || has_newline(input.source, open.end_byte(), close_byte)
+        {
             render_elements.push(RenderElement::ForceBreakingParent);
         }
     }
@@ -2450,10 +2485,24 @@ fn process_method_call_arguments(
     render_elements: &mut Vec<RenderElement>,
 ) {
     if let Some(args) = attribute_call.child(1) {
+        let mut has_lambda_argument = false;
+        let mut argument_index = 1;
+        while argument_index < args.child_count() - 1 {
+            if let Some(argument) = args.child(argument_index as u32)
+                && GDScriptNodeKind::get_kind_from_ast_node(argument) == GDScriptNodeKind::Lambda
+            {
+                has_lambda_argument = true;
+                break;
+            }
+            argument_index += 1;
+        }
+
         if is_last_chain_call {
             let group_index = begin_group_until_first_line_break(render_elements);
             process_node(input, args, render_elements);
             finish_group(render_elements, group_index);
+        } else if has_lambda_argument {
+            process_node(input, args, render_elements);
         } else {
             process_method_arguments_flat(input, args, render_elements);
         }
