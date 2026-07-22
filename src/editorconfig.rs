@@ -5,20 +5,30 @@
 //! editorconfig's features. Custom keys are read as plain strings and parsed
 //! manually.
 
-use crate::{FormatterConfiguration, QuoteStyle};
+use crate::{FormatterConfiguration, QuoteStyle, linter::LinterConfig};
+use ec4rs::Properties;
 use ec4rs::property::{FinalNewline, IndentSize, IndentStyle, MaxLineLen, TrimTrailingWs};
 use std::path::Path;
+
+fn load_editorconfig_properties(editorconfig_file_path: &Path) -> Option<Properties> {
+    let mut properties = ec4rs::properties_of(editorconfig_file_path).ok()?;
+    properties.use_fallbacks();
+    Some(properties)
+}
+
+fn get_max_line_length_from_properties(properties: &Properties) -> Option<usize> {
+    match properties.get::<MaxLineLen>() {
+        Ok(MaxLineLen::Value(max_line_length)) if max_line_length > 0 => Some(max_line_length),
+        _ => None,
+    }
+}
 
 pub fn apply_editorconfig_to_formatter_config(
     config: &mut FormatterConfiguration,
     editorconfig_file_path: &Path,
 ) {
-    let properties = match ec4rs::properties_of(editorconfig_file_path) {
-        Ok(mut properties) => {
-            properties.use_fallbacks();
-            properties
-        }
-        Err(_) => return,
+    let Some(properties) = load_editorconfig_properties(editorconfig_file_path) else {
+        return;
     };
 
     if let Ok(IndentStyle::Spaces) = properties.get::<IndentStyle>() {
@@ -32,10 +42,8 @@ pub fn apply_editorconfig_to_formatter_config(
         }
     }
 
-    if let Ok(MaxLineLen::Value(max_line_length)) = properties.get::<MaxLineLen>() {
-        if max_line_length > 0 {
-            config.printer.max_line_length = max_line_length;
-        }
+    if let Some(max_line_length) = get_max_line_length_from_properties(&properties) {
+        config.printer.max_line_length = max_line_length;
     }
 
     if let Ok(FinalNewline::Value(insert_final_newline)) = properties.get::<FinalNewline>() {
@@ -78,5 +86,18 @@ pub fn apply_editorconfig_to_formatter_config(
         if let Some(quote_style) = QuoteStyle::from_name(found_value) {
             config.quote_style = quote_style;
         }
+    }
+}
+
+/// Applies the `.editorconfig` settings used by the linter.
+pub fn apply_editorconfig_to_linter_config(
+    config: &mut LinterConfig,
+    editorconfig_file_path: &Path,
+) {
+    let Some(properties) = load_editorconfig_properties(editorconfig_file_path) else {
+        return;
+    };
+    if let Some(max_line_length) = get_max_line_length_from_properties(&properties) {
+        config.max_line_length = max_line_length;
     }
 }

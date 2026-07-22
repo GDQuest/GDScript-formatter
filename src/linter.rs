@@ -1,6 +1,6 @@
 use crate::node_kind::GDScriptNodeKind;
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::{fs, io::IsTerminal};
 use tree_sitter::{Node, Parser};
 
@@ -167,12 +167,40 @@ impl GDScriptLinter {
         gdscript_files: &[PathBuf],
         do_pretty_print: bool,
     ) -> Result<bool, Box<dyn std::error::Error>> {
+        self.lint_files_with_editorconfig(gdscript_files, do_pretty_print, None)
+    }
+
+    pub fn lint_files_with_editorconfig(
+        &mut self,
+        gdscript_files: &[PathBuf],
+        do_pretty_print: bool,
+        max_line_length_override: Option<usize>,
+    ) -> Result<bool, Box<dyn std::error::Error>> {
         let with_colors = std::io::stdout().is_terminal();
+        let base_config = self.config.clone();
 
         if do_pretty_print {
-            self.lint_files_pretty(gdscript_files, with_colors)
+            self.lint_files_pretty(
+                gdscript_files,
+                with_colors,
+                &base_config,
+                max_line_length_override,
+            )
         } else {
-            self.lint_files_standard(gdscript_files)
+            self.lint_files_standard(gdscript_files, &base_config, max_line_length_override)
+        }
+    }
+
+    fn apply_file_config(
+        &mut self,
+        base_config: &LinterConfig,
+        file_path: &Path,
+        max_line_length_override: Option<usize>,
+    ) {
+        self.config = base_config.clone();
+        crate::editorconfig::apply_editorconfig_to_linter_config(&mut self.config, file_path);
+        if let Some(max_line_length) = max_line_length_override {
+            self.config.max_line_length = max_line_length;
         }
     }
 
@@ -180,12 +208,15 @@ impl GDScriptLinter {
         &mut self,
         gdscript_files: &[PathBuf],
         with_colors: bool,
+        base_config: &LinterConfig,
+        max_line_length_override: Option<usize>,
     ) -> Result<bool, Box<dyn std::error::Error>> {
         use std::collections::HashMap;
         let mut file_issues: HashMap<String, Vec<_>> = HashMap::new();
         let mut has_issues = false;
 
         for file_path in gdscript_files {
+            self.apply_file_config(base_config, file_path, max_line_length_override);
             let source_code = fs::read_to_string(file_path).map_err(|error| {
                 format!("Failed to read file {}: {}", file_path.display(), error)
             })?;
@@ -256,10 +287,13 @@ impl GDScriptLinter {
     fn lint_files_standard(
         &mut self,
         gdscript_files: &[PathBuf],
+        base_config: &LinterConfig,
+        max_line_length_override: Option<usize>,
     ) -> Result<bool, Box<dyn std::error::Error>> {
         let mut has_issues = false;
 
         for file_path in gdscript_files {
+            self.apply_file_config(base_config, file_path, max_line_length_override);
             let source_code = fs::read_to_string(file_path).map_err(|error| {
                 format!("Failed to read file {}: {}", file_path.display(), error)
             })?;

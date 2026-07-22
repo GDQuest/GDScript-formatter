@@ -102,7 +102,7 @@ pub enum Command {
         /// Optional list of comma-separated linter rule names to disable.
         disabled_linter_rules: Option<String>,
         /// Maximum line length for the linter.
-        max_line_length: usize,
+        max_line_length: Option<usize>,
         /// If true, the linter program will list all available linting rules and
         /// exit.
         do_list_rules: bool,
@@ -136,7 +136,7 @@ pub fn parse_args() -> CliArguments {
     let mut format_quote_style: Option<QuoteStyle> = None;
 
     let mut lint_disabled_rules: Option<String> = None;
-    let mut lint_max_line_length: usize = 100;
+    let mut lint_max_line_length: Option<usize> = None;
     let mut lint_list_rules = false;
     let mut lint_pretty_print = false;
 
@@ -297,7 +297,7 @@ pub fn parse_args() -> CliArguments {
                             "--max-line-length",
                         );
                         lint_max_line_length = match value.parse::<usize>() {
-                            Ok(n) => n,
+                            Ok(n) => Some(n),
                             Err(_) => print_error_invalid_argument(&format!(
                                 "--max-line-length expects a number, got '{}'",
                                 value

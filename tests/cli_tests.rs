@@ -35,7 +35,7 @@ fn stdin_and_file_modes_apply_editorconfig_and_cli_overrides() {
     let directory = test_directory();
     fs::write(
         directory.join(".editorconfig"),
-        "root = true\n\n[*.gd]\nindent_style = space\nindent_size = 8\ngdscript_formatter_blank_lines_around_definitions = 2\ngdscript_formatter_quote_style = double\n",
+        "root = true\n\n[*.gd]\nindent_style = space\nindent_size = 8\nmax_line_length = 120\ngdscript_formatter_blank_lines_around_definitions = 2\ngdscript_formatter_quote_style = double\n",
     )
     .expect("should write EditorConfig");
 
@@ -94,6 +94,25 @@ fn stdin_and_file_modes_apply_editorconfig_and_cli_overrides() {
     assert_eq!(
         String::from_utf8(file_output.stdout).expect("file output should be valid UTF-8"),
         expected,
+    );
+
+    let lint_path = directory.join("lint.gd");
+    fs::write(&lint_path, format!("#{}\n", "1".repeat(119))).expect("should write lint input");
+    let lint_output = formatter_command(&directory, &["lint", "lint.gd"])
+        .output()
+        .expect("should lint file");
+    assert!(lint_output.status.success());
+    assert!(lint_output.stdout.is_empty());
+
+    let lint_override_output =
+        formatter_command(&directory, &["lint", "--max-line-length", "100", "lint.gd"])
+            .output()
+            .expect("should lint file with an override");
+    assert!(!lint_override_output.status.success());
+    assert!(
+        String::from_utf8(lint_override_output.stdout)
+            .expect("lint output should be valid UTF-8")
+            .contains("maximum allowed is 100")
     );
 
     fs::remove_dir_all(directory).expect("should remove temporary test directory");

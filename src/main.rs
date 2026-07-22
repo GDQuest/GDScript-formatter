@@ -92,11 +92,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let linter_config = LinterConfig {
             disabled_rules,
-            max_line_length,
+            max_line_length: max_line_length.unwrap_or(100),
         };
 
         let input_gdscript_files = find_gdscript_files(&parsed_cli_args.input_file_paths)?;
-        return run_linter(&input_gdscript_files, linter_config, do_pretty_print);
+        return run_linter(
+            &input_gdscript_files,
+            linter_config,
+            max_line_length,
+            do_pretty_print,
+        );
     }
 
     let Command::Format {
@@ -266,10 +271,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 fn run_linter(
     input_files: &[PathBuf],
     config: LinterConfig,
+    max_line_length_override: Option<usize>,
     do_pretty_print: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut linter = gdscript_formatter::linter::GDScriptLinter::new(config)?;
-    let has_issues = linter.lint_files(input_files, do_pretty_print)?;
+    let has_issues = linter.lint_files_with_editorconfig(
+        input_files,
+        do_pretty_print,
+        max_line_length_override,
+    )?;
 
     if has_issues {
         std::process::exit(1);
