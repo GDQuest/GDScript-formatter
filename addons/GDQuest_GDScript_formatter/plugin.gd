@@ -55,6 +55,7 @@ var installer: FormatterInstaller = null
 var formatter_cache_dir: String
 var menu: FormatterMenu = null
 var _has_uninstall_command := false
+var _has_formatter_command := false
 # Used to auto detect changes to the project's .editorconfig file.
 var _editorconfig_last_modified_time := -1
 # Editorconfig allows setting rules per path glob. We track globs for the format
@@ -89,6 +90,9 @@ func _enter_tree() -> void:
 	installer.installation_completed.connect(
 		func _on_installation_completed(binary_path: String) -> void:
 			set_editor_setting(SETTING_FORMATTER_PATH, binary_path)
+			_has_formatter_command = true
+			add_format_command()
+			add_lint_command()
 			# After installing the formatter we can add the menu option to show the uninstall command
 			if is_instance_valid(menu):
 				menu.update_menu(true)
@@ -98,6 +102,7 @@ func _enter_tree() -> void:
 			push_error("Formatter installation failed: ", error_message)
 	)
 
+	_has_formatter_command = has_command(get_editor_setting(SETTING_FORMATTER_PATH))
 	add_format_command()
 	add_lint_command()
 	add_install_update_command()
@@ -133,17 +138,18 @@ func _exit_tree() -> void:
 
 
 func _shortcut_input(event: InputEvent) -> void:
-	if not has_command(get_editor_setting(SETTING_FORMATTER_PATH)):
-		return
 	var shortcut := get_editor_setting(SETTING_SHORTCUT) as Shortcut
 	if not is_instance_valid(shortcut):
 		return
-	if shortcut.matches_event(event) and event.is_pressed() and not event.is_echo():
-		if format_current_script():
-			get_tree().root.set_input_as_handled()
+	if not shortcut.matches_event(event) or not event.is_pressed() or event.is_echo():
+		return
+	if format_current_script():
+		get_tree().root.set_input_as_handled()
 
 
 func format_current_script() -> bool:
+	if not is_formatter_available():
+		return false
 	if not EditorInterface.get_script_editor().is_visible_in_tree():
 		return false
 	var current_script := EditorInterface.get_script_editor().get_current_script()
@@ -160,6 +166,8 @@ func format_current_script() -> bool:
 
 
 func lint_current_script() -> bool:
+	if not is_formatter_available():
+		return false
 	if not EditorInterface.get_script_editor().is_visible_in_tree():
 		return false
 
@@ -230,7 +238,7 @@ func _on_resource_saved(saved_resource: Resource) -> void:
 		if matches:
 			return
 
-	if not has_command(get_editor_setting(SETTING_FORMATTER_PATH)) or not is_instance_valid(script):
+	if not is_formatter_available() or not is_instance_valid(script):
 		return
 
 	if do_format_on_save:
@@ -276,7 +284,7 @@ func _on_resource_saved(saved_resource: Resource) -> void:
 
 func add_format_command() -> void:
 	var formatter_path := get_editor_setting(SETTING_FORMATTER_PATH) as String
-	if formatter_path.is_empty() or not has_command(formatter_path):
+	if formatter_path.is_empty() or not _has_formatter_command:
 		if not formatter_path.is_empty():
 			push_error(
 				'GDScript Formatter: The command "%s" can\'t be found in your environment.\n' % formatter_path +
@@ -298,7 +306,7 @@ func remove_format_command() -> void:
 
 
 func add_lint_command() -> void:
-	if not has_command(get_editor_setting(SETTING_FORMATTER_PATH)):
+	if not _has_formatter_command:
 		return
 
 	EditorInterface.get_command_palette().add_command(
@@ -355,6 +363,21 @@ func remove_report_issue_command() -> void:
 	EditorInterface.get_command_palette().remove_command(COMMAND_PALETTE_CATEGORY + COMMAND_PALETTE_REPORT_ISSUE)
 
 
+func has_command(command: String) -> bool:
+	if command.is_empty():
+		return false
+	var output: Array = []
+	var exit_code := OS.execute(command, ["--version"], output)
+	return exit_code == OK
+
+
+func is_formatter_available() -> bool:
+	if _has_formatter_command:
+		return true
+	_has_formatter_command = has_command(get_editor_setting(SETTING_FORMATTER_PATH))
+	return _has_formatter_command
+
+
 func is_formatter_installed_locally() -> bool:
 	var binary_name := "gdscript-formatter"
 	if OS.get_name().to_lower().contains("windows"):
@@ -373,6 +396,7 @@ func uninstall_formatter() -> void:
 		DirAccess.remove_absolute(binary_path)
 		print("GDScript formatter uninstalled successfully from: ", binary_path)
 		set_editor_setting(SETTING_FORMATTER_PATH, DEFAULT_SETTINGS[SETTING_FORMATTER_PATH])
+		_has_formatter_command = false
 
 		remove_format_command()
 		add_format_command()
@@ -385,6 +409,8 @@ func uninstall_formatter() -> void:
 
 
 func reorder_code() -> bool:
+	if not is_formatter_available():
+		return false
 	if not EditorInterface.get_script_editor().is_visible_in_tree():
 		return false
 	var current_script := EditorInterface.get_script_editor().get_current_script()
@@ -426,14 +452,6 @@ func _on_menu_item_selected(command: String) -> void:
 			show_help()
 		_:
 			push_warning("Unsupported command sent from the menu: " + command)
-
-
-func has_command(command: String) -> bool:
-	if command.is_empty():
-		return false
-	var output: Array = []
-	var exit_code := OS.execute(command, ["--version"], output)
-	return exit_code == OK
 
 
 ## Reloads the code editor with new text while preserving editor state.
