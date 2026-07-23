@@ -20,7 +20,7 @@ const HELP_FORMATTER: &str = "\
 
 	Options:
 	  -c, --check                                Check if files are formatted, exit 1 if not
-	  -s, --safe                                 Safe mode: abort if formatting changes code meaning
+	      --verify-structure                     Verify formatted output has the same structure as the input
 	      --stdout                               Write to stdout instead of overwriting files
 	      --use-spaces                           Use spaces instead of tabs for indentation
 	      --indent-size <NUM>                    Spaces per indent level (default: 4)
@@ -79,9 +79,9 @@ pub enum Command {
         use_spaces: Option<bool>,
         /// Number of spaces to use for indentation.
         indent_size: Option<usize>,
-        /// If true, the formatter will re-parse the formatted code to ensure it
-        /// matches the original code semantics before writing it to files.
-        use_safe_mode: bool,
+        /// If true, the formatter will re-parse the formatted code and verify it
+        /// has the same structure as the original before writing it to files.
+        use_verify_structure: bool,
         /// If true, the formatter will reorder code to follow the official
         /// GDScript style guide's recommended order of code elements.
         do_reorder_code: bool,
@@ -128,7 +128,8 @@ pub fn parse_args() -> CliArguments {
     let mut format_do_check_formatted_only = false;
     let mut format_use_spaces: Option<bool> = None;
     let mut format_indent_size: Option<usize> = None;
-    let mut format_use_safe_mode = false;
+    let mut format_use_verify_structure = false;
+    let mut format_used_deprecated_safe_flag = false;
     let mut format_do_reorder_code = false;
     let mut format_max_line_length: Option<usize> = None;
     let mut format_blank_lines_around_definitions: Option<u16> = None;
@@ -191,9 +192,18 @@ pub fn parse_args() -> CliArguments {
                         require_no_value(assigned_value, "--use-spaces");
                         format_use_spaces = Some(true);
                     }
+                    "verify-structure" => {
+                        require_no_value(assigned_value, "--verify-structure");
+                        format_use_verify_structure = true;
+                    }
                     "safe" => {
+                        // DEPRECATED: We keep this flag for anyone who already
+                        // used it as part of a CI or of their workflow. But
+                        // it's now replaced by --verify-structure, which is a
+                        // more accurate name for this mode.
                         require_no_value(assigned_value, "--safe");
-                        format_use_safe_mode = true;
+                        format_use_verify_structure = true;
+                        format_used_deprecated_safe_flag = true;
                     }
                     "reorder-code" => {
                         require_no_value(assigned_value, "--reorder-code");
@@ -332,7 +342,8 @@ pub fn parse_args() -> CliArguments {
                         if matches!(active_command, ActiveCommand::Lint) {
                             print_error_invalid_argument("unexpected argument '-s'");
                         }
-                        format_use_safe_mode = true;
+                        format_use_verify_structure = true;
+                        format_used_deprecated_safe_flag = true;
                     }
                     _ => print_error_invalid_argument(&format!(
                         "unexpected argument '-{}'",
@@ -346,6 +357,12 @@ pub fn parse_args() -> CliArguments {
         current_argument_index += 1;
     }
 
+    if format_used_deprecated_safe_flag {
+        eprintln!(
+            "gdscript-formatter: warning: --safe is deprecated; use --verify-structure instead"
+        );
+    }
+
     match active_command {
         ActiveCommand::Format => CliArguments {
             input_file_paths,
@@ -354,7 +371,7 @@ pub fn parse_args() -> CliArguments {
                 do_check_formatted_only: format_do_check_formatted_only,
                 use_spaces: format_use_spaces,
                 indent_size: format_indent_size,
-                use_safe_mode: format_use_safe_mode,
+                use_verify_structure: format_use_verify_structure,
                 do_reorder_code: format_do_reorder_code,
                 max_line_length: format_max_line_length,
                 blank_lines_around_definitions: format_blank_lines_around_definitions,
