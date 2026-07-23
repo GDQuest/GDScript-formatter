@@ -383,6 +383,30 @@ func _get_binary_path() -> String:
 
 	return formatter_cache_dir.path_join(binary_name)
 
+func _parse_formatter_version(version: Array) -> String:
+	var version_raw: String = ""
+
+	for index in version.size():
+		version_raw += version[index]
+
+	if version_raw.begins_with(FORMATTER_BINARY_NAME):
+		version_raw = version_raw.trim_prefix(FORMATTER_BINARY_NAME)
+
+	return version_raw.strip_edges()
+
+func get_formatter_version():
+	var binary_path = _get_binary_path()
+
+	if not FileAccess.file_exists(binary_path):
+		return
+
+	var version_stdout: Array = []
+	var exit_code = OS.execute(binary_path, ["--version"], version_stdout)
+
+	if not exit_code == OK:
+		return
+
+	return _parse_formatter_version(version_stdout)
 
 func is_formatter_available() -> bool:
 	if _has_formatter_command:
