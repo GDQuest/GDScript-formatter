@@ -62,6 +62,8 @@ var _editorconfig_last_modified_time := -1
 # on save rule here so users can enable it selectively for specific folders.
 var _editorconfig_format_on_save_rules: Array[Dictionary] = []
 
+# Used to detect the formatter
+const FORMATTER_BINARY_NAME = "gdscript-formatter"
 
 func _init() -> void:
 	for setting: String in DEFAULT_SETTINGS.keys():
@@ -373,6 +375,14 @@ func has_command(command: String) -> bool:
 	var exit_code := OS.execute(command, ["--version"], output, true)
 	return exit_code == OK
 
+func _get_binary_path() -> String:
+	var binary_name := FORMATTER_BINARY_NAME
+
+	if OS.get_name().to_lower().contains("windows"):
+		binary_name = binary_name + ".exe"
+
+	return formatter_cache_dir.path_join(binary_name)
+
 
 func is_formatter_available() -> bool:
 	if _has_formatter_command:
@@ -382,18 +392,12 @@ func is_formatter_available() -> bool:
 
 
 func is_formatter_installed_locally() -> bool:
-	var binary_name := "gdscript-formatter"
-	if OS.get_name().to_lower().contains("windows"):
-		binary_name = "gdscript-formatter.exe"
-	var binary_path := formatter_cache_dir.path_join(binary_name)
+	var binary_path = _get_binary_path()
 	return FileAccess.file_exists(binary_path)
 
 
 func uninstall_formatter() -> void:
-	var binary_name := "gdscript-formatter"
-	if OS.get_name().to_lower().contains("windows"):
-		binary_name = "gdscript-formatter.exe"
-	var binary_path := formatter_cache_dir.path_join(binary_name)
+	var binary_path = _get_binary_path()
 
 	if FileAccess.file_exists(binary_path):
 		DirAccess.remove_absolute(binary_path)
