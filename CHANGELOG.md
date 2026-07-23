@@ -2,7 +2,7 @@
 
 This file documents the changes made to the formatter with each release.
 
-## Release 0.22.2 (2026-07-22)
+## Unrelease - 0.23.0
 
 ### Added
 
@@ -14,10 +14,15 @@ This file documents the changes made to the formatter with each release.
 
 ### Fixed
 
+- Fix type casts with type subscripts wrapping when placed at the end of long lines (e.g. `[long, array] as Array[SomeType]`)
+
+## Release 0.22.2 (2026-07-22)
+
+### Fixed
+
 - Fix long ternaries without pre-existing backslashes or delimiters formatting in a way that GDScript doesn't parse (the formatter will now add parentheses around the expression and indent it) (#293)
 - Fix non-parenthesized lambda can lead to a parse error when not parenthesized or followed by other arguments (#292)
 - Fix max_line_length in .editorconfig ignored when linting (#272)
-- Fix type casts with type subscripts wrapping when placed at the end of long lines (e.g. `[long, array] as Array[SomeType]`)
 
 
 ## Release 0.22.1 (2026-07-22)
