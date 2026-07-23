@@ -866,7 +866,7 @@ fn process_source(
     // pull code into or out of a # fmt: off disabled region. For now we
     // skip reordering for disabled regions, but in the future we may want
     // to reorder code around disabled regions as well?
-    if input.reorder_code {
+    if input.reorder_code && !input.has_parse_errors {
         if input.disabled_regions.is_empty() {
             process_source_reorder(input, node, render_elements);
             return;
@@ -896,6 +896,11 @@ fn process_source(
         };
 
         let kind = GDScriptNodeKind::get_kind_from_ast_node(child);
+        // Tree-sitter can recover from syntax errors by wrapping a declaration
+        // in an ERROR node. Formatting inside that subtree would rely on AST
+        // relationships that may no longer describe the source. Keep the
+        // malformed declaration intact while formatting its valid siblings.
+        let contains_parse_error = input.has_parse_errors && child.has_error();
 
         // This code is similar to the one in process_body(). See comments
         // there for some explanation of what this does and why it's needed.
@@ -928,7 +933,16 @@ fn process_source(
                 continue;
             }
             DisabledRegionOverlapKind::PartiallyCovered => {
-                process_node(input, child, render_elements);
+                if contains_parse_error {
+                    render_elements.push(RenderElement::UnformattedSource {
+                        range: RangeSourceBytes {
+                            start_byte: child.start_byte(),
+                            end_byte: child.end_byte(),
+                        },
+                    });
+                } else {
+                    process_node(input, child, render_elements);
+                }
                 spacing_context.last_output_end = Some(child.end_byte());
                 spacing_context.last_declaration_end = Some(child.end_byte());
                 spacing_context.last_declaration_kind = Some(kind);
@@ -970,7 +984,16 @@ fn process_source(
             &spacing_context,
             child,
         );
-        process_node(input, child, render_elements);
+        if contains_parse_error {
+            render_elements.push(RenderElement::UnformattedSource {
+                range: RangeSourceBytes {
+                    start_byte: child.start_byte(),
+                    end_byte: child.end_byte(),
+                },
+            });
+        } else {
+            process_node(input, child, render_elements);
+        }
         spacing_context.last_output_end = Some(child.end_byte());
         spacing_context.last_declaration_end = Some(child.end_byte());
         spacing_context.last_declaration_kind = Some(kind);

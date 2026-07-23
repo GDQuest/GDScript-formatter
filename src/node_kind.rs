@@ -193,10 +193,21 @@ impl GDScriptNodeKind {
     /// `populate_lookup_table` first.
     #[inline]
     pub fn get_kind_from_ast_node(node: tree_sitter::Node) -> Self {
+        // Tree-sitter uses u16::MAX for synthetic ERROR nodes. They are not
+        // grammar symbols, so they cannot be represented in the lookup table.
+        if node.is_error() {
+            return GDScriptNodeKind::Error;
+        }
+
+        let node_kind_id = node.kind_id() as usize;
+        if node_kind_id >= LOOKUP_TABLE_SIZE {
+            return GDScriptNodeKind::Other;
+        }
+
         LOOKUP_TABLE
             .get()
             .expect("populate_lookup_table must be called before get_kind_from_ast_node")
-            [node.kind_id() as usize]
+            [node_kind_id]
     }
 }
 

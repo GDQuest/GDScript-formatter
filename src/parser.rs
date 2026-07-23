@@ -11,6 +11,7 @@ pub struct ParseInput<'src> {
     pub source: &'src str,
     pub tree: tree_sitter::Tree,
     pub kind_lookup: &'static [GDScriptNodeKind; 256],
+    pub has_parse_errors: bool,
     pub reorder_code: bool,
     pub blank_lines_around_definitions: u16,
     /// Extra indent level for continuation lines (default 2).
@@ -235,11 +236,13 @@ impl<'src> ParseInput<'src> {
             .expect("tree_sitter_gdscript::LANGUAGE is a build-time invariant");
         let tree = parser.parse(source.as_bytes(), None)?;
         let kind_lookup = GDScriptNodeKind::populate_lookup_table();
+        let has_parse_errors = tree.root_node().has_error();
         let disabled_regions = find_disabled_regions(source);
         Some(Self {
             source,
             tree,
             kind_lookup,
+            has_parse_errors,
             reorder_code: config.reorder_code,
             blank_lines_around_definitions: config.blank_lines_around_definitions,
             continuation_indent_level: config.printer.continuation_indent_level,

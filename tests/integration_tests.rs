@@ -195,6 +195,19 @@ lines"""
 }
 
 #[test]
+fn parse_errors_disable_reordering_without_disabling_formatting() {
+    let input = "var b=1\nvar name.bla = value\nvar a=2\n";
+    let config = FormatterConfiguration {
+        reorder_code: true,
+        ..Default::default()
+    };
+
+    let output = format_gdscript(input, &config).unwrap();
+
+    assert_eq!(output, "var b = 1\nvar name.bla = value\nvar a = 2\n");
+}
+
+#[test]
 fn generic_type_parameters_never_break() {
     // Type-level generic parameters like Dictionary[String, String] must
     // stay on one line even when max_line_length would otherwise force a

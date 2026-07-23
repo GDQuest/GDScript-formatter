@@ -39,11 +39,13 @@ fn test_ir_format_file(file_path: &std::path::Path) {
     let mut output = String::new();
     render(&render_elements, &input, &config, &mut output);
 
-    assert_reparses_cleanly(
-        &output,
-        file_path,
-        "formatted output does not parse cleanly",
-    );
+    if !parsed.has_parse_errors {
+        assert_reparses_cleanly(
+            &output,
+            file_path,
+            "formatted output does not parse cleanly",
+        );
+    }
 
     assert_idempotent(
         &input,
