@@ -296,13 +296,32 @@ fn process_node(
             //     (identifier)))          ; String
             // ```
             //
-            // Which is why we walk up the AST to check if we are inside a `type` node.
-            let mut is_type_with_subscript = false;
+            // Which is why we walk up the AST to check if we are inside a
+            // `type` node.
+            //
+            // Note: Type hints have a `type` ancestor, while when doing type
+            // casts (a as b), they're parsed as the right side of a binary
+            // operator with an `as` token.
+            let mut is_type_subscript = false;
             let mut ancestor = node.parent();
             while let Some(current) = ancestor {
                 let current_kind = GDScriptNodeKind::get_kind_from_ast_node(current);
                 if current_kind == GDScriptNodeKind::Type {
-                    is_type_with_subscript = true;
+                    is_type_subscript = true;
+                    break;
+                }
+                if current_kind == GDScriptNodeKind::BinaryOperator {
+                    let mut child_index = 0;
+                    while child_index < current.child_count() {
+                        if current
+                            .child(child_index as u32)
+                            .is_some_and(|child| child.kind() == "as")
+                        {
+                            is_type_subscript = true;
+                            break;
+                        }
+                        child_index += 1;
+                    }
                     break;
                 }
                 if current_kind != GDScriptNodeKind::Subscript
@@ -312,7 +331,7 @@ fn process_node(
                 }
                 ancestor = current.parent();
             }
-            if is_type_with_subscript {
+            if is_type_subscript {
                 process_children_with_spacing(input, node, render_elements);
             } else {
                 process_container(input, node, render_elements);
