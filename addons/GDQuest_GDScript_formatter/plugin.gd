@@ -408,6 +408,20 @@ func get_formatter_version():
 
 	return _parse_formatter_version(version_stdout)
 
+func get_addon_version():
+	var menu = FormatterMenu.new()
+	print(menu.get_path())
+
+	var plugin_config = ConfigFile.new()
+	var config_loaded = plugin_config.load(get_script().resource_path.get_base_dir() + "/plugin.cfg")
+
+	if not config_loaded == OK:
+		push_error("Unable to load plugin config")
+
+		return
+
+	return plugin_config.get_value("plugin", "version")
+
 func is_formatter_available() -> bool:
 	if _has_formatter_command:
 		return true
