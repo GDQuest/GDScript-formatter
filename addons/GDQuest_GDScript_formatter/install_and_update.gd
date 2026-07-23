@@ -8,7 +8,6 @@ enum HttpRequestState {
 }
 
 const URL_GITHUB_API_LATEST_RELEASE = "https://api.github.com/repos/gdquest/GDScript-formatter/releases/latest"
-
 signal installation_completed(binary_path: String)
 signal installation_failed(error_message: String)
 
@@ -228,6 +227,20 @@ func _download_and_install_binary(zip_data: PackedByteArray, platform_info: Dict
 	file.close()
 
 	if not OS.get_name().to_lower().contains("windows"):
-		OS.execute("chmod", ["+x", binary_path])
+		# This should be equivalent to setting the binary to permissions 755
+		const UNIX_EXECUTABLE_PERMISSIONS = (
+			FileAccess.UNIX_READ_OWNER
+			| FileAccess.UNIX_WRITE_OWNER
+			| FileAccess.UNIX_EXECUTE_OWNER
+			| FileAccess.UNIX_READ_GROUP
+			| FileAccess.UNIX_EXECUTE_GROUP
+			| FileAccess.UNIX_READ_OTHER
+			| FileAccess.UNIX_EXECUTE_OTHER
+		)
+		var permissions_error := FileAccess.set_unix_permissions(binary_path, UNIX_EXECUTABLE_PERMISSIONS)
+		if permissions_error != OK:
+			push_error("Failed to make formatter executable: ", binary_path)
+			DirAccess.remove_absolute(binary_path)
+			return ""
 
 	return binary_path

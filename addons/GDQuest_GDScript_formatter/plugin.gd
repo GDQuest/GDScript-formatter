@@ -90,7 +90,10 @@ func _enter_tree() -> void:
 	installer.installation_completed.connect(
 		func _on_installation_completed(binary_path: String) -> void:
 			set_editor_setting(SETTING_FORMATTER_PATH, binary_path)
-			_has_formatter_command = true
+			_has_formatter_command = has_command(binary_path)
+			if not _has_formatter_command:
+				push_error("GDScript Formatter: Installed binary cannot be executed: " + binary_path)
+				return
 			add_format_command()
 			add_lint_command()
 			# After installing the formatter we can add the menu option to show the uninstall command
@@ -367,7 +370,7 @@ func has_command(command: String) -> bool:
 	if command.is_empty():
 		return false
 	var output: Array = []
-	var exit_code := OS.execute(command, ["--version"], output)
+	var exit_code := OS.execute(command, ["--version"], output, true)
 	return exit_code == OK
 
 
@@ -629,6 +632,7 @@ func format_code(script: GDScript, force_reorder := false, source_content: Varia
 		get_editor_setting(SETTING_FORMATTER_PATH),
 		formatter_arguments,
 		output,
+		true,
 	)
 
 	var formatted_content := ""
