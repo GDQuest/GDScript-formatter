@@ -64,10 +64,10 @@ You can also pass multiple files or folders:
 gdscript-formatter path/to/file.gd path/to/folder
 ```
 
-Use the `--safe` flag to add a safety check that prevents overwriting files if the formatter makes unwanted changes (any change that would modify the code meaning, like removing a piece of functional code). This is most useful when formatting many files at once, running the formatter from a script or in continuous integration, or when you use a development version of the formatter:
+Use the `--verify-structure` flag to reparse the formatted output and reject it if its structure differs from the input. This is an imperfect check, not a guarantee that formatting is safe or semantically equivalent. It is most useful when formatting many files at once, running the formatter from a script or in continuous integration, or when you do not regularly use version control:
 
 ```bash
-gdscript-formatter --safe path/to/folder
+gdscript-formatter --verify-structure path/to/folder
 ```
 
 Format with check mode, to use in a build system (exit code 1 if changes needed):

@@ -16,6 +16,7 @@ const SETTING_FORMAT_ON_SAVE = "format_on_save"
 const SETTING_SHORTCUT = "shortcut"
 const SETTING_USE_SPACES = "use_spaces"
 const SETTING_INDENT_SIZE = "indent_size"
+const SETTING_FORMAT_MODE = "format_mode"
 const SETTING_REORDER_CODE = "reorder_code"
 const SETTING_SAFE_MODE = "safe_mode"
 const SETTING_FORMATTER_PATH = "formatter_path"
@@ -24,6 +25,30 @@ const SETTING_LINT_LINE_LENGTH = "lint_line_length"
 const SETTING_LINT_IGNORED_RULES = "lint_ignored_rules"
 # Directories to ignore when Format on Save is enabled
 const SETTING_IGNORED_DIRECTORIES = "format_on_save_ignored_directories"
+
+## Represents the modes the user wants to use by default, notably when running
+## the formatter on save.
+enum FormatMode {
+	NORMAL,
+	## Reorder the code according to the official style guide every time the
+	## formatter runs. Note that without this option, you can still reorder any
+	## time from the format menu in the script editor.
+	REORDER_CODE,
+	## Reparse the formatted code and compare its structure with the original.
+	##
+	## [b]WARNING:[/b] this is an imperfect check. It does not guarantee that
+	## formatting is 100% safe or semantically equivalent. We always recommend
+	## using a version control system when running the formatter.
+	##
+	## This is an option used notably for development of the formatter, when
+	## testing it on new codebases, to quickly catch bugs on unsupported
+	## GDScript syntax.
+	##
+	## When using the formatter normally on individual scripts, you can always
+	## undo after formatting or use a version control system to track, review,
+	## and undo changes.
+	VERIFY_STRUCTURE,
+}
 
 const COMMAND_PALETTE_CATEGORY = "gdquest gdscript formatter/"
 const COMMAND_PALETTE_FORMAT_SCRIPT = "Format GDScript"
@@ -36,8 +61,7 @@ var DEFAULT_SETTINGS = {
 	SETTING_FORMAT_ON_SAVE: false,
 	SETTING_USE_SPACES: false,
 	SETTING_INDENT_SIZE: 4,
-	SETTING_REORDER_CODE: false,
-	SETTING_SAFE_MODE: true,
+	SETTING_FORMAT_MODE: FormatMode.NORMAL,
 	SETTING_FORMATTER_PATH: "",
 	SETTING_LINT_ON_SAVE: false,
 	SETTING_LINT_LINE_LENGTH: 100,
@@ -56,6 +80,9 @@ var formatter_cache_dir: String
 var menu: FormatterMenu = null
 var _has_uninstall_command := false
 var _has_formatter_command := false
+var _has_format_command := false
+var _has_lint_command := false
+var _already_warned_about_reorder_on_save := false
 # Used to auto detect changes to the project's .editorconfig file.
 var _editorconfig_last_modified_time := -1
 # Editorconfig allows setting rules per path glob. We track globs for the format
@@ -64,7 +91,14 @@ var _editorconfig_format_on_save_rules: Array[Dictionary] = []
 
 
 func _init() -> void:
+	migrate_format_mode_setting()
+	if not has_editor_setting(SETTING_FORMAT_MODE):
+		set_editor_setting(SETTING_FORMAT_MODE, DEFAULT_SETTINGS[SETTING_FORMAT_MODE])
+	register_format_mode_setting()
+
 	for setting: String in DEFAULT_SETTINGS.keys():
+		if setting == SETTING_FORMAT_MODE:
+			continue
 		if not has_editor_setting(setting):
 			set_editor_setting(setting, DEFAULT_SETTINGS[setting])
 
@@ -81,6 +115,42 @@ func _init() -> void:
 		shortcut.events.push_back(default_shortcut)
 
 		set_editor_setting(SETTING_SHORTCUT, shortcut)
+
+
+func register_format_mode_setting() -> void:
+	var editor_settings := EditorInterface.get_editor_settings()
+	var setting_name := EDITOR_SETTINGS_CATEGORY + SETTING_FORMAT_MODE
+	editor_settings.add_property_info({
+		"name": setting_name,
+		"type": TYPE_INT,
+		"hint": PROPERTY_HINT_ENUM,
+		"hint_string": "Normal,Reorder code,Verify structure",
+	})
+	editor_settings.set_initial_value(setting_name, DEFAULT_SETTINGS[SETTING_FORMAT_MODE], false)
+
+
+## Converts the old independent settings to the mutually exclusive format mode.
+## The legacy safe mode takes priority because it is the least destructive option.
+func migrate_format_mode_setting() -> void:
+	if has_editor_setting(SETTING_FORMAT_MODE):
+		return
+	var has_legacy_settings := has_editor_setting(SETTING_REORDER_CODE) or has_editor_setting(SETTING_SAFE_MODE)
+	if not has_legacy_settings:
+		return
+
+	var format_mode := FormatMode.NORMAL
+	if has_editor_setting(SETTING_SAFE_MODE) and get_editor_setting(SETTING_SAFE_MODE) as bool:
+		format_mode = FormatMode.VERIFY_STRUCTURE
+	elif has_editor_setting(SETTING_REORDER_CODE) and get_editor_setting(SETTING_REORDER_CODE) as bool:
+		format_mode = FormatMode.REORDER_CODE
+
+	set_editor_setting(SETTING_FORMAT_MODE, format_mode)
+
+	# Remove the old settings so users do not see two conflicting configurations.
+	var editor_settings := EditorInterface.get_editor_settings()
+	for setting_name: String in [SETTING_REORDER_CODE, SETTING_SAFE_MODE]:
+		if has_editor_setting(setting_name):
+			editor_settings.erase(EDITOR_SETTINGS_CATEGORY + setting_name)
 
 
 func _enter_tree() -> void:
@@ -219,6 +289,9 @@ func _on_resource_saved(saved_resource: Resource) -> void:
 	if editorconfig_format_on_save != null:
 		do_format_on_save = editorconfig_format_on_save as bool
 	var lint_on_save := get_editor_setting(SETTING_LINT_ON_SAVE) as bool
+	if do_format_on_save and get_format_mode() == FormatMode.REORDER_CODE and not _already_warned_about_reorder_on_save:
+		push_warning("GDScript Formatter: Reorder code is enabled for format on save. It is usually better used manually.")
+		_already_warned_about_reorder_on_save = true
 
 	if not do_format_on_save and not lint_on_save:
 		return
@@ -286,6 +359,8 @@ func _on_resource_saved(saved_resource: Resource) -> void:
 
 
 func add_format_command() -> void:
+	if _has_format_command:
+		return
 	var formatter_path := get_editor_setting(SETTING_FORMATTER_PATH) as String
 	if formatter_path.is_empty() or not _has_formatter_command:
 		if not formatter_path.is_empty():
@@ -302,14 +377,18 @@ func add_format_command() -> void:
 		format_current_script,
 		shortcut.get_as_text() if is_instance_valid(shortcut) else "None",
 	)
+	_has_format_command = true
 
 
 func remove_format_command() -> void:
+	if not _has_format_command:
+		return
 	EditorInterface.get_command_palette().remove_command(COMMAND_PALETTE_CATEGORY + COMMAND_PALETTE_FORMAT_SCRIPT)
+	_has_format_command = false
 
 
 func add_lint_command() -> void:
-	if not _has_formatter_command:
+	if not _has_formatter_command or _has_lint_command:
 		return
 
 	EditorInterface.get_command_palette().add_command(
@@ -317,12 +396,16 @@ func add_lint_command() -> void:
 		COMMAND_PALETTE_CATEGORY + COMMAND_PALETTE_LINT_SCRIPT,
 		lint_current_script,
 	)
+	_has_lint_command = true
 
 
 func remove_lint_command() -> void:
+	if not _has_lint_command:
+		return
 	EditorInterface.get_command_palette().remove_command(
 		COMMAND_PALETTE_CATEGORY + COMMAND_PALETTE_LINT_SCRIPT,
 	)
+	_has_lint_command = false
 
 
 func add_install_update_command() -> void:
@@ -402,6 +485,7 @@ func uninstall_formatter() -> void:
 		_has_formatter_command = false
 
 		remove_format_command()
+		remove_lint_command()
 		add_format_command()
 		remove_uninstall_command()
 		add_uninstall_command()
@@ -617,13 +701,14 @@ func format_code(script: GDScript, force_reorder := false, source_content: Varia
 		formatter_arguments.push_back("--use-spaces")
 		formatter_arguments.push_back("--indent-size=%d" % get_editor_setting(SETTING_INDENT_SIZE))
 
-	var should_reorder := force_reorder or get_editor_setting(SETTING_REORDER_CODE) as bool
+	var format_mode := get_format_mode()
+	var should_reorder := force_reorder or format_mode == FormatMode.REORDER_CODE
 
 	if should_reorder:
 		formatter_arguments.push_back("--reorder-code")
 
-	if get_editor_setting(SETTING_SAFE_MODE):
-		formatter_arguments.push_back("--safe")
+	if not force_reorder and format_mode == FormatMode.VERIFY_STRUCTURE:
+		formatter_arguments.push_back("--verify-structure")
 
 	formatter_arguments.push_back(path_temporary_file)
 
@@ -655,6 +740,10 @@ func format_code(script: GDScript, force_reorder := false, source_content: Varia
 		DirAccess.remove_absolute(path_temporary_file)
 
 	return formatted_content
+
+
+func get_format_mode() -> int:
+	return get_editor_setting(SETTING_FORMAT_MODE) as int
 
 
 ## Lints a GDScript file using the GDScript Formatter's linter,

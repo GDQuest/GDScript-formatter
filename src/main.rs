@@ -109,7 +109,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         do_check_formatted_only,
         use_spaces,
         indent_size,
-        use_safe_mode,
+        use_verify_structure,
         do_reorder_code,
         max_line_length,
         blank_lines_around_definitions,
@@ -121,7 +121,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let mut config = FormatterConfiguration {
-        safe: use_safe_mode,
+        safe: use_verify_structure,
         reorder_code: do_reorder_code,
         ..Default::default()
     };
