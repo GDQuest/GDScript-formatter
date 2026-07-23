@@ -1690,19 +1690,8 @@ fn process_container(
         render_elements.push(RenderElement::TextStatic(","));
     }
 
-    if (contains_more_than_one_element || is_non_empty_enum || is_single_lambda || contains_lambda)
-        && let Some(open) = node.child(0)
-    {
-        let close_byte = node
-            .child((child_count - 1) as u32)
-            .expect("container node has close delimiter")
-            .start_byte();
-        if is_non_empty_enum
-            || contains_lambda
-            || has_newline(input.source, open.end_byte(), close_byte)
-        {
-            render_elements.push(RenderElement::ForceBreakingParent);
-        }
+    if is_non_empty_enum || contains_lambda {
+        render_elements.push(RenderElement::ForceBreakingParent);
     }
 
     finish_indent(render_elements, indent_index);

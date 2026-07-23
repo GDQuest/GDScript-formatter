@@ -73,6 +73,13 @@ func test():
 	print("test", "test",)
 
 
+func test_axis():
+	direction.y = Input.get_axis(
+		"move_up",
+		"move_down",
+	)
+
+
 # Preload does not support trailing commas, multiline formatting should not add it
 const MAIN_MUSIC: AudioStream = preload(
 	"res://assets/audio/a_very_long_filename_that_honestly_could_be_a_lot_shorter.mp3")

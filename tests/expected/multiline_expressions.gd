@@ -30,10 +30,7 @@ func foo():
 	var pitch_input = (
 		Input.get_axis("ui_up", "ui_down")
 		if invert_pitch
-		else Input.get_axis(
-			"ui_down",
-			"ui_up",
-		)
+		else Input.get_axis("ui_down", "ui_up")
 	)
 
 	var position = Vector2(250, 350)
@@ -44,15 +41,6 @@ func foo():
 		pass
 
 	var a = (1 + 2)
-
-	var a = [
-		1,
-		[
-			1,
-			2,
-		],
-		2,
-	]
 
 	var sum = (1 + 2)
 
