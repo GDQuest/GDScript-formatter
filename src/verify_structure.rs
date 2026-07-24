@@ -13,16 +13,16 @@
 //! positives. These are:
 //!
 //! 1. Annotation merge: `@export\nvar x = 1` (annotation sibling + variable
-//! sibling) may become `@export var x = 1` (single variable_statement with
-//! annotations child inside), or vice versa.
+//!    sibling) may become `@export var x = 1` (single variable_statement with
+//!    annotations child inside), or vice versa.
 //!
 //! 2. Splitting statements. E.g., `class_name Foo extends Bar`
-//! (class_name_statement with inline extends child) becomes `class_name
-//! Foo\nextends Bar` (two siblings).
+//!    (class_name_statement with inline extends child) becomes `class_name
+//!    Foo\nextends Bar` (two siblings).
 //!
 //! 3. Wrapping expressions: the formatter may add parentheses around a long
-//! expression so it can wrap safely. Parenthesized expressions are ignored and
-//! normalized to their inner expression before checking.
+//!    expression so it can wrap safely. Parenthesized expressions are ignored and
+//!    normalized to their inner expression before checking.
 //!
 //! We normalize ASTs recursively checking for these things before comparing
 //! them (i.e. verify that node kind + children match).
