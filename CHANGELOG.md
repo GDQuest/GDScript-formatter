@@ -2,7 +2,7 @@
 
 This file documents the changes made to the formatter with each release.
 
-## Unrelease - 0.23.0
+## Unreleased - 0.23.0
 
 ### Added
 
@@ -15,6 +15,7 @@ This file documents the changes made to the formatter with each release.
 ### Fixed
 
 - Fix type casts with type subscripts wrapping when placed at the end of long lines (e.g. `[long, array] as Array[SomeType]`)
+- Fix icon annotation being reordered below class_name when extends was before class_name (#295)
 
 ## Release 0.22.2 (2026-07-22)
 

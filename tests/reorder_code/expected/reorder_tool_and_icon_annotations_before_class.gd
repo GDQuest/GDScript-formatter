@@ -1,4 +1,5 @@
 @tool
+@icon('res://addons/at-icons/node2d/comet.svg')
 class_name Test
 extends RefCounted
 

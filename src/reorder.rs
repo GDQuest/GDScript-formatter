@@ -145,10 +145,10 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
         if kind == GDScriptNodeKind::Comment || kind == GDScriptNodeKind::RegionStart {
             is_child_attached_to_declaration[child_index] = true;
         } else if kind == GDScriptNodeKind::Annotation {
-            // Make sure to keep tool at the top of the script, above class_name
-            // and extends. Otherwise it's a syntax error.
+            // Make sure to keep tool and icon at the top of the script, above
+            // class_name and extends. Otherwise it's a syntax error.
             let annotation_name = get_node_text(child, content);
-            if annotation_name.starts_with("@tool") {
+            if annotation_name.starts_with("@tool") || annotation_name.starts_with("@icon") {
                 items.push(ReorderItem {
                     child_index,
                     sub_child: None,
