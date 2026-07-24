@@ -129,7 +129,6 @@ pub fn parse_args() -> CliArguments {
     let mut format_use_spaces: Option<bool> = None;
     let mut format_indent_size: Option<usize> = None;
     let mut format_use_verify_structure = false;
-    let mut format_used_deprecated_safe_flag = false;
     let mut format_do_reorder_code = false;
     let mut format_max_line_length: Option<usize> = None;
     let mut format_blank_lines_around_definitions: Option<u16> = None;
@@ -203,7 +202,6 @@ pub fn parse_args() -> CliArguments {
                         // more accurate name for this mode.
                         require_no_value(assigned_value, "--safe");
                         format_use_verify_structure = true;
-                        format_used_deprecated_safe_flag = true;
                     }
                     "reorder-code" => {
                         require_no_value(assigned_value, "--reorder-code");
@@ -343,7 +341,6 @@ pub fn parse_args() -> CliArguments {
                             print_error_invalid_argument("unexpected argument '-s'");
                         }
                         format_use_verify_structure = true;
-                        format_used_deprecated_safe_flag = true;
                     }
                     _ => print_error_invalid_argument(&format!(
                         "unexpected argument '-{}'",
@@ -355,12 +352,6 @@ pub fn parse_args() -> CliArguments {
             input_file_paths.push(PathBuf::from(current_argument));
         }
         current_argument_index += 1;
-    }
-
-    if format_used_deprecated_safe_flag {
-        eprintln!(
-            "gdscript-formatter: warning: --safe is deprecated; use --verify-structure instead"
-        );
     }
 
     match active_command {
