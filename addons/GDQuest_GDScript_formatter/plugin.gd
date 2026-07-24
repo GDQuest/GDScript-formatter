@@ -134,23 +134,32 @@ func register_format_mode_setting() -> void:
 func migrate_format_mode_setting() -> void:
 	if has_editor_setting(SETTING_FORMAT_MODE):
 		return
-	var has_legacy_settings := has_editor_setting(SETTING_REORDER_CODE) or has_editor_setting(SETTING_SAFE_MODE)
-	if not has_legacy_settings:
-		return
 
-	var format_mode := FormatMode.NORMAL
-	if has_editor_setting(SETTING_SAFE_MODE) and get_editor_setting(SETTING_SAFE_MODE) as bool:
-		format_mode = FormatMode.VERIFY_STRUCTURE
-	elif has_editor_setting(SETTING_REORDER_CODE) and get_editor_setting(SETTING_REORDER_CODE) as bool:
-		format_mode = FormatMode.REORDER_CODE
+	# Inferring a version number from the old settings; editor settings does not
+	# give us a neat way to version our settings so we do it manually. It's just
+	# to keep track of migrations.
+	var version := -1
+	if has_editor_setting(SETTING_REORDER_CODE) or has_editor_setting(SETTING_SAFE_MODE):
+		version = 1
 
-	set_editor_setting(SETTING_FORMAT_MODE, format_mode)
+	# Upgrade to version 2; that's when we merged safe mode and reorder code
+	# into a single format mode (because they're mutually exclusive).
+	if version == 1:
+		var format_mode := FormatMode.NORMAL
+		if has_editor_setting(SETTING_SAFE_MODE) and get_editor_setting(SETTING_SAFE_MODE) as bool:
+			format_mode = FormatMode.VERIFY_STRUCTURE
+		elif has_editor_setting(SETTING_REORDER_CODE) and get_editor_setting(SETTING_REORDER_CODE) as bool:
+			format_mode = FormatMode.REORDER_CODE
 
-	# Remove the old settings so users do not see two conflicting configurations.
-	var editor_settings := EditorInterface.get_editor_settings()
-	for setting_name: String in [SETTING_REORDER_CODE, SETTING_SAFE_MODE]:
-		if has_editor_setting(setting_name):
-			editor_settings.erase(EDITOR_SETTINGS_CATEGORY + setting_name)
+		set_editor_setting(SETTING_FORMAT_MODE, format_mode)
+
+		# Remove the old settings so users do not see two conflicting configurations.
+		var editor_settings := EditorInterface.get_editor_settings()
+		for setting_name: String in [SETTING_REORDER_CODE, SETTING_SAFE_MODE]:
+			if has_editor_setting(setting_name):
+				editor_settings.erase(EDITOR_SETTINGS_CATEGORY + setting_name)
+
+		version = 2
 
 
 func _enter_tree() -> void:
