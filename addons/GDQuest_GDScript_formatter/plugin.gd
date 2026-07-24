@@ -10,6 +10,7 @@ extends EditorPlugin
 
 const FormatterInstaller = preload("install_and_update.gd")
 const FormatterMenu = preload("menu.gd")
+const GreeterPanel = preload("editor/greeter.tscn")
 
 const EDITOR_SETTINGS_CATEGORY = "gdquest_gdscript_formatter/"
 const SETTING_FORMAT_ON_SAVE = "format_on_save"
@@ -121,6 +122,20 @@ func _enter_tree() -> void:
 
 	update_shortcut()
 	resource_saved.connect(_on_resource_saved)
+	
+	_show_greeter()
+	
+
+func _show_greeter() -> void:
+	var greeter_panel = GreeterPanel.instantiate() as Greeter
+	var addon_version = get_addon_version()
+	var formatter_version = get_formatter_version()
+	
+	add_child(greeter_panel)
+	
+	greeter_panel.popup_centered()
+	greeter_panel.set_addon_version(addon_version)
+	greeter_panel.set_formatter_version(formatter_version)
 
 
 func _exit_tree() -> void:
