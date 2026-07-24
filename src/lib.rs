@@ -21,7 +21,7 @@ pub mod node_kind;
 pub mod parser;
 pub mod renderer;
 pub mod reorder;
-pub mod safe_mode;
+pub mod verify_structure;
 
 pub use renderer::{PrinterConfiguration, RenderElement};
 
@@ -115,7 +115,11 @@ pub fn format_gdscript_with_buffers(
     if config.safe {
         let reparsed = parser::ParseInput::new(output, config)
             .ok_or_else(|| "Verify structure: formatted output does not parse".to_string())?;
-        if !safe_mode::trees_structurally_equal(&parsed.tree, &reparsed.tree, parsed.kind_lookup) {
+        if !verify_structure::trees_structurally_equal(
+            &parsed.tree,
+            &reparsed.tree,
+            parsed.kind_lookup,
+        ) {
             return Err(
                 "Verify structure: formatted output is structurally different from input. \
                  Keeping original source."
