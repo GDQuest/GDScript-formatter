@@ -708,7 +708,10 @@ func format_code(script: GDScript, force_reorder := false, source_content: Varia
 		formatter_arguments.push_back("--reorder-code")
 
 	if not force_reorder and format_mode == FormatMode.VERIFY_STRUCTURE:
-		formatter_arguments.push_back("--verify-structure")
+		# NB: this is a deprecated flag, replaced with --verify-structure, but
+		# we keep it here for users that have a previous version of the
+		# formatter installed.
+		formatter_arguments.push_back("--safe")
 
 	formatter_arguments.push_back(path_temporary_file)
 
