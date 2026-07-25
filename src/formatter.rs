@@ -2657,7 +2657,12 @@ fn process_method_call_arguments(
         } else if has_lambda_argument {
             process_node(input, args, render_elements);
         } else {
+            // Prevent a multiline argument list from forcing the surrounding
+            // method call chain to use explicit line continuations (trailing
+            // "\").
+            let group_index = begin_group_until_first_line_break(render_elements);
             process_method_arguments_flat(input, args, render_elements);
+            finish_group(render_elements, group_index);
         }
     }
 }
