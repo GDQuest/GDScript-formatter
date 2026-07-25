@@ -2,7 +2,7 @@
 
 This file documents the changes made to the formatter with each release.
 
-## Unreleased 0.24.0
+## Release 0.24.0 (2026-07-25)
 
 ### Added
 
@@ -12,6 +12,8 @@ This file documents the changes made to the formatter with each release.
 
 - Fixed edge case when a lambda is at the end of an argument list and ends with a match statement, causing the formatter to insert a trailing comma (#301)
 - Fixed a case of a long function definition that would not wrap on multiple lines despite being a little over 100 characters (#300)
+- Fixed a multiline argument in a function call that's not at the end of a chain of function calls forcing explicit line continuations for the rest of the chain (#298)
+
 
 ## Release 0.23.0 (2026-07-24)
 
