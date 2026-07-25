@@ -86,6 +86,10 @@ func _init() -> void:
 		set_editor_setting(SETTING_SHORTCUT, shortcut)
 
 
+func _enable_plugin() -> void:
+	_show_greeter()
+
+
 func _enter_tree() -> void:
 	formatter_cache_dir = EditorInterface.get_editor_paths().get_cache_dir().path_join("gdquest")
 	installer = FormatterInstaller.new(formatter_cache_dir)
@@ -122,8 +126,6 @@ func _enter_tree() -> void:
 
 	update_shortcut()
 	resource_saved.connect(_on_resource_saved)
-	
-	_show_greeter()
 	
 
 func _show_greeter() -> void:
