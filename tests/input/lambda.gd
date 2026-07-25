@@ -63,3 +63,10 @@ func issue_301() -> void:
 			_:
 				return true
 	)
+
+
+# Verifies that this function wraps. In a previous release, the return type
+# would not be accounted for in the width calculation, so the parameter list
+# would stay on a single line.
+func issue_300(open_xr_analog_threshold_modifier_long: OpenXRAnalogThresholdModifier, other_type: Test) -> void:
+	pass

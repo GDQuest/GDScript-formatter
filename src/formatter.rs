@@ -341,6 +341,7 @@ fn process_node(
             process_body(input, node, render_elements)
         }
         GDScriptNodeKind::Lambda => process_lambda(input, node, render_elements),
+        GDScriptNodeKind::Function => process_function(input, node, render_elements),
         GDScriptNodeKind::SetGet => process_setget(input, node, render_elements),
         GDScriptNodeKind::ParenthesizedExpression => {
             process_parenthesized_expression(input, node, render_elements)
@@ -350,6 +351,70 @@ fn process_node(
         GDScriptNodeKind::Attribute => process_attribute(input, node, render_elements),
         _ => process_children_with_spacing(input, node, render_elements),
     }
+}
+
+/// Groups a function header (the declaration line/first line) separately from
+/// its body so the complete header, including the return type, is treated as
+/// one unit when deciding whether parameters need to be wrapped onto multiple
+/// lines.
+fn process_function(
+    input: &ParseInput,
+    node: tree_sitter::Node,
+    render_elements: &mut Vec<RenderElement>,
+) {
+    let mut has_disabled_region = false;
+    let mut region_index = 0;
+    while region_index < input.disabled_regions.len() {
+        let region = input.disabled_regions[region_index];
+        if region.start < node.end_byte() && region.end > node.start_byte() {
+            has_disabled_region = true;
+            break;
+        }
+        region_index += 1;
+    }
+    // Disabled regions (fmt: off / fmt: on comment pairs) can overlap a
+    // function anywhere, so they can be anywhere in the middle of the function
+    // AST. If we encounter one we fall back to the generic formatter, which
+    // handles disabled regions correctly.
+    if has_disabled_region {
+        process_children_with_spacing(input, node, render_elements);
+        return;
+    }
+
+    let group_index = begin_group(render_elements);
+    let mut previous: Option<tree_sitter::Node> = None;
+    let mut child_index = 0;
+    while child_index < node.child_count() {
+        if let Some(child) = node.child(child_index as u32) {
+            let child_kind = GDScriptNodeKind::get_kind_from_ast_node(child);
+            if child_kind == GDScriptNodeKind::Body {
+                finish_group(render_elements, group_index);
+                if let Some(previous_child) = previous {
+                    process_separator_between_sibling_nodes(
+                        GDScriptNodeKind::Function,
+                        &previous_child,
+                        &child,
+                        render_elements,
+                    );
+                }
+                process_node(input, child, render_elements);
+                return;
+            }
+
+            if let Some(previous_child) = previous {
+                process_separator_between_sibling_nodes(
+                    GDScriptNodeKind::Function,
+                    &previous_child,
+                    &child,
+                    render_elements,
+                );
+            }
+            process_node(input, child, render_elements);
+            previous = Some(child);
+        }
+        child_index += 1;
+    }
+    finish_group(render_elements, group_index);
 }
 
 /// Returns the string with the preferred string delimiters if the user used the
@@ -1513,7 +1578,15 @@ fn process_container(
         return;
     }
 
-    let group_index = begin_group(render_elements);
+    let is_function_parameters = node_kind == GDScriptNodeKind::Parameters
+        && node.parent().is_some_and(|parent| {
+            GDScriptNodeKind::get_kind_from_ast_node(parent) == GDScriptNodeKind::Function
+        });
+    let group_index = if is_function_parameters {
+        None
+    } else {
+        Some(begin_group(render_elements))
+    };
 
     if let Some(open) = node.child(0) {
         process_node(input, open, render_elements);
@@ -1756,7 +1829,9 @@ fn process_container(
         process_node(input, close, render_elements);
     }
 
-    finish_group(render_elements, group_index);
+    if let Some(group_index) = group_index {
+        finish_group(render_elements, group_index);
+    }
 }
 
 /// Formats ParenthesizedExpression nodes with a Group. Falls back to
