@@ -16,6 +16,17 @@ fn load_editorconfig_properties(editorconfig_file_path: &Path) -> Option<Propert
     Some(properties)
 }
 
+/// Returns whether the matching EditorConfig settings exclude this file.
+pub fn is_excluded_by_editorconfig(editorconfig_file_path: &Path) -> bool {
+    let Some(properties) = load_editorconfig_properties(editorconfig_file_path) else {
+        return false;
+    };
+    properties
+        .get_raw_for_key("gdscript_formatter_exclude")
+        .into_option()
+        .is_some_and(|value| value == "true")
+}
+
 fn get_max_line_length_from_properties(properties: &Properties) -> Option<usize> {
     match properties.get::<MaxLineLen>() {
         Ok(MaxLineLen::Value(max_line_length)) if max_line_length > 0 => Some(max_line_length),

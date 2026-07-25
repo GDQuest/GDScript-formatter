@@ -2,6 +2,12 @@
 
 This file documents the changes made to the formatter with each release.
 
+## Unreleased 0.24.0
+
+### Added
+
+- You can not exclude files and folders using the `--exclude/-x` flag or `gdscript_formatter_exclude` in your editorconfig files (#299)
+
 ## Release 0.23.0 (2026-07-24)
 
 ### Added

@@ -20,6 +20,7 @@ const HELP_FORMATTER: &str = "\
 
 	Options:
 	  -c, --check                                Check if files are formatted, exit 1 if not
+	  -x, --exclude <PATH>                       Exclude one file or directory (you can repeat this option multiple times)
 	      --verify-structure                     Verify formatted output has the same structure as the input
 	      --stdout                               Write to stdout instead of overwriting files
 	      --use-spaces                           Use spaces instead of tabs for indentation
@@ -47,6 +48,7 @@ Arguments:
   <FILES>...                 GDScript files or directories to lint
 
 Options:
+  -x, --exclude <PATH>         Exclude a file or directory (may be repeated)
       --disable <RULES>       Disable specific rules (comma-separated)
       --max-line-length <NUM>  Maximum line length allowed (default: 100)
       --list-rules            List all available linting rules
@@ -59,6 +61,8 @@ Options:
 pub struct CliArguments {
     /// List of input file paths or directories to process.
     pub input_file_paths: Vec<PathBuf>,
+    /// Files or directories to skip during discovery.
+    pub excluded_paths: Vec<PathBuf>,
     /// Which command to run.
     pub command: Command,
 }
@@ -124,6 +128,7 @@ pub fn parse_args() -> CliArguments {
     let mut active_command = ActiveCommand::Format;
 
     let mut input_file_paths: Vec<PathBuf> = Vec::new();
+    let mut excluded_paths: Vec<PathBuf> = Vec::new();
     let mut format_do_print_to_stdout = false;
     let mut format_do_check_formatted_only = false;
     let mut format_use_spaces: Option<bool> = None;
@@ -179,6 +184,15 @@ pub fn parse_args() -> CliArguments {
             let (flag_name, assigned_value) = split_flag_and_value(flag_without_prefix);
             match active_command {
                 ActiveCommand::Format => match flag_name {
+                    "exclude" => {
+                        let value = consume_flag_value(
+                            assigned_value,
+                            &argument_list,
+                            &mut current_argument_index,
+                            "--exclude",
+                        );
+                        excluded_paths.push(PathBuf::from(value));
+                    }
                     "stdout" => {
                         require_no_value(assigned_value, "--stdout");
                         format_do_print_to_stdout = true;
@@ -288,6 +302,15 @@ pub fn parse_args() -> CliArguments {
                     )),
                 },
                 ActiveCommand::Lint => match flag_name {
+                    "exclude" => {
+                        let value = consume_flag_value(
+                            assigned_value,
+                            &argument_list,
+                            &mut current_argument_index,
+                            "--exclude",
+                        );
+                        excluded_paths.push(PathBuf::from(value));
+                    }
                     "disable" => {
                         let value = consume_flag_value(
                             assigned_value,
@@ -328,6 +351,17 @@ pub fn parse_args() -> CliArguments {
             }
         } else if current_argument.starts_with('-') && current_argument.len() > 1 {
             let short_flags = &current_argument[1..];
+            if short_flags == "x" {
+                let value = consume_flag_value(
+                    None,
+                    &argument_list,
+                    &mut current_argument_index,
+                    "-x/--exclude",
+                );
+                excluded_paths.push(PathBuf::from(value));
+                current_argument_index += 1;
+                continue;
+            }
             for flag_char in short_flags.chars() {
                 match flag_char {
                     'c' => {
@@ -357,6 +391,7 @@ pub fn parse_args() -> CliArguments {
     match active_command {
         ActiveCommand::Format => CliArguments {
             input_file_paths,
+            excluded_paths,
             command: Command::Format {
                 do_print_to_stdout: format_do_print_to_stdout,
                 do_check_formatted_only: format_do_check_formatted_only,
@@ -372,6 +407,7 @@ pub fn parse_args() -> CliArguments {
         },
         ActiveCommand::Lint => CliArguments {
             input_file_paths,
+            excluded_paths,
             command: Command::Lint {
                 disabled_linter_rules: lint_disabled_rules,
                 max_line_length: lint_max_line_length,

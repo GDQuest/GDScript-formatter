@@ -95,7 +95,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             max_line_length: max_line_length.unwrap_or(100),
         };
 
-        let input_gdscript_files = find_gdscript_files(&parsed_cli_args.input_file_paths)?;
+        let input_gdscript_files = find_gdscript_files(
+            &parsed_cli_args.input_file_paths,
+            &parsed_cli_args.excluded_paths,
+        )?;
         return run_linter(
             &input_gdscript_files,
             linter_config,
@@ -180,7 +183,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         parsed_cli_args.input_file_paths
     };
-    let input_gdscript_files = find_gdscript_files(&input_paths)?;
+    let input_gdscript_files = find_gdscript_files(&input_paths, &parsed_cli_args.excluded_paths)?;
 
     let total_files = input_gdscript_files.len();
 
@@ -414,6 +417,7 @@ fn format_chunk(
 
 fn find_gdscript_files(
     input_paths: &[PathBuf],
+    excluded_paths: &[PathBuf],
 ) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
     let mut gdscript_file_paths = Vec::new();
     let mut paths_to_check: Vec<PathBuf> = Vec::with_capacity(input_paths.len());
@@ -422,6 +426,9 @@ fn find_gdscript_files(
     }
 
     while let Some(current_path) = paths_to_check.pop() {
+        if is_path_excluded(&current_path, excluded_paths) {
+            continue;
+        }
         if current_path.is_dir() {
             let entries = fs::read_dir(&current_path).map_err(|error| {
                 format!(
@@ -442,13 +449,22 @@ fn find_gdscript_files(
                     paths_to_check.push(entry.path());
                 } else if let Some(extension) = entry.path().extension() {
                     if extension == "gd" {
-                        gdscript_file_paths.push(entry.path());
+                        let file_path = entry.path();
+                        if !is_path_excluded(&file_path, excluded_paths)
+                            && !gdscript_formatter::editorconfig::is_excluded_by_editorconfig(
+                                &file_path,
+                            )
+                        {
+                            gdscript_file_paths.push(file_path);
+                        }
                     }
                 }
             }
         } else if let Some(extension) = current_path.extension() {
             if extension == "gd" {
-                gdscript_file_paths.push(current_path);
+                if !gdscript_formatter::editorconfig::is_excluded_by_editorconfig(&current_path) {
+                    gdscript_file_paths.push(current_path);
+                }
             }
         }
     }
@@ -464,6 +480,23 @@ fn find_gdscript_files(
     }
 
     Ok(gdscript_file_paths)
+}
+
+fn is_path_excluded(path: &Path, excluded_paths: &[PathBuf]) -> bool {
+    let current_directory = env::current_dir().expect("Failed to get current directory");
+    let absolute_path = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        current_directory.join(path)
+    };
+    excluded_paths.iter().any(|exclude_path| {
+        let absolute_exclude_path = if exclude_path.is_absolute() {
+            exclude_path.clone()
+        } else {
+            current_directory.join(exclude_path)
+        };
+        absolute_path.starts_with(absolute_exclude_path)
+    })
 }
 
 fn compare_output_index(
