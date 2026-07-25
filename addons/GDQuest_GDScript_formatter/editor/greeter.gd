@@ -5,8 +5,8 @@ extends Node
 @onready var _addon_version_label_value: Label = $Padding/Layout/Versions/Addon/Layout/Meta/Value
 @onready var _formatter_version_value: Label = $Padding/Layout/Versions/Formatter/Layout/Meta/Value
 
-var _addon_version: String = ""
-var _formatter_version: String = ""
+var _addon_version: String = "0.0.0"
+var _formatter_version: String = "0.0.0"
 
 func _ready() -> void:
 	_addon_version_label_value.text = _addon_version
