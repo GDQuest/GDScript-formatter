@@ -56,3 +56,17 @@ func issue_287() -> void:
 			),
 		self,
 	)
+
+
+# Godot doesn't support a trailing comma in a lambda ending an argument list
+# when the lambda ends with a match statement. We make sure the formatter
+# doesn't insert a trailing comma in this case.
+func issue_301() -> void:
+	[0, 2, 3].filter(
+		func(value: int):
+			match value:
+				0:
+					return false
+				_:
+					return true
+	)

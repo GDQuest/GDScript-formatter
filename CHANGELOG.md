@@ -8,6 +8,10 @@ This file documents the changes made to the formatter with each release.
 
 - You can not exclude files and folders using the `--exclude/-x` flag or `gdscript_formatter_exclude` in your editorconfig files (#299)
 
+### Fixed
+
+- Fixed edge case when a lambda is at the end of an argument list and ends with a match statement, causing the formatter to insert a trailing comma (#301)
+
 ## Release 0.23.0 (2026-07-24)
 
 ### Added

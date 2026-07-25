@@ -461,10 +461,10 @@ fn find_gdscript_files(
                 }
             }
         } else if let Some(extension) = current_path.extension() {
-            if extension == "gd" {
-                if !gdscript_formatter::editorconfig::is_excluded_by_editorconfig(&current_path) {
-                    gdscript_file_paths.push(current_path);
-                }
+            if extension == "gd"
+                && !gdscript_formatter::editorconfig::is_excluded_by_editorconfig(&current_path)
+            {
+                gdscript_file_paths.push(current_path);
             }
         }
     }

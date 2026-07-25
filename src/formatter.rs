@@ -1637,6 +1637,46 @@ fn process_container(
         false
     }
 
+    /// Returns true if the lambda ends with a match statement.
+    fn lambda_ends_with_match(lambda: tree_sitter::Node) -> bool {
+        let mut body = None;
+        let mut child_index = 0;
+        while child_index < lambda.child_count() {
+            if let Some(child) = lambda.child(child_index as u32)
+                && GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Body
+            {
+                body = Some(child);
+                break;
+            }
+            child_index += 1;
+        }
+        let Some(body) = body else {
+            return false;
+        };
+        let mut last_statement = None;
+        child_index = 0;
+        while child_index < body.named_child_count() {
+            last_statement = body.named_child(child_index as u32);
+            child_index += 1;
+        }
+        last_statement.is_some_and(|statement| {
+            if GDScriptNodeKind::get_kind_from_ast_node(statement) == GDScriptNodeKind::MatchBody {
+                return true;
+            }
+            let mut child_index = 0;
+            while child_index < statement.child_count() {
+                if let Some(child) = statement.child(child_index as u32)
+                    && GDScriptNodeKind::get_kind_from_ast_node(child)
+                        == GDScriptNodeKind::MatchBody
+                {
+                    return true;
+                }
+                child_index += 1;
+            }
+            false
+        })
+    }
+
     // A container's children are: [open_delimiter, elements_and_commas...,
     // close_delimiter]. The minimal single-element form is 3 children
     // ([open, element, close]); child_count >= 4 means there is either a
@@ -1664,11 +1704,18 @@ fn process_container(
         && node.child(1).is_some_and(|child| {
             GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Lambda
         });
+    // This works around an edge case of the GDScript parser in Godot failing to
+    // parse an unparenthesized lambda argument if its final statement is match
+    // and the formatter adds a comma to the last match branch.
+    let is_unparenthesized_lambda_with_match = is_single_lambda
+        && node_kind == GDScriptNodeKind::Arguments
+        && node.child(1).is_some_and(lambda_ends_with_match);
     let needs_lambda_trailing_comma = is_single_lambda
         && matches!(
             node_kind,
             GDScriptNodeKind::Array | GDScriptNodeKind::Arguments
-        );
+        )
+        && !is_unparenthesized_lambda_with_match;
     if (contains_more_than_one_element || needs_lambda_trailing_comma)
         && !trailing_comma_handled
         && !last_was_comment
