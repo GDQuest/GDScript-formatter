@@ -55,6 +55,7 @@ var connection_list: Array[Resource] = []
 var installer: FormatterInstaller = null
 var formatter_cache_dir: String
 var menu: FormatterMenu = null
+var greeter_panel: Greeter = null
 var _has_uninstall_command := false
 var _has_formatter_command := false
 # Used to auto detect changes to the project's .editorconfig file.
@@ -111,7 +112,10 @@ func _enter_tree() -> void:
 		func _on_installation_failed(error_message: String) -> void:
 			push_error("Formatter installation failed: ", error_message)
 	)
-
+	
+	greeter_panel = GreeterPanel.instantiate() as Greeter
+	add_child(greeter_panel)
+	
 	_has_formatter_command = has_command(get_editor_setting(SETTING_FORMATTER_PATH))
 	add_format_command()
 	add_lint_command()
@@ -129,11 +133,11 @@ func _enter_tree() -> void:
 	
 
 func _show_greeter() -> void:
-	var greeter_panel = GreeterPanel.instantiate() as Greeter
+	if not greeter_panel:
+		return
+	
 	var addon_version = get_addon_version()
 	var formatter_version = get_formatter_version()
-	
-	add_child(greeter_panel)
 	
 	greeter_panel.popup_centered()
 	greeter_panel.set_addon_version(addon_version)
@@ -153,6 +157,9 @@ func _exit_tree() -> void:
 
 	installer.queue_free()
 	installer = null
+	
+	greeter_panel.action_pressed.disconnect(_on_menu_item_selected)
+	greeter_panel.queue_free()
 
 	if is_instance_valid(menu):
 		menu.menu_item_selected.disconnect(_on_menu_item_selected)
