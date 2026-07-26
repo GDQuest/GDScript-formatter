@@ -138,6 +138,8 @@ func _show_greeter() -> void:
 	greeter_panel.popup_centered()
 	greeter_panel.set_addon_version(addon_version)
 	greeter_panel.set_formatter_version(formatter_version)
+	
+	greeter_panel.action_pressed.connect(_on_menu_item_selected)
 
 
 func _exit_tree() -> void:
