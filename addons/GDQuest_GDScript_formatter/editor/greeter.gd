@@ -19,10 +19,16 @@ func _ready() -> void:
 
 func set_addon_version(version: String) -> void:
 	_addon_version = version
+	
+	if is_node_ready():
+		_addon_version_label_value.text = _addon_version
 
 
 func set_formatter_version(version: String) -> void:
 	_formatter_version = version
+	
+	if is_node_ready():
+		_formatter_version_value.text = _formatter_version
 
 
 func _handle_close() -> void:
