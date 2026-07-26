@@ -338,7 +338,7 @@ fn process_node(
             }
         }
         GDScriptNodeKind::Body | GDScriptNodeKind::ClassBody | GDScriptNodeKind::MatchBody => {
-            process_body(input, node, render_elements)
+            process_body(input, node, render_elements, false)
         }
         GDScriptNodeKind::Lambda => process_lambda(input, node, render_elements),
         GDScriptNodeKind::Function => process_function(input, node, render_elements),
@@ -616,6 +616,7 @@ fn process_body(
     input: &ParseInput,
     node: tree_sitter::Node,
     render_elements: &mut Vec<RenderElement>,
+    do_add_comma_before_trailing_comment: bool,
 ) {
     let source = input.source;
     let indent_index = begin_indent(render_elements, 1);
@@ -687,6 +688,15 @@ fn process_body(
             last_processed_child_kind = Some(GDScriptNodeKind::SemiColon);
             current_index += 1;
             continue;
+        }
+        // This is used for cases like a lambda function in a function call, we
+        // need to add a delimiter between arguments but the comma should go
+        // before any trailing comment on a given line.
+        if do_add_comma_before_trailing_comment
+            && current_child_kind == GDScriptNodeKind::Comment
+            && current_index + 1 == child_count
+        {
+            render_elements.push(RenderElement::TextStatic(","));
         }
         if let Some(previous_end) = last_processed_child_end_byte {
             if last_processed_child_kind == Some(GDScriptNodeKind::SemiColon) {
@@ -1710,46 +1720,6 @@ fn process_container(
         false
     }
 
-    /// Returns true if the lambda ends with a match statement.
-    fn lambda_ends_with_match(lambda: tree_sitter::Node) -> bool {
-        let mut body = None;
-        let mut child_index = 0;
-        while child_index < lambda.child_count() {
-            if let Some(child) = lambda.child(child_index as u32)
-                && GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Body
-            {
-                body = Some(child);
-                break;
-            }
-            child_index += 1;
-        }
-        let Some(body) = body else {
-            return false;
-        };
-        let mut last_statement = None;
-        child_index = 0;
-        while child_index < body.named_child_count() {
-            last_statement = body.named_child(child_index as u32);
-            child_index += 1;
-        }
-        last_statement.is_some_and(|statement| {
-            if GDScriptNodeKind::get_kind_from_ast_node(statement) == GDScriptNodeKind::MatchBody {
-                return true;
-            }
-            let mut child_index = 0;
-            while child_index < statement.child_count() {
-                if let Some(child) = statement.child(child_index as u32)
-                    && GDScriptNodeKind::get_kind_from_ast_node(child)
-                        == GDScriptNodeKind::MatchBody
-                {
-                    return true;
-                }
-                child_index += 1;
-            }
-            false
-        })
-    }
-
     // A container's children are: [open_delimiter, elements_and_commas...,
     // close_delimiter]. The minimal single-element form is 3 children
     // ([open, element, close]); child_count >= 4 means there is either a
@@ -1782,16 +1752,21 @@ fn process_container(
     // and the formatter adds a comma to the last match branch.
     let is_unparenthesized_lambda_with_match = is_single_lambda
         && node_kind == GDScriptNodeKind::Arguments
-        && node.child(1).is_some_and(lambda_ends_with_match);
+        && node.child(1).is_some_and(lambda_ends_with_match_node);
     let needs_lambda_trailing_comma = is_single_lambda
         && matches!(
             node_kind,
             GDScriptNodeKind::Array | GDScriptNodeKind::Arguments
         )
         && !is_unparenthesized_lambda_with_match;
+    let lambda_has_trailing_comment = is_single_lambda
+        && node
+            .child(1)
+            .is_some_and(is_lambda_body_ending_with_comment);
     if (contains_more_than_one_element || needs_lambda_trailing_comma)
         && !trailing_comma_handled
         && !last_was_comment
+        && !lambda_has_trailing_comment
     {
         let text_index = render_elements.len() + 1;
         render_elements.push(RenderElement::Branch {
@@ -2742,6 +2717,17 @@ fn process_lambda(
 
     let group_index = begin_group(render_elements);
 
+    let do_add_comma_before_trailing_comment = node.parent().is_some_and(|parent| {
+        let parent_kind = GDScriptNodeKind::get_kind_from_ast_node(parent);
+        matches!(
+            parent_kind,
+            GDScriptNodeKind::Array | GDScriptNodeKind::Arguments
+        ) && parent.child_count() == 3
+            && parent.child(1).is_some_and(|child| child == node)
+            && !lambda_ends_with_match_node(node)
+            && is_lambda_body_ending_with_comment(node)
+    });
+
     let mut index = 0;
     let mut previous: Option<tree_sitter::Node> = None;
     while index < child_count {
@@ -2766,7 +2752,11 @@ fn process_lambda(
                     process_lambda_separator(previous_kind, child_kind, render_elements);
                 }
             }
-            process_node(input, child, render_elements);
+            if child_kind == GDScriptNodeKind::Body && do_add_comma_before_trailing_comment {
+                process_body(input, child, render_elements, true);
+            } else {
+                process_node(input, child, render_elements);
+            }
             previous = Some(child);
         }
         index += 1;
@@ -2798,6 +2788,60 @@ fn process_lambda(
     }
 
     finish_group(render_elements, group_index);
+}
+
+fn is_lambda_body_ending_with_comment(lambda: tree_sitter::Node) -> bool {
+    let mut child_index = 0;
+    while child_index < lambda.child_count() {
+        if let Some(child) = lambda.child(child_index as u32)
+            && GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Body
+        {
+            return child
+                .child(child.child_count().saturating_sub(1) as u32)
+                .is_some_and(|last_child| {
+                    GDScriptNodeKind::get_kind_from_ast_node(last_child)
+                        == GDScriptNodeKind::Comment
+                });
+        }
+        child_index += 1;
+    }
+    false
+}
+
+fn lambda_ends_with_match_node(lambda: tree_sitter::Node) -> bool {
+    let mut child_index = 0;
+    while child_index < lambda.child_count() {
+        if let Some(child) = lambda.child(child_index as u32)
+            && GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Body
+        {
+            let mut last_statement = None;
+            let mut statement_index = 0;
+            while statement_index < child.named_child_count() {
+                last_statement = child.named_child(statement_index as u32);
+                statement_index += 1;
+            }
+            return last_statement.is_some_and(|statement| {
+                if GDScriptNodeKind::get_kind_from_ast_node(statement)
+                    == GDScriptNodeKind::MatchBody
+                {
+                    return true;
+                }
+                let mut statement_child_index = 0;
+                while statement_child_index < statement.child_count() {
+                    if let Some(statement_child) = statement.child(statement_child_index as u32)
+                        && GDScriptNodeKind::get_kind_from_ast_node(statement_child)
+                            == GDScriptNodeKind::MatchBody
+                    {
+                        return true;
+                    }
+                    statement_child_index += 1;
+                }
+                false
+            });
+        }
+        child_index += 1;
+    }
+    false
 }
 
 /// Handles spacing between children of a lambda node. Deals with comments (hard

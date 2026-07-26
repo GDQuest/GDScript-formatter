@@ -20,3 +20,11 @@ func test_single_lambda_argument():
 	var test: String = ", ".join([].map(
 		func(it: String) -> String: return it
 	))
+
+
+# Make sure to place the trailing comma before a trailing comment.
+func test_lambda_trailing_comment():
+	_my_func_call(
+		func(vector: Vector2):
+			vector.x = 1 # gdlint-ignore
+	)
