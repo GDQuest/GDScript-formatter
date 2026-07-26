@@ -172,13 +172,12 @@ layout_mode = 2
 size_flags_vertical = 2
 text = "0.0.0"
 
-[node name="DownloadButton" type="Button" parent="Panel/Padding/Layout/Versions/Formatter/Layout" unique_id=1459022472]
+[node name="FormatterButton" type="Button" parent="Panel/Padding/Layout/Versions/Formatter/Layout" unique_id=1459022472]
 layout_mode = 2
 size_flags_horizontal = 4
 size_flags_vertical = 4
 tooltip_text = "Download update"
 theme_override_constants/icon_max_width = 18
-disabled = true
 icon = ExtResource("3_cku6i")
 icon_alignment = 1
 

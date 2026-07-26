@@ -9,6 +9,7 @@ signal action_pressed(action: String)
 
 @onready var _docs_button: Button = $Panel/Padding/Layout/Links/Docs/HBoxContainer/DocsButton
 @onready var _issues_button: Button = $Panel/Padding/Layout/Links/Issues/HBoxContainer/IssuesButton
+@onready var _formatter_button: Button = $Panel/Padding/Layout/Versions/Formatter/Layout/FormatterButton
 
 var _addon_version: String = "0.0.0"
 var _formatter_version: String = "0.0.0"
@@ -22,6 +23,7 @@ func _ready() -> void:
 	
 	_docs_button.button_down.connect(_handle_docs_press)
 	_issues_button.button_down.connect(_handle_issues_press)
+	_formatter_button.button_down.connect(_handle_formatter_press)
 
 
 func set_addon_version(version: String) -> void:
@@ -43,6 +45,7 @@ func _handle_close() -> void:
 	
 	_docs_button.button_down.disconnect(_handle_docs_press)
 	_issues_button.button_down.disconnect(_handle_issues_press)
+	_formatter_button.button_down.disconnect(_handle_formatter_press)
 	
 	hide()
 
@@ -53,3 +56,7 @@ func _handle_docs_press() -> void:
 
 func _handle_issues_press() -> void:
 	action_pressed.emit("report_issue")
+
+
+func _handle_formatter_press() -> void:
+	action_pressed.emit("install_update")
