@@ -104,6 +104,9 @@ func _enter_tree() -> void:
 				return
 			add_format_command()
 			add_lint_command()
+			
+			_update_formatter_version()
+			
 			# After installing the formatter we can add the menu option to show the uninstall command
 			if is_instance_valid(menu):
 				menu.update_menu(true)
@@ -136,13 +139,10 @@ func _show_greeter() -> void:
 	if not greeter_panel:
 		return
 	
-	var addon_version = get_addon_version()
-	var formatter_version = get_formatter_version()
+	_update_addon_version()
+	_update_formatter_version()
 	
 	greeter_panel.popup_centered()
-	greeter_panel.set_addon_version(addon_version)
-	greeter_panel.set_formatter_version(formatter_version)
-	
 	greeter_panel.action_pressed.connect(_on_menu_item_selected)
 
 
@@ -434,6 +434,16 @@ func get_formatter_version():
 
 	return _parse_formatter_version(version_stdout)
 
+
+func _update_formatter_version() -> void:
+	if not greeter_panel:
+		return
+		
+	var formatter_version = get_formatter_version()
+	
+	greeter_panel.set_formatter_version(formatter_version)
+
+
 func get_addon_version():
 	var menu = FormatterMenu.new()
 	print(menu.get_path())
@@ -447,6 +457,16 @@ func get_addon_version():
 		return
 
 	return plugin_config.get_value("plugin", "version")
+
+
+func _update_addon_version() -> void:
+	if not greeter_panel:
+		return
+		
+	var addon_version = get_addon_version()
+	
+	greeter_panel.set_addon_version(addon_version)
+
 
 func is_formatter_available() -> bool:
 	if _has_formatter_command:
