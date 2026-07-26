@@ -6,7 +6,7 @@ This file documents the changes made to the formatter with each release.
 
 ### Added
 
-- You can not exclude files and folders using the `--exclude/-x` flag or `gdscript_formatter_exclude` in your editorconfig files (#299)
+- You can now exclude files and folders using the `--exclude/-x` flag or `gdscript_formatter_exclude` in your editorconfig files (#299)
 
 ### Fixed
 
