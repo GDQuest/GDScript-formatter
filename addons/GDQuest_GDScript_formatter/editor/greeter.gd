@@ -6,6 +6,7 @@ signal action_pressed(action: String)
 
 @onready var _addon_version_label_value: Label = $Panel/Padding/Layout/Versions/Addon/Layout/Meta/Value
 @onready var _formatter_version_value: Label = $Panel/Padding/Layout/Versions/Formatter/Layout/Meta/Value
+@onready var _heading_label: Label = $Panel/Padding/Layout/Heading/Description
 
 @onready var _docs_button: Button = $Panel/Padding/Layout/Links/Docs/HBoxContainer/DocsButton
 @onready var _issues_button: Button = $Panel/Padding/Layout/Links/Issues/HBoxContainer/IssuesButton
@@ -24,6 +25,8 @@ func _ready() -> void:
 	_docs_button.button_down.connect(_handle_docs_press)
 	_issues_button.button_down.connect(_handle_issues_press)
 	_formatter_button.button_down.connect(_handle_formatter_press)
+	
+	_update_tagline()
 
 
 func set_addon_version(version: String) -> void:
@@ -38,6 +41,13 @@ func set_formatter_version(version: String) -> void:
 	
 	if is_node_ready():
 		_formatter_version_value.text = _formatter_version
+
+
+func _update_tagline() -> void:
+	var godot_version = Engine.get_version_info()
+	var version_major = str(godot_version.major)
+	
+	_heading_label.text = _heading_label.text.replace("<MAJOR>", version_major)
 
 
 func _handle_close() -> void:
