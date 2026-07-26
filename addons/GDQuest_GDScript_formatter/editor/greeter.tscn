@@ -109,12 +109,19 @@ vertical_alignment = 1
 [node name="Versions" type="HBoxContainer" parent="Panel/Padding/Layout" unique_id=215688731]
 layout_mode = 2
 size_flags_vertical = 0
+accessibility_name = "Versions"
+accessibility_description = "Addon and formatter versions"
 theme_override_constants/separation = 1
+accessibility_region = true
 
 [node name="Addon" type="PanelContainer" parent="Panel/Padding/Layout/Versions" unique_id=1266364516]
 layout_mode = 2
 size_flags_horizontal = 3
+accessibility_name = "Addon version"
+accessibility_described_by_nodes = Array[NodePath]([NodePath("Layout/Meta/Value")])
+accessibility_labeled_by_nodes = Array[NodePath]([NodePath("Layout/Meta/Title")])
 theme_override_styles/panel = SubResource("StyleBoxFlat_cku6i")
+accessibility_region = true
 
 [node name="Layout" type="HBoxContainer" parent="Panel/Padding/Layout/Versions/Addon" unique_id=1478601450]
 layout_mode = 2
@@ -135,6 +142,8 @@ text = "Addon Version"
 [node name="Value" type="Label" parent="Panel/Padding/Layout/Versions/Addon/Layout/Meta" unique_id=1344464055]
 layout_mode = 2
 size_flags_vertical = 0
+accessibility_live = 1
+accessibility_labeled_by_nodes = Array[NodePath]([NodePath("../Title")])
 theme_override_font_sizes/font_size = 14
 text = "0.0.0"
 
@@ -150,7 +159,11 @@ icon_alignment = 1
 [node name="Formatter" type="PanelContainer" parent="Panel/Padding/Layout/Versions" unique_id=1351105920]
 layout_mode = 2
 size_flags_horizontal = 3
+accessibility_name = "Formatter version"
+accessibility_described_by_nodes = Array[NodePath]([NodePath("Layout/Meta/Value")])
+accessibility_labeled_by_nodes = Array[NodePath]([NodePath("Layout/Meta/Title")])
 theme_override_styles/panel = SubResource("StyleBoxFlat_hq2xi")
+accessibility_region = true
 
 [node name="Layout" type="HBoxContainer" parent="Panel/Padding/Layout/Versions/Formatter" unique_id=185289625]
 layout_mode = 2
@@ -170,6 +183,8 @@ text = "Formatter Version"
 [node name="Value" type="Label" parent="Panel/Padding/Layout/Versions/Formatter/Layout/Meta" unique_id=1786751365]
 layout_mode = 2
 size_flags_vertical = 2
+accessibility_live = 1
+accessibility_labeled_by_nodes = Array[NodePath]([NodePath("../Title")])
 text = "0.0.0"
 
 [node name="FormatterButton" type="Button" parent="Panel/Padding/Layout/Versions/Formatter/Layout" unique_id=1459022472]
@@ -183,12 +198,17 @@ icon_alignment = 1
 
 [node name="Links" type="VBoxContainer" parent="Panel/Padding/Layout" unique_id=308460711]
 layout_mode = 2
+accessibility_name = "Links"
 theme_override_constants/separation = 1
+accessibility_region = true
 
 [node name="Docs" type="PanelContainer" parent="Panel/Padding/Layout/Links" unique_id=1617879850]
 layout_mode = 2
 size_flags_horizontal = 3
+accessibility_name = "Documentation"
+accessibility_labeled_by_nodes = Array[NodePath]([NodePath("HBoxContainer/Meta/Title")])
 theme_override_styles/panel = SubResource("StyleBoxFlat_yrmdb")
+accessibility_region = true
 
 [node name="HBoxContainer" type="HBoxContainer" parent="Panel/Padding/Layout/Links/Docs" unique_id=730529116]
 layout_mode = 2
@@ -215,7 +235,7 @@ text_overrun_behavior = 3
 [node name="DocsButton" type="Button" parent="Panel/Padding/Layout/Links/Docs/HBoxContainer" unique_id=1379633793]
 layout_mode = 2
 size_flags_vertical = 4
-tooltip_text = "Download update"
+tooltip_text = "View documentation"
 theme_override_constants/icon_max_width = 18
 icon = ExtResource("4_yrmdb")
 icon_alignment = 1
@@ -223,7 +243,10 @@ icon_alignment = 1
 [node name="Issues" type="PanelContainer" parent="Panel/Padding/Layout/Links" unique_id=828435889]
 layout_mode = 2
 size_flags_horizontal = 3
+accessibility_name = "Issue tracker"
+accessibility_labeled_by_nodes = Array[NodePath]([NodePath("HBoxContainer/Meta/Title")])
 theme_override_styles/panel = SubResource("StyleBoxFlat_lrwqi")
+accessibility_region = true
 
 [node name="HBoxContainer" type="HBoxContainer" parent="Panel/Padding/Layout/Links/Issues" unique_id=1959402616]
 layout_mode = 2
@@ -240,7 +263,7 @@ theme_override_constants/separation = 0
 layout_mode = 2
 size_flags_vertical = 2
 theme_type_variation = &"HeaderSmall"
-text = "Report an issue"
+text = "Issue Tracker"
 
 [node name="Value" type="Label" parent="Panel/Padding/Layout/Links/Issues/HBoxContainer/Meta" unique_id=1694691580]
 layout_mode = 2
@@ -251,7 +274,8 @@ text_overrun_behavior = 3
 [node name="IssuesButton" type="Button" parent="Panel/Padding/Layout/Links/Issues/HBoxContainer" unique_id=225001517]
 layout_mode = 2
 size_flags_vertical = 4
-tooltip_text = "Download update"
+tooltip_text = "Report an issue"
+accessibility_name = "Report an issue"
 theme_override_constants/icon_max_width = 18
 icon = ExtResource("4_yrmdb")
 icon_alignment = 1
