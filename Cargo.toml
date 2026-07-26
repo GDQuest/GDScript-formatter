@@ -11,6 +11,11 @@ categories = ["command-line-utilities", "development-tools"]
 default-run = "gdscript-formatter"
 rust-version = "1.85"
 
+[workspace]
+members = [
+  "gdextension",
+]
+
 [lints.clippy]
 dbg_macro = "warn"
 branches_sharing_code = "warn"

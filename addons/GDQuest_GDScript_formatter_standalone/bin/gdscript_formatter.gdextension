@@ -1,0 +1,6 @@
+[configuration]
+entry_symbol = "gdext_rust_init"
+compatibility_minimum = 4.7
+
+[libraries]
+linux.debug.x86_64 = "res://addons/GDQuest_GDScript_formatter_standalone/bin/libgdscript_formatter_gdextension.so"
