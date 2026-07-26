@@ -109,6 +109,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let Command::Format {
         do_print_to_stdout,
+        use_verbose_output,
         do_check_formatted_only,
         use_spaces,
         indent_size,
@@ -187,12 +188,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let total_files = input_gdscript_files.len();
 
-    eprint!(
-        "Formatting {} file{}...",
-        total_files,
-        if total_files == 1 { "" } else { "s" }
-    );
-    let _ = io::stdout().flush();
+    if !use_verbose_output {
+        eprint!(
+            "Formatting {} file{}...",
+            total_files,
+            if total_files == 1 { "" } else { "s" }
+        );
+        let _ = io::stdout().flush();
+    }
 
     let mut sorted_outputs: Vec<Result<FormatterOutput, String>> =
         format_files_parallel(&input_gdscript_files, &config, config_overrides);
@@ -206,6 +209,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         match output {
             Ok(output) => {
                 if do_check_formatted_only {
+                    if use_verbose_output {
+                        eprintln!(
+                            "Checking {}... {}",
+                            output.file_path.display(),
+                            if output.is_formatted {
+                                "OK"
+                            } else {
+                                "needs formatting"
+                            }
+                        );
+                    }
                     if !output.is_formatted {
                         all_formatted = false;
                         unformatted_files.push(output.file_path);
@@ -217,6 +231,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         println!("#--file:{}", output.file_path.display());
                     }
                     print!("{}", output.formatted_content);
+                    if use_verbose_output {
+                        eprintln!(
+                            "Formatting {}... {}",
+                            output.file_path.display(),
+                            if output.is_formatted {
+                                "already formatted"
+                            } else {
+                                "done"
+                            }
+                        );
+                    }
                 } else if !output.is_formatted {
                     fs::write(&output.file_path, output.formatted_content).map_err(|error| {
                         format!(
@@ -226,6 +251,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         )
                     })?;
                     modified_file_count += 1;
+                    if use_verbose_output {
+                        eprintln!("Formatting {}... done", output.file_path.display());
+                    }
+                } else if use_verbose_output {
+                    eprintln!(
+                        "Formatting {}... already formatted",
+                        output.file_path.display()
+                    );
                 }
             }
             Err(error_msg) => {
@@ -235,35 +268,55 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     if do_check_formatted_only {
-        terminal_clear_line();
+        if !use_verbose_output {
+            terminal_clear_line();
+        }
+        let summary_prefix = if use_verbose_output { "" } else { "\r" };
         if all_formatted {
-            eprintln!("\rAll {} file(s) are formatted", total_files);
+            eprintln!(
+                "{}All {} file(s) are formatted",
+                summary_prefix, total_files
+            );
         } else {
-            eprintln!("\rSome files are not formatted");
+            eprintln!("{}Some files are not formatted", summary_prefix);
             for file_path in unformatted_files {
                 eprintln!("{}", file_path.display());
             }
             std::process::exit(ERROR_CODE_NOT_FORMATTED);
         }
     } else if !do_print_to_stdout {
-        terminal_clear_line();
+        if !use_verbose_output {
+            terminal_clear_line();
+        }
+        let summary_prefix = if use_verbose_output { "" } else { "\r" };
         if total_files == 1 {
             if modified_file_count > 0 {
-                eprintln!("\rFormatted {}", input_gdscript_files[0].display());
+                eprintln!(
+                    "{}Formatted {}",
+                    summary_prefix,
+                    input_gdscript_files[0].display()
+                );
             } else {
-                eprintln!("\rAlready formatted: {}", input_gdscript_files[0].display());
+                eprintln!(
+                    "{}Already formatted: {}",
+                    summary_prefix,
+                    input_gdscript_files[0].display()
+                );
             }
         } else {
             let already_formatted_count = total_files - modified_file_count;
             if modified_file_count > 0 && already_formatted_count > 0 {
                 eprintln!(
-                    "\rFormatted {} files, {} already formatted",
-                    modified_file_count, already_formatted_count
+                    "{}Formatted {} files, {} already formatted",
+                    summary_prefix, modified_file_count, already_formatted_count
                 );
             } else if modified_file_count > 0 {
-                eprintln!("\rFormatted {} files", modified_file_count);
+                eprintln!("{}Formatted {} files", summary_prefix, modified_file_count);
             } else {
-                eprintln!("\rAll {} files already formatted", total_files);
+                eprintln!(
+                    "{}All {} files already formatted",
+                    summary_prefix, total_files
+                );
             }
         }
     }

@@ -2,6 +2,12 @@
 
 This file documents the changes made to the formatter with each release.
 
+## Unreleased
+
+### Added
+
+- Added `--verbose` option to print one line per formatted file (#227)
+
 ## Release 0.24.0 (2026-07-25)
 
 ### Added
