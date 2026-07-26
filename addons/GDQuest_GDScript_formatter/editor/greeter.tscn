@@ -5,6 +5,9 @@
 [ext_resource type="Texture2D" uid="uid://pfs8d8babvcu" path="res://addons/GDQuest_GDScript_formatter/images/icons/download.svg" id="3_cku6i"]
 [ext_resource type="Texture2D" uid="uid://ctpras52nelx3" path="res://addons/GDQuest_GDScript_formatter/images/icons/link.svg" id="4_yrmdb"]
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_cx1jr"]
+bg_color = Color(0.105882354, 0.105882354, 0.105882354, 1)
+
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_cku6i"]
 content_margin_left = 8.0
 content_margin_top = 4.0
@@ -41,20 +44,33 @@ bg_color = Color(0.13333334, 0.13333334, 0.13333334, 1)
 corner_radius_bottom_right = 8
 corner_radius_bottom_left = 8
 
-[node name="Greeter" type="PopupPanel" unique_id=1454134907]
-transparent_bg = false
+[node name="Window" type="Window" unique_id=447471143]
 oversampling_override = 1.0
 title = "GDScript Formatter"
 initial_position = 1
 size = Vector2i(495, 366)
-visible = true
-borderless = false
+visible = false
+wrap_controls = true
+unresizable = true
 always_on_top = true
-transparent = false
-keep_title_visible = true
+popup_wm_hint = true
+minimize_disabled = true
+maximize_disabled = true
 script = ExtResource("1_cku6i")
 
-[node name="Padding" type="MarginContainer" parent="." unique_id=83505692]
+[node name="Panel" type="Panel" parent="." unique_id=710910967]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_styles/panel = SubResource("StyleBoxFlat_cx1jr")
+metadata/_edit_use_anchors_ = true
+
+[node name="Padding" type="MarginContainer" parent="Panel" unique_id=83505692]
+layout_mode = 0
 offset_left = 12.0
 offset_top = 12.0
 offset_right = 483.0
@@ -64,25 +80,25 @@ theme_override_constants/margin_top = 8
 theme_override_constants/margin_right = 8
 theme_override_constants/margin_bottom = 8
 
-[node name="Layout" type="VBoxContainer" parent="Padding" unique_id=508597381]
+[node name="Layout" type="VBoxContainer" parent="Panel/Padding" unique_id=508597381]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 theme_override_constants/separation = 8
 
-[node name="Heading" type="VBoxContainer" parent="Padding/Layout" unique_id=1777254668]
+[node name="Heading" type="VBoxContainer" parent="Panel/Padding/Layout" unique_id=1777254668]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="Branding" type="CenterContainer" parent="Padding/Layout/Heading" unique_id=373074182]
+[node name="Branding" type="CenterContainer" parent="Panel/Padding/Layout/Heading" unique_id=373074182]
 layout_mode = 2
 
-[node name="Logo" type="TextureRect" parent="Padding/Layout/Heading/Branding" unique_id=859651745]
+[node name="Logo" type="TextureRect" parent="Panel/Padding/Layout/Heading/Branding" unique_id=859651745]
 layout_mode = 2
 texture = ExtResource("1_hq2xi")
 stretch_mode = 4
 
-[node name="Description" type="Label" parent="Padding/Layout/Heading" unique_id=1391782465]
+[node name="Description" type="Label" parent="Panel/Padding/Layout/Heading" unique_id=1391782465]
 layout_mode = 2
 size_flags_vertical = 0
 theme_override_font_sizes/font_size = 16
@@ -90,39 +106,39 @@ text = "A faster code formatter for GDScript and Godot 4"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="Versions" type="HBoxContainer" parent="Padding/Layout" unique_id=215688731]
+[node name="Versions" type="HBoxContainer" parent="Panel/Padding/Layout" unique_id=215688731]
 layout_mode = 2
 size_flags_vertical = 0
 theme_override_constants/separation = 1
 
-[node name="Addon" type="PanelContainer" parent="Padding/Layout/Versions" unique_id=1266364516]
+[node name="Addon" type="PanelContainer" parent="Panel/Padding/Layout/Versions" unique_id=1266364516]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_styles/panel = SubResource("StyleBoxFlat_cku6i")
 
-[node name="Layout" type="HBoxContainer" parent="Padding/Layout/Versions/Addon" unique_id=1478601450]
+[node name="Layout" type="HBoxContainer" parent="Panel/Padding/Layout/Versions/Addon" unique_id=1478601450]
 layout_mode = 2
 theme_override_constants/separation = 16
 
-[node name="Meta" type="VBoxContainer" parent="Padding/Layout/Versions/Addon/Layout" unique_id=764178420]
+[node name="Meta" type="VBoxContainer" parent="Panel/Padding/Layout/Versions/Addon/Layout" unique_id=764178420]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
 theme_override_constants/separation = 0
 
-[node name="Title" type="Label" parent="Padding/Layout/Versions/Addon/Layout/Meta" unique_id=1563506712]
+[node name="Title" type="Label" parent="Panel/Padding/Layout/Versions/Addon/Layout/Meta" unique_id=1563506712]
 layout_mode = 2
 size_flags_vertical = 0
 theme_type_variation = &"HeaderSmall"
 text = "Addon Version"
 
-[node name="Value" type="Label" parent="Padding/Layout/Versions/Addon/Layout/Meta" unique_id=1344464055]
+[node name="Value" type="Label" parent="Panel/Padding/Layout/Versions/Addon/Layout/Meta" unique_id=1344464055]
 layout_mode = 2
 size_flags_vertical = 0
 theme_override_font_sizes/font_size = 14
 text = "0.0.0"
 
-[node name="Button" type="Button" parent="Padding/Layout/Versions/Addon/Layout" unique_id=1381876748]
+[node name="Button" type="Button" parent="Panel/Padding/Layout/Versions/Addon/Layout" unique_id=1381876748]
 layout_mode = 2
 size_flags_vertical = 4
 tooltip_text = "Download update"
@@ -131,32 +147,32 @@ disabled = true
 icon = ExtResource("3_cku6i")
 icon_alignment = 1
 
-[node name="Formatter" type="PanelContainer" parent="Padding/Layout/Versions" unique_id=1351105920]
+[node name="Formatter" type="PanelContainer" parent="Panel/Padding/Layout/Versions" unique_id=1351105920]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_styles/panel = SubResource("StyleBoxFlat_hq2xi")
 
-[node name="Layout" type="HBoxContainer" parent="Padding/Layout/Versions/Formatter" unique_id=185289625]
+[node name="Layout" type="HBoxContainer" parent="Panel/Padding/Layout/Versions/Formatter" unique_id=185289625]
 layout_mode = 2
 theme_override_constants/separation = 16
 
-[node name="Meta" type="VBoxContainer" parent="Padding/Layout/Versions/Formatter/Layout" unique_id=1585824214]
+[node name="Meta" type="VBoxContainer" parent="Panel/Padding/Layout/Versions/Formatter/Layout" unique_id=1585824214]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
 
-[node name="Title" type="Label" parent="Padding/Layout/Versions/Formatter/Layout/Meta" unique_id=265656052]
+[node name="Title" type="Label" parent="Panel/Padding/Layout/Versions/Formatter/Layout/Meta" unique_id=265656052]
 layout_mode = 2
 size_flags_vertical = 3
 theme_type_variation = &"HeaderSmall"
 text = "Formatter Version"
 
-[node name="Value" type="Label" parent="Padding/Layout/Versions/Formatter/Layout/Meta" unique_id=1786751365]
+[node name="Value" type="Label" parent="Panel/Padding/Layout/Versions/Formatter/Layout/Meta" unique_id=1786751365]
 layout_mode = 2
 size_flags_vertical = 2
 text = "0.0.0"
 
-[node name="DownloadButton" type="Button" parent="Padding/Layout/Versions/Formatter/Layout" unique_id=1459022472]
+[node name="DownloadButton" type="Button" parent="Panel/Padding/Layout/Versions/Formatter/Layout" unique_id=1459022472]
 layout_mode = 2
 size_flags_horizontal = 4
 size_flags_vertical = 4
@@ -166,38 +182,38 @@ disabled = true
 icon = ExtResource("3_cku6i")
 icon_alignment = 1
 
-[node name="Links" type="VBoxContainer" parent="Padding/Layout" unique_id=308460711]
+[node name="Links" type="VBoxContainer" parent="Panel/Padding/Layout" unique_id=308460711]
 layout_mode = 2
 theme_override_constants/separation = 1
 
-[node name="Docs" type="PanelContainer" parent="Padding/Layout/Links" unique_id=1617879850]
+[node name="Docs" type="PanelContainer" parent="Panel/Padding/Layout/Links" unique_id=1617879850]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_styles/panel = SubResource("StyleBoxFlat_yrmdb")
 
-[node name="HBoxContainer" type="HBoxContainer" parent="Padding/Layout/Links/Docs" unique_id=730529116]
+[node name="HBoxContainer" type="HBoxContainer" parent="Panel/Padding/Layout/Links/Docs" unique_id=730529116]
 layout_mode = 2
 theme_override_constants/separation = 16
 
-[node name="Meta" type="VBoxContainer" parent="Padding/Layout/Links/Docs/HBoxContainer" unique_id=491611772]
+[node name="Meta" type="VBoxContainer" parent="Panel/Padding/Layout/Links/Docs/HBoxContainer" unique_id=491611772]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 0
 theme_override_constants/separation = 0
 
-[node name="Title" type="Label" parent="Padding/Layout/Links/Docs/HBoxContainer/Meta" unique_id=292956704]
+[node name="Title" type="Label" parent="Panel/Padding/Layout/Links/Docs/HBoxContainer/Meta" unique_id=292956704]
 layout_mode = 2
 size_flags_vertical = 3
 theme_type_variation = &"HeaderSmall"
 text = "Documentation"
 
-[node name="Value" type="Label" parent="Padding/Layout/Links/Docs/HBoxContainer/Meta" unique_id=541682671]
+[node name="Value" type="Label" parent="Panel/Padding/Layout/Links/Docs/HBoxContainer/Meta" unique_id=541682671]
 layout_mode = 2
 size_flags_vertical = 2
 text = "https://www.gdquest.com/library/gdscript_formatter"
 text_overrun_behavior = 3
 
-[node name="Button" type="Button" parent="Padding/Layout/Links/Docs/HBoxContainer" unique_id=1379633793]
+[node name="Button" type="Button" parent="Panel/Padding/Layout/Links/Docs/HBoxContainer" unique_id=1379633793]
 layout_mode = 2
 size_flags_vertical = 4
 tooltip_text = "Download update"
@@ -205,35 +221,35 @@ theme_override_constants/icon_max_width = 18
 icon = ExtResource("4_yrmdb")
 icon_alignment = 1
 
-[node name="Issues" type="PanelContainer" parent="Padding/Layout/Links" unique_id=828435889]
+[node name="Issues" type="PanelContainer" parent="Panel/Padding/Layout/Links" unique_id=828435889]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_styles/panel = SubResource("StyleBoxFlat_lrwqi")
 
-[node name="HBoxContainer" type="HBoxContainer" parent="Padding/Layout/Links/Issues" unique_id=1959402616]
+[node name="HBoxContainer" type="HBoxContainer" parent="Panel/Padding/Layout/Links/Issues" unique_id=1959402616]
 layout_mode = 2
 size_flags_vertical = 4
 theme_override_constants/separation = 16
 
-[node name="Meta" type="VBoxContainer" parent="Padding/Layout/Links/Issues/HBoxContainer" unique_id=820974620]
+[node name="Meta" type="VBoxContainer" parent="Panel/Padding/Layout/Links/Issues/HBoxContainer" unique_id=820974620]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 0
 theme_override_constants/separation = 0
 
-[node name="Title" type="Label" parent="Padding/Layout/Links/Issues/HBoxContainer/Meta" unique_id=669708178]
+[node name="Title" type="Label" parent="Panel/Padding/Layout/Links/Issues/HBoxContainer/Meta" unique_id=669708178]
 layout_mode = 2
 size_flags_vertical = 2
 theme_type_variation = &"HeaderSmall"
 text = "Report an issue"
 
-[node name="Value" type="Label" parent="Padding/Layout/Links/Issues/HBoxContainer/Meta" unique_id=1694691580]
+[node name="Value" type="Label" parent="Panel/Padding/Layout/Links/Issues/HBoxContainer/Meta" unique_id=1694691580]
 layout_mode = 2
 size_flags_vertical = 2
 text = "https://github.com/GDQuest/GDScript-formatter"
 text_overrun_behavior = 3
 
-[node name="Button" type="Button" parent="Padding/Layout/Links/Issues/HBoxContainer" unique_id=225001517]
+[node name="Button" type="Button" parent="Panel/Padding/Layout/Links/Issues/HBoxContainer" unique_id=225001517]
 layout_mode = 2
 size_flags_vertical = 4
 tooltip_text = "Download update"
