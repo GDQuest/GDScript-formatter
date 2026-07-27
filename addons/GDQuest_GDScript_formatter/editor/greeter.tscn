@@ -9,6 +9,10 @@
 [ext_resource type="Texture2D" uid="uid://dp30pekmsn6tt" path="res://addons/GDQuest_GDScript_formatter/images/icons/settings.svg" id="5_lrwqi"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_2dn7m"]
+content_margin_left = 16.0
+content_margin_top = 16.0
+content_margin_right = 16.0
+content_margin_bottom = 16.0
 bg_color = Color(0.105882354, 0.105882354, 0.105882354, 1)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_cku6i"]
@@ -82,34 +86,25 @@ size_flags_vertical = 3
 theme_override_styles/panel = SubResource("StyleBoxFlat_2dn7m")
 metadata/_edit_use_anchors_ = true
 
-[node name="Padding" type="MarginContainer" parent="Container" unique_id=83505692]
-clip_contents = true
-layout_mode = 2
-theme_override_constants/margin_left = 16
-theme_override_constants/margin_top = 16
-theme_override_constants/margin_right = 16
-theme_override_constants/margin_bottom = 16
-metadata/_edit_use_anchors_ = true
-
-[node name="Layout" type="VBoxContainer" parent="Container/Padding" unique_id=508597381]
+[node name="Layout" type="VBoxContainer" parent="Container" unique_id=508597381]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 theme_override_constants/separation = 16
 
-[node name="Heading" type="VBoxContainer" parent="Container/Padding/Layout" unique_id=1777254668]
+[node name="Heading" type="VBoxContainer" parent="Container/Layout" unique_id=1777254668]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="Branding" type="CenterContainer" parent="Container/Padding/Layout/Heading" unique_id=373074182]
+[node name="Branding" type="CenterContainer" parent="Container/Layout/Heading" unique_id=373074182]
 layout_mode = 2
 
-[node name="Logo" type="TextureRect" parent="Container/Padding/Layout/Heading/Branding" unique_id=859651745]
+[node name="Logo" type="TextureRect" parent="Container/Layout/Heading/Branding" unique_id=859651745]
 layout_mode = 2
 texture = ExtResource("1_hq2xi")
 stretch_mode = 4
 
-[node name="Description" type="Label" parent="Container/Padding/Layout/Heading" unique_id=1391782465]
+[node name="Description" type="Label" parent="Container/Layout/Heading" unique_id=1391782465]
 layout_mode = 2
 size_flags_vertical = 0
 theme_override_font_sizes/font_size = 16
@@ -117,7 +112,7 @@ text = "A faster code formatter for GDScript and Godot 4"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="Versions" type="HBoxContainer" parent="Container/Padding/Layout" unique_id=215688731]
+[node name="Versions" type="HBoxContainer" parent="Container/Layout" unique_id=215688731]
 layout_mode = 2
 size_flags_vertical = 0
 accessibility_name = "Versions"
@@ -125,7 +120,7 @@ accessibility_description = "Addon and formatter versions"
 theme_override_constants/separation = 1
 accessibility_region = true
 
-[node name="Addon" type="PanelContainer" parent="Container/Padding/Layout/Versions" unique_id=1266364516]
+[node name="Addon" type="PanelContainer" parent="Container/Layout/Versions" unique_id=1266364516]
 layout_mode = 2
 size_flags_horizontal = 3
 accessibility_name = "Addon version"
@@ -134,23 +129,23 @@ accessibility_labeled_by_nodes = Array[NodePath]([NodePath("Layout/Meta/Title")]
 theme_override_styles/panel = SubResource("StyleBoxFlat_cku6i")
 accessibility_region = true
 
-[node name="Layout" type="HBoxContainer" parent="Container/Padding/Layout/Versions/Addon" unique_id=1478601450]
+[node name="Layout" type="HBoxContainer" parent="Container/Layout/Versions/Addon" unique_id=1478601450]
 layout_mode = 2
 theme_override_constants/separation = 16
 
-[node name="Meta" type="VBoxContainer" parent="Container/Padding/Layout/Versions/Addon/Layout" unique_id=764178420]
+[node name="Meta" type="VBoxContainer" parent="Container/Layout/Versions/Addon/Layout" unique_id=764178420]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
 theme_override_constants/separation = 0
 
-[node name="Title" type="Label" parent="Container/Padding/Layout/Versions/Addon/Layout/Meta" unique_id=1563506712]
+[node name="Title" type="Label" parent="Container/Layout/Versions/Addon/Layout/Meta" unique_id=1563506712]
 layout_mode = 2
 size_flags_vertical = 0
 theme_type_variation = &"HeaderSmall"
 text = "Addon Version"
 
-[node name="Value" type="Label" parent="Container/Padding/Layout/Versions/Addon/Layout/Meta" unique_id=1344464055]
+[node name="Value" type="Label" parent="Container/Layout/Versions/Addon/Layout/Meta" unique_id=1344464055]
 layout_mode = 2
 size_flags_vertical = 0
 accessibility_live = 1
@@ -158,7 +153,7 @@ accessibility_labeled_by_nodes = Array[NodePath]([NodePath("../Title")])
 theme_override_font_sizes/font_size = 14
 text = "0.0.0"
 
-[node name="Button" type="Button" parent="Container/Padding/Layout/Versions/Addon/Layout" unique_id=1381876748]
+[node name="Button" type="Button" parent="Container/Layout/Versions/Addon/Layout" unique_id=1381876748]
 layout_mode = 2
 size_flags_vertical = 4
 tooltip_text = "Download update"
@@ -167,7 +162,7 @@ disabled = true
 icon = ExtResource("3_cku6i")
 icon_alignment = 1
 
-[node name="Formatter" type="PanelContainer" parent="Container/Padding/Layout/Versions" unique_id=1351105920]
+[node name="Formatter" type="PanelContainer" parent="Container/Layout/Versions" unique_id=1351105920]
 layout_mode = 2
 size_flags_horizontal = 3
 accessibility_name = "Formatter version"
@@ -176,29 +171,29 @@ accessibility_labeled_by_nodes = Array[NodePath]([NodePath("Layout/Meta/Title")]
 theme_override_styles/panel = SubResource("StyleBoxFlat_hq2xi")
 accessibility_region = true
 
-[node name="Layout" type="HBoxContainer" parent="Container/Padding/Layout/Versions/Formatter" unique_id=185289625]
+[node name="Layout" type="HBoxContainer" parent="Container/Layout/Versions/Formatter" unique_id=185289625]
 layout_mode = 2
 theme_override_constants/separation = 16
 
-[node name="Meta" type="VBoxContainer" parent="Container/Padding/Layout/Versions/Formatter/Layout" unique_id=1585824214]
+[node name="Meta" type="VBoxContainer" parent="Container/Layout/Versions/Formatter/Layout" unique_id=1585824214]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
 
-[node name="Title" type="Label" parent="Container/Padding/Layout/Versions/Formatter/Layout/Meta" unique_id=265656052]
+[node name="Title" type="Label" parent="Container/Layout/Versions/Formatter/Layout/Meta" unique_id=265656052]
 layout_mode = 2
 size_flags_vertical = 3
 theme_type_variation = &"HeaderSmall"
 text = "Formatter Version"
 
-[node name="Value" type="Label" parent="Container/Padding/Layout/Versions/Formatter/Layout/Meta" unique_id=1786751365]
+[node name="Value" type="Label" parent="Container/Layout/Versions/Formatter/Layout/Meta" unique_id=1786751365]
 layout_mode = 2
 size_flags_vertical = 2
 accessibility_live = 1
 accessibility_labeled_by_nodes = Array[NodePath]([NodePath("../Title")])
 text = "0.0.0"
 
-[node name="FormatterButton" type="Button" parent="Container/Padding/Layout/Versions/Formatter/Layout" unique_id=1459022472]
+[node name="FormatterButton" type="Button" parent="Container/Layout/Versions/Formatter/Layout" unique_id=1459022472]
 layout_mode = 2
 size_flags_horizontal = 4
 size_flags_vertical = 4
@@ -207,41 +202,41 @@ theme_override_constants/icon_max_width = 18
 icon = ExtResource("3_cku6i")
 icon_alignment = 1
 
-[node name="SplitPanel" type="HBoxContainer" parent="Container/Padding/Layout" unique_id=1617836975]
+[node name="SplitPanel" type="HBoxContainer" parent="Container/Layout" unique_id=1617836975]
 layout_mode = 2
 theme_override_constants/separation = 16
 
-[node name="QuickSettings" type="VBoxContainer" parent="Container/Padding/Layout/SplitPanel" unique_id=255097673]
+[node name="QuickSettings" type="VBoxContainer" parent="Container/Layout/SplitPanel" unique_id=255097673]
 layout_mode = 2
 size_flags_horizontal = 3
 accessibility_name = "Resources"
 theme_override_constants/separation = 4
 accessibility_region = true
 
-[node name="Heading" type="HBoxContainer" parent="Container/Padding/Layout/SplitPanel/QuickSettings" unique_id=627743144]
+[node name="Heading" type="HBoxContainer" parent="Container/Layout/SplitPanel/QuickSettings" unique_id=627743144]
 layout_mode = 2
 size_flags_vertical = 0
 theme_override_constants/separation = 0
 
-[node name="TextureRect" type="TextureRect" parent="Container/Padding/Layout/SplitPanel/QuickSettings/Heading" unique_id=1095513836]
+[node name="TextureRect" type="TextureRect" parent="Container/Layout/SplitPanel/QuickSettings/Heading" unique_id=1095513836]
 custom_maximum_size = Vector2(18, 18)
 layout_mode = 2
 size_flags_horizontal = 4
 size_flags_vertical = 4
 texture = ExtResource("5_lrwqi")
 
-[node name="Label" type="Label" parent="Container/Padding/Layout/SplitPanel/QuickSettings/Heading" unique_id=2032064637]
+[node name="Label" type="Label" parent="Container/Layout/SplitPanel/QuickSettings/Heading" unique_id=2032064637]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 0
 theme_type_variation = &"HeaderSmall"
 text = "Quick Settings"
 
-[node name="Items" type="VBoxContainer" parent="Container/Padding/Layout/SplitPanel/QuickSettings" unique_id=1814396095]
+[node name="Items" type="VBoxContainer" parent="Container/Layout/SplitPanel/QuickSettings" unique_id=1814396095]
 layout_mode = 2
 theme_override_constants/separation = 1
 
-[node name="Settings" type="PanelContainer" parent="Container/Padding/Layout/SplitPanel/QuickSettings/Items" unique_id=151495686]
+[node name="Settings" type="PanelContainer" parent="Container/Layout/SplitPanel/QuickSettings/Items" unique_id=151495686]
 layout_mode = 2
 size_flags_horizontal = 3
 accessibility_name = "Addon settings"
@@ -249,24 +244,24 @@ accessibility_labeled_by_nodes = Array[NodePath]([NodePath("HBoxContainer/Meta/T
 theme_override_styles/panel = SubResource("StyleBoxFlat_lrwqi")
 accessibility_region = true
 
-[node name="HBoxContainer" type="HBoxContainer" parent="Container/Padding/Layout/SplitPanel/QuickSettings/Items/Settings" unique_id=948736503]
+[node name="HBoxContainer" type="HBoxContainer" parent="Container/Layout/SplitPanel/QuickSettings/Items/Settings" unique_id=948736503]
 layout_mode = 2
 size_flags_vertical = 4
 theme_override_constants/separation = 16
 
-[node name="Meta" type="VBoxContainer" parent="Container/Padding/Layout/SplitPanel/QuickSettings/Items/Settings/HBoxContainer" unique_id=1723535888]
+[node name="Meta" type="VBoxContainer" parent="Container/Layout/SplitPanel/QuickSettings/Items/Settings/HBoxContainer" unique_id=1723535888]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 0
 theme_override_constants/separation = 0
 
-[node name="Title" type="Label" parent="Container/Padding/Layout/SplitPanel/QuickSettings/Items/Settings/HBoxContainer/Meta" unique_id=2111755764]
+[node name="Title" type="Label" parent="Container/Layout/SplitPanel/QuickSettings/Items/Settings/HBoxContainer/Meta" unique_id=2111755764]
 layout_mode = 2
 size_flags_vertical = 2
 theme_type_variation = &"HeaderSmall"
 text = "More Settings"
 
-[node name="SettingsButton" type="Button" parent="Container/Padding/Layout/SplitPanel/QuickSettings/Items/Settings/HBoxContainer" unique_id=976437207]
+[node name="SettingsButton" type="Button" parent="Container/Layout/SplitPanel/QuickSettings/Items/Settings/HBoxContainer" unique_id=976437207]
 layout_mode = 2
 size_flags_vertical = 4
 tooltip_text = "View addon settings"
@@ -275,37 +270,37 @@ theme_override_constants/icon_max_width = 18
 icon = ExtResource("5_cx1jr")
 icon_alignment = 1
 
-[node name="Resources" type="VBoxContainer" parent="Container/Padding/Layout/SplitPanel" unique_id=308460711]
+[node name="Resources" type="VBoxContainer" parent="Container/Layout/SplitPanel" unique_id=308460711]
 layout_mode = 2
 size_flags_horizontal = 3
 accessibility_name = "Resources"
 theme_override_constants/separation = 4
 accessibility_region = true
 
-[node name="Heading" type="HBoxContainer" parent="Container/Padding/Layout/SplitPanel/Resources" unique_id=2131034157]
+[node name="Heading" type="HBoxContainer" parent="Container/Layout/SplitPanel/Resources" unique_id=2131034157]
 layout_mode = 2
 size_flags_vertical = 0
 theme_override_constants/separation = 0
 
-[node name="TextureRect" type="TextureRect" parent="Container/Padding/Layout/SplitPanel/Resources/Heading" unique_id=213876480]
+[node name="TextureRect" type="TextureRect" parent="Container/Layout/SplitPanel/Resources/Heading" unique_id=213876480]
 custom_maximum_size = Vector2(18, 18)
 layout_mode = 2
 size_flags_horizontal = 4
 size_flags_vertical = 4
 texture = ExtResource("4_2dn7m")
 
-[node name="Label" type="Label" parent="Container/Padding/Layout/SplitPanel/Resources/Heading" unique_id=326050371]
+[node name="Label" type="Label" parent="Container/Layout/SplitPanel/Resources/Heading" unique_id=326050371]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 0
 theme_type_variation = &"HeaderSmall"
 text = "Resources"
 
-[node name="Items" type="VBoxContainer" parent="Container/Padding/Layout/SplitPanel/Resources" unique_id=528407113]
+[node name="Items" type="VBoxContainer" parent="Container/Layout/SplitPanel/Resources" unique_id=528407113]
 layout_mode = 2
 theme_override_constants/separation = 1
 
-[node name="Docs" type="PanelContainer" parent="Container/Padding/Layout/SplitPanel/Resources/Items" unique_id=1617879850]
+[node name="Docs" type="PanelContainer" parent="Container/Layout/SplitPanel/Resources/Items" unique_id=1617879850]
 layout_mode = 2
 size_flags_horizontal = 3
 accessibility_name = "Documentation"
@@ -313,23 +308,23 @@ accessibility_labeled_by_nodes = Array[NodePath]([NodePath("HBoxContainer/Meta/T
 theme_override_styles/panel = SubResource("StyleBoxFlat_yrmdb")
 accessibility_region = true
 
-[node name="HBoxContainer" type="HBoxContainer" parent="Container/Padding/Layout/SplitPanel/Resources/Items/Docs" unique_id=730529116]
+[node name="HBoxContainer" type="HBoxContainer" parent="Container/Layout/SplitPanel/Resources/Items/Docs" unique_id=730529116]
 layout_mode = 2
 theme_override_constants/separation = 16
 
-[node name="Meta" type="VBoxContainer" parent="Container/Padding/Layout/SplitPanel/Resources/Items/Docs/HBoxContainer" unique_id=491611772]
+[node name="Meta" type="VBoxContainer" parent="Container/Layout/SplitPanel/Resources/Items/Docs/HBoxContainer" unique_id=491611772]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 0
 theme_override_constants/separation = 0
 
-[node name="Title" type="Label" parent="Container/Padding/Layout/SplitPanel/Resources/Items/Docs/HBoxContainer/Meta" unique_id=292956704]
+[node name="Title" type="Label" parent="Container/Layout/SplitPanel/Resources/Items/Docs/HBoxContainer/Meta" unique_id=292956704]
 layout_mode = 2
 size_flags_vertical = 3
 theme_type_variation = &"HeaderSmall"
 text = "Documentation"
 
-[node name="DocsButton" type="Button" parent="Container/Padding/Layout/SplitPanel/Resources/Items/Docs/HBoxContainer" unique_id=1379633793]
+[node name="DocsButton" type="Button" parent="Container/Layout/SplitPanel/Resources/Items/Docs/HBoxContainer" unique_id=1379633793]
 layout_mode = 2
 size_flags_vertical = 4
 tooltip_text = "View documentation"
@@ -337,7 +332,7 @@ theme_override_constants/icon_max_width = 18
 icon = ExtResource("4_yrmdb")
 icon_alignment = 1
 
-[node name="Issues" type="PanelContainer" parent="Container/Padding/Layout/SplitPanel/Resources/Items" unique_id=828435889]
+[node name="Issues" type="PanelContainer" parent="Container/Layout/SplitPanel/Resources/Items" unique_id=828435889]
 layout_mode = 2
 size_flags_horizontal = 3
 accessibility_name = "Issue tracker"
@@ -345,24 +340,24 @@ accessibility_labeled_by_nodes = Array[NodePath]([NodePath("HBoxContainer/Meta/T
 theme_override_styles/panel = SubResource("StyleBoxFlat_cx1jr")
 accessibility_region = true
 
-[node name="HBoxContainer" type="HBoxContainer" parent="Container/Padding/Layout/SplitPanel/Resources/Items/Issues" unique_id=1959402616]
+[node name="HBoxContainer" type="HBoxContainer" parent="Container/Layout/SplitPanel/Resources/Items/Issues" unique_id=1959402616]
 layout_mode = 2
 size_flags_vertical = 4
 theme_override_constants/separation = 16
 
-[node name="Meta" type="VBoxContainer" parent="Container/Padding/Layout/SplitPanel/Resources/Items/Issues/HBoxContainer" unique_id=820974620]
+[node name="Meta" type="VBoxContainer" parent="Container/Layout/SplitPanel/Resources/Items/Issues/HBoxContainer" unique_id=820974620]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 0
 theme_override_constants/separation = 0
 
-[node name="Title" type="Label" parent="Container/Padding/Layout/SplitPanel/Resources/Items/Issues/HBoxContainer/Meta" unique_id=669708178]
+[node name="Title" type="Label" parent="Container/Layout/SplitPanel/Resources/Items/Issues/HBoxContainer/Meta" unique_id=669708178]
 layout_mode = 2
 size_flags_vertical = 2
 theme_type_variation = &"HeaderSmall"
 text = "Issue Tracker"
 
-[node name="IssuesButton" type="Button" parent="Container/Padding/Layout/SplitPanel/Resources/Items/Issues/HBoxContainer" unique_id=225001517]
+[node name="IssuesButton" type="Button" parent="Container/Layout/SplitPanel/Resources/Items/Issues/HBoxContainer" unique_id=225001517]
 layout_mode = 2
 size_flags_vertical = 4
 tooltip_text = "Report an issue"
