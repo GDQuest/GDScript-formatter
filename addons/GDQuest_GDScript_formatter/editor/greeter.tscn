@@ -3,6 +3,7 @@
 [ext_resource type="Script" uid="uid://chtdytdwey3un" path="res://addons/GDQuest_GDScript_formatter/editor/greeter.gd" id="1_cku6i"]
 [ext_resource type="Texture2D" uid="uid://cp5vhsg54dmt5" path="res://addons/GDQuest_GDScript_formatter/images/gdquest_logo.svg" id="1_hq2xi"]
 [ext_resource type="Texture2D" uid="uid://pfs8d8babvcu" path="res://addons/GDQuest_GDScript_formatter/images/icons/download.svg" id="3_cku6i"]
+[ext_resource type="Texture2D" uid="uid://bgwq4as8xi47j" path="res://addons/GDQuest_GDScript_formatter/images/icons/resources.svg" id="4_2dn7m"]
 [ext_resource type="Texture2D" uid="uid://ctpras52nelx3" path="res://addons/GDQuest_GDScript_formatter/images/icons/link.svg" id="4_yrmdb"]
 [ext_resource type="Texture2D" uid="uid://dp30pekmsn6tt" path="res://addons/GDQuest_GDScript_formatter/images/icons/settings.svg" id="5_lrwqi"]
 
@@ -30,7 +31,7 @@ corner_radius_bottom_right = 8
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_yrmdb"]
 content_margin_left = 8.0
 content_margin_top = 8.0
-content_margin_right = 16.0
+content_margin_right = 8.0
 content_margin_bottom = 8.0
 bg_color = Color(0.13333334, 0.13333334, 0.13333334, 1)
 corner_radius_top_left = 8
@@ -39,14 +40,14 @@ corner_radius_top_right = 8
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_cx1jr"]
 content_margin_left = 8.0
 content_margin_top = 8.0
-content_margin_right = 16.0
+content_margin_right = 8.0
 content_margin_bottom = 8.0
 bg_color = Color(0.13333334, 0.13333334, 0.13333334, 1)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_lrwqi"]
 content_margin_left = 8.0
 content_margin_top = 8.0
-content_margin_right = 16.0
+content_margin_right = 8.0
 content_margin_bottom = 8.0
 bg_color = Color(0.13333334, 0.13333334, 0.13333334, 1)
 corner_radius_bottom_right = 8
@@ -56,7 +57,7 @@ corner_radius_bottom_left = 8
 oversampling_override = 1.0
 title = "GDScript Formatter"
 initial_position = 1
-size = Vector2i(435, 336)
+size = Vector2i(439, 401)
 visible = false
 wrap_controls = true
 unresizable = true
@@ -79,17 +80,17 @@ metadata/_edit_use_anchors_ = true
 [node name="Padding" type="MarginContainer" parent="Container" unique_id=83505692]
 clip_contents = true
 layout_mode = 2
-theme_override_constants/margin_left = 8
-theme_override_constants/margin_top = 8
-theme_override_constants/margin_right = 8
-theme_override_constants/margin_bottom = 8
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
 metadata/_edit_use_anchors_ = true
 
 [node name="Layout" type="VBoxContainer" parent="Container/Padding" unique_id=508597381]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
-theme_override_constants/separation = 8
+theme_override_constants/separation = 16
 
 [node name="Heading" type="VBoxContainer" parent="Container/Padding/Layout" unique_id=1777254668]
 layout_mode = 2
@@ -204,10 +205,33 @@ icon_alignment = 1
 [node name="Resources" type="VBoxContainer" parent="Container/Padding/Layout" unique_id=308460711]
 layout_mode = 2
 accessibility_name = "Resources"
-theme_override_constants/separation = 1
+theme_override_constants/separation = 4
 accessibility_region = true
 
-[node name="Docs" type="PanelContainer" parent="Container/Padding/Layout/Resources" unique_id=1617879850]
+[node name="Heading" type="HBoxContainer" parent="Container/Padding/Layout/Resources" unique_id=2131034157]
+layout_mode = 2
+size_flags_vertical = 0
+theme_override_constants/separation = 0
+
+[node name="TextureRect" type="TextureRect" parent="Container/Padding/Layout/Resources/Heading" unique_id=213876480]
+custom_maximum_size = Vector2(18, 18)
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+texture = ExtResource("4_2dn7m")
+
+[node name="Label" type="Label" parent="Container/Padding/Layout/Resources/Heading" unique_id=326050371]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 0
+theme_type_variation = &"HeaderSmall"
+text = "Resources"
+
+[node name="Items" type="VBoxContainer" parent="Container/Padding/Layout/Resources" unique_id=528407113]
+layout_mode = 2
+theme_override_constants/separation = 1
+
+[node name="Docs" type="PanelContainer" parent="Container/Padding/Layout/Resources/Items" unique_id=1617879850]
 layout_mode = 2
 size_flags_horizontal = 3
 accessibility_name = "Documentation"
@@ -215,23 +239,23 @@ accessibility_labeled_by_nodes = Array[NodePath]([NodePath("HBoxContainer/Meta/T
 theme_override_styles/panel = SubResource("StyleBoxFlat_yrmdb")
 accessibility_region = true
 
-[node name="HBoxContainer" type="HBoxContainer" parent="Container/Padding/Layout/Resources/Docs" unique_id=730529116]
+[node name="HBoxContainer" type="HBoxContainer" parent="Container/Padding/Layout/Resources/Items/Docs" unique_id=730529116]
 layout_mode = 2
 theme_override_constants/separation = 16
 
-[node name="Meta" type="VBoxContainer" parent="Container/Padding/Layout/Resources/Docs/HBoxContainer" unique_id=491611772]
+[node name="Meta" type="VBoxContainer" parent="Container/Padding/Layout/Resources/Items/Docs/HBoxContainer" unique_id=491611772]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 0
 theme_override_constants/separation = 0
 
-[node name="Title" type="Label" parent="Container/Padding/Layout/Resources/Docs/HBoxContainer/Meta" unique_id=292956704]
+[node name="Title" type="Label" parent="Container/Padding/Layout/Resources/Items/Docs/HBoxContainer/Meta" unique_id=292956704]
 layout_mode = 2
 size_flags_vertical = 3
 theme_type_variation = &"HeaderSmall"
 text = "Documentation"
 
-[node name="DocsButton" type="Button" parent="Container/Padding/Layout/Resources/Docs/HBoxContainer" unique_id=1379633793]
+[node name="DocsButton" type="Button" parent="Container/Padding/Layout/Resources/Items/Docs/HBoxContainer" unique_id=1379633793]
 layout_mode = 2
 size_flags_vertical = 4
 tooltip_text = "View documentation"
@@ -239,7 +263,7 @@ theme_override_constants/icon_max_width = 18
 icon = ExtResource("4_yrmdb")
 icon_alignment = 1
 
-[node name="Issues" type="PanelContainer" parent="Container/Padding/Layout/Resources" unique_id=828435889]
+[node name="Issues" type="PanelContainer" parent="Container/Padding/Layout/Resources/Items" unique_id=828435889]
 layout_mode = 2
 size_flags_horizontal = 3
 accessibility_name = "Issue tracker"
@@ -247,24 +271,24 @@ accessibility_labeled_by_nodes = Array[NodePath]([NodePath("HBoxContainer/Meta/T
 theme_override_styles/panel = SubResource("StyleBoxFlat_cx1jr")
 accessibility_region = true
 
-[node name="HBoxContainer" type="HBoxContainer" parent="Container/Padding/Layout/Resources/Issues" unique_id=1959402616]
+[node name="HBoxContainer" type="HBoxContainer" parent="Container/Padding/Layout/Resources/Items/Issues" unique_id=1959402616]
 layout_mode = 2
 size_flags_vertical = 4
 theme_override_constants/separation = 16
 
-[node name="Meta" type="VBoxContainer" parent="Container/Padding/Layout/Resources/Issues/HBoxContainer" unique_id=820974620]
+[node name="Meta" type="VBoxContainer" parent="Container/Padding/Layout/Resources/Items/Issues/HBoxContainer" unique_id=820974620]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 0
 theme_override_constants/separation = 0
 
-[node name="Title" type="Label" parent="Container/Padding/Layout/Resources/Issues/HBoxContainer/Meta" unique_id=669708178]
+[node name="Title" type="Label" parent="Container/Padding/Layout/Resources/Items/Issues/HBoxContainer/Meta" unique_id=669708178]
 layout_mode = 2
 size_flags_vertical = 2
 theme_type_variation = &"HeaderSmall"
 text = "Issue Tracker"
 
-[node name="IssuesButton" type="Button" parent="Container/Padding/Layout/Resources/Issues/HBoxContainer" unique_id=225001517]
+[node name="IssuesButton" type="Button" parent="Container/Padding/Layout/Resources/Items/Issues/HBoxContainer" unique_id=225001517]
 layout_mode = 2
 size_flags_vertical = 4
 tooltip_text = "Report an issue"
@@ -273,7 +297,7 @@ theme_override_constants/icon_max_width = 18
 icon = ExtResource("4_yrmdb")
 icon_alignment = 1
 
-[node name="Settings" type="PanelContainer" parent="Container/Padding/Layout/Resources" unique_id=1686778136]
+[node name="Settings" type="PanelContainer" parent="Container/Padding/Layout/Resources/Items" unique_id=1686778136]
 layout_mode = 2
 size_flags_horizontal = 3
 accessibility_name = "Addon settings"
@@ -281,24 +305,24 @@ accessibility_labeled_by_nodes = Array[NodePath]([NodePath("HBoxContainer/Meta/T
 theme_override_styles/panel = SubResource("StyleBoxFlat_lrwqi")
 accessibility_region = true
 
-[node name="HBoxContainer" type="HBoxContainer" parent="Container/Padding/Layout/Resources/Settings" unique_id=1987605781]
+[node name="HBoxContainer" type="HBoxContainer" parent="Container/Padding/Layout/Resources/Items/Settings" unique_id=1987605781]
 layout_mode = 2
 size_flags_vertical = 4
 theme_override_constants/separation = 16
 
-[node name="Meta" type="VBoxContainer" parent="Container/Padding/Layout/Resources/Settings/HBoxContainer" unique_id=1350916315]
+[node name="Meta" type="VBoxContainer" parent="Container/Padding/Layout/Resources/Items/Settings/HBoxContainer" unique_id=1350916315]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 0
 theme_override_constants/separation = 0
 
-[node name="Title" type="Label" parent="Container/Padding/Layout/Resources/Settings/HBoxContainer/Meta" unique_id=1328338107]
+[node name="Title" type="Label" parent="Container/Padding/Layout/Resources/Items/Settings/HBoxContainer/Meta" unique_id=1328338107]
 layout_mode = 2
 size_flags_vertical = 2
 theme_type_variation = &"HeaderSmall"
 text = "Addon Settings"
 
-[node name="SettingsButton" type="Button" parent="Container/Padding/Layout/Resources/Settings/HBoxContainer" unique_id=1257919535]
+[node name="SettingsButton" type="Button" parent="Container/Padding/Layout/Resources/Items/Settings/HBoxContainer" unique_id=1257919535]
 layout_mode = 2
 size_flags_vertical = 4
 tooltip_text = "View addon settings"
