@@ -5,6 +5,7 @@
 [ext_resource type="Texture2D" uid="uid://pfs8d8babvcu" path="res://addons/GDQuest_GDScript_formatter/images/icons/download.svg" id="3_cku6i"]
 [ext_resource type="Texture2D" uid="uid://bgwq4as8xi47j" path="res://addons/GDQuest_GDScript_formatter/images/icons/resources.svg" id="4_2dn7m"]
 [ext_resource type="Texture2D" uid="uid://ctpras52nelx3" path="res://addons/GDQuest_GDScript_formatter/images/icons/link.svg" id="4_yrmdb"]
+[ext_resource type="Texture2D" uid="uid://n3171hh2ie3y" path="res://addons/GDQuest_GDScript_formatter/images/icons/arrow-right.svg" id="5_cx1jr"]
 [ext_resource type="Texture2D" uid="uid://dp30pekmsn6tt" path="res://addons/GDQuest_GDScript_formatter/images/icons/settings.svg" id="5_lrwqi"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_2dn7m"]
@@ -28,6 +29,17 @@ bg_color = Color(0.13333334, 0.13333334, 0.13333334, 1)
 corner_radius_top_right = 8
 corner_radius_bottom_right = 8
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_lrwqi"]
+content_margin_left = 8.0
+content_margin_top = 8.0
+content_margin_right = 8.0
+content_margin_bottom = 8.0
+bg_color = Color(0.13333334, 0.13333334, 0.13333334, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_yrmdb"]
 content_margin_left = 8.0
 content_margin_top = 8.0
@@ -43,13 +55,6 @@ content_margin_top = 8.0
 content_margin_right = 8.0
 content_margin_bottom = 8.0
 bg_color = Color(0.13333334, 0.13333334, 0.13333334, 1)
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_lrwqi"]
-content_margin_left = 8.0
-content_margin_top = 8.0
-content_margin_right = 8.0
-content_margin_bottom = 8.0
-bg_color = Color(0.13333334, 0.13333334, 0.13333334, 1)
 corner_radius_bottom_right = 8
 corner_radius_bottom_left = 8
 
@@ -57,7 +62,7 @@ corner_radius_bottom_left = 8
 oversampling_override = 1.0
 title = "GDScript Formatter"
 initial_position = 1
-size = Vector2i(439, 401)
+size = Vector2i(500, 354)
 visible = false
 wrap_controls = true
 unresizable = true
@@ -202,102 +207,41 @@ theme_override_constants/icon_max_width = 18
 icon = ExtResource("3_cku6i")
 icon_alignment = 1
 
-[node name="Resources" type="VBoxContainer" parent="Container/Padding/Layout" unique_id=308460711]
+[node name="SplitPanel" type="HBoxContainer" parent="Container/Padding/Layout" unique_id=1617836975]
 layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="QuickSettings" type="VBoxContainer" parent="Container/Padding/Layout/SplitPanel" unique_id=255097673]
+layout_mode = 2
+size_flags_horizontal = 3
 accessibility_name = "Resources"
 theme_override_constants/separation = 4
 accessibility_region = true
 
-[node name="Heading" type="HBoxContainer" parent="Container/Padding/Layout/Resources" unique_id=2131034157]
+[node name="Heading" type="HBoxContainer" parent="Container/Padding/Layout/SplitPanel/QuickSettings" unique_id=627743144]
 layout_mode = 2
 size_flags_vertical = 0
 theme_override_constants/separation = 0
 
-[node name="TextureRect" type="TextureRect" parent="Container/Padding/Layout/Resources/Heading" unique_id=213876480]
+[node name="TextureRect" type="TextureRect" parent="Container/Padding/Layout/SplitPanel/QuickSettings/Heading" unique_id=1095513836]
 custom_maximum_size = Vector2(18, 18)
 layout_mode = 2
 size_flags_horizontal = 4
 size_flags_vertical = 4
-texture = ExtResource("4_2dn7m")
+texture = ExtResource("5_lrwqi")
 
-[node name="Label" type="Label" parent="Container/Padding/Layout/Resources/Heading" unique_id=326050371]
+[node name="Label" type="Label" parent="Container/Padding/Layout/SplitPanel/QuickSettings/Heading" unique_id=2032064637]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 0
 theme_type_variation = &"HeaderSmall"
-text = "Resources"
+text = "Quick Settings"
 
-[node name="Items" type="VBoxContainer" parent="Container/Padding/Layout/Resources" unique_id=528407113]
+[node name="Items" type="VBoxContainer" parent="Container/Padding/Layout/SplitPanel/QuickSettings" unique_id=1814396095]
 layout_mode = 2
 theme_override_constants/separation = 1
 
-[node name="Docs" type="PanelContainer" parent="Container/Padding/Layout/Resources/Items" unique_id=1617879850]
-layout_mode = 2
-size_flags_horizontal = 3
-accessibility_name = "Documentation"
-accessibility_labeled_by_nodes = Array[NodePath]([NodePath("HBoxContainer/Meta/Title")])
-theme_override_styles/panel = SubResource("StyleBoxFlat_yrmdb")
-accessibility_region = true
-
-[node name="HBoxContainer" type="HBoxContainer" parent="Container/Padding/Layout/Resources/Items/Docs" unique_id=730529116]
-layout_mode = 2
-theme_override_constants/separation = 16
-
-[node name="Meta" type="VBoxContainer" parent="Container/Padding/Layout/Resources/Items/Docs/HBoxContainer" unique_id=491611772]
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 0
-theme_override_constants/separation = 0
-
-[node name="Title" type="Label" parent="Container/Padding/Layout/Resources/Items/Docs/HBoxContainer/Meta" unique_id=292956704]
-layout_mode = 2
-size_flags_vertical = 3
-theme_type_variation = &"HeaderSmall"
-text = "Documentation"
-
-[node name="DocsButton" type="Button" parent="Container/Padding/Layout/Resources/Items/Docs/HBoxContainer" unique_id=1379633793]
-layout_mode = 2
-size_flags_vertical = 4
-tooltip_text = "View documentation"
-theme_override_constants/icon_max_width = 18
-icon = ExtResource("4_yrmdb")
-icon_alignment = 1
-
-[node name="Issues" type="PanelContainer" parent="Container/Padding/Layout/Resources/Items" unique_id=828435889]
-layout_mode = 2
-size_flags_horizontal = 3
-accessibility_name = "Issue tracker"
-accessibility_labeled_by_nodes = Array[NodePath]([NodePath("HBoxContainer/Meta/Title")])
-theme_override_styles/panel = SubResource("StyleBoxFlat_cx1jr")
-accessibility_region = true
-
-[node name="HBoxContainer" type="HBoxContainer" parent="Container/Padding/Layout/Resources/Items/Issues" unique_id=1959402616]
-layout_mode = 2
-size_flags_vertical = 4
-theme_override_constants/separation = 16
-
-[node name="Meta" type="VBoxContainer" parent="Container/Padding/Layout/Resources/Items/Issues/HBoxContainer" unique_id=820974620]
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 0
-theme_override_constants/separation = 0
-
-[node name="Title" type="Label" parent="Container/Padding/Layout/Resources/Items/Issues/HBoxContainer/Meta" unique_id=669708178]
-layout_mode = 2
-size_flags_vertical = 2
-theme_type_variation = &"HeaderSmall"
-text = "Issue Tracker"
-
-[node name="IssuesButton" type="Button" parent="Container/Padding/Layout/Resources/Items/Issues/HBoxContainer" unique_id=225001517]
-layout_mode = 2
-size_flags_vertical = 4
-tooltip_text = "Report an issue"
-accessibility_name = "Report an issue"
-theme_override_constants/icon_max_width = 18
-icon = ExtResource("4_yrmdb")
-icon_alignment = 1
-
-[node name="Settings" type="PanelContainer" parent="Container/Padding/Layout/Resources/Items" unique_id=1686778136]
+[node name="Settings" type="PanelContainer" parent="Container/Padding/Layout/SplitPanel/QuickSettings/Items" unique_id=151495686]
 layout_mode = 2
 size_flags_horizontal = 3
 accessibility_name = "Addon settings"
@@ -305,28 +249,124 @@ accessibility_labeled_by_nodes = Array[NodePath]([NodePath("HBoxContainer/Meta/T
 theme_override_styles/panel = SubResource("StyleBoxFlat_lrwqi")
 accessibility_region = true
 
-[node name="HBoxContainer" type="HBoxContainer" parent="Container/Padding/Layout/Resources/Items/Settings" unique_id=1987605781]
+[node name="HBoxContainer" type="HBoxContainer" parent="Container/Padding/Layout/SplitPanel/QuickSettings/Items/Settings" unique_id=948736503]
 layout_mode = 2
 size_flags_vertical = 4
 theme_override_constants/separation = 16
 
-[node name="Meta" type="VBoxContainer" parent="Container/Padding/Layout/Resources/Items/Settings/HBoxContainer" unique_id=1350916315]
+[node name="Meta" type="VBoxContainer" parent="Container/Padding/Layout/SplitPanel/QuickSettings/Items/Settings/HBoxContainer" unique_id=1723535888]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 0
 theme_override_constants/separation = 0
 
-[node name="Title" type="Label" parent="Container/Padding/Layout/Resources/Items/Settings/HBoxContainer/Meta" unique_id=1328338107]
+[node name="Title" type="Label" parent="Container/Padding/Layout/SplitPanel/QuickSettings/Items/Settings/HBoxContainer/Meta" unique_id=2111755764]
 layout_mode = 2
 size_flags_vertical = 2
 theme_type_variation = &"HeaderSmall"
-text = "Addon Settings"
+text = "More Settings"
 
-[node name="SettingsButton" type="Button" parent="Container/Padding/Layout/Resources/Items/Settings/HBoxContainer" unique_id=1257919535]
+[node name="SettingsButton" type="Button" parent="Container/Padding/Layout/SplitPanel/QuickSettings/Items/Settings/HBoxContainer" unique_id=976437207]
 layout_mode = 2
 size_flags_vertical = 4
 tooltip_text = "View addon settings"
 accessibility_name = "View addon settings"
 theme_override_constants/icon_max_width = 18
-icon = ExtResource("5_lrwqi")
+icon = ExtResource("5_cx1jr")
+icon_alignment = 1
+
+[node name="Resources" type="VBoxContainer" parent="Container/Padding/Layout/SplitPanel" unique_id=308460711]
+layout_mode = 2
+size_flags_horizontal = 3
+accessibility_name = "Resources"
+theme_override_constants/separation = 4
+accessibility_region = true
+
+[node name="Heading" type="HBoxContainer" parent="Container/Padding/Layout/SplitPanel/Resources" unique_id=2131034157]
+layout_mode = 2
+size_flags_vertical = 0
+theme_override_constants/separation = 0
+
+[node name="TextureRect" type="TextureRect" parent="Container/Padding/Layout/SplitPanel/Resources/Heading" unique_id=213876480]
+custom_maximum_size = Vector2(18, 18)
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+texture = ExtResource("4_2dn7m")
+
+[node name="Label" type="Label" parent="Container/Padding/Layout/SplitPanel/Resources/Heading" unique_id=326050371]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 0
+theme_type_variation = &"HeaderSmall"
+text = "Resources"
+
+[node name="Items" type="VBoxContainer" parent="Container/Padding/Layout/SplitPanel/Resources" unique_id=528407113]
+layout_mode = 2
+theme_override_constants/separation = 1
+
+[node name="Docs" type="PanelContainer" parent="Container/Padding/Layout/SplitPanel/Resources/Items" unique_id=1617879850]
+layout_mode = 2
+size_flags_horizontal = 3
+accessibility_name = "Documentation"
+accessibility_labeled_by_nodes = Array[NodePath]([NodePath("HBoxContainer/Meta/Title")])
+theme_override_styles/panel = SubResource("StyleBoxFlat_yrmdb")
+accessibility_region = true
+
+[node name="HBoxContainer" type="HBoxContainer" parent="Container/Padding/Layout/SplitPanel/Resources/Items/Docs" unique_id=730529116]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Meta" type="VBoxContainer" parent="Container/Padding/Layout/SplitPanel/Resources/Items/Docs/HBoxContainer" unique_id=491611772]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 0
+theme_override_constants/separation = 0
+
+[node name="Title" type="Label" parent="Container/Padding/Layout/SplitPanel/Resources/Items/Docs/HBoxContainer/Meta" unique_id=292956704]
+layout_mode = 2
+size_flags_vertical = 3
+theme_type_variation = &"HeaderSmall"
+text = "Documentation"
+
+[node name="DocsButton" type="Button" parent="Container/Padding/Layout/SplitPanel/Resources/Items/Docs/HBoxContainer" unique_id=1379633793]
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "View documentation"
+theme_override_constants/icon_max_width = 18
+icon = ExtResource("4_yrmdb")
+icon_alignment = 1
+
+[node name="Issues" type="PanelContainer" parent="Container/Padding/Layout/SplitPanel/Resources/Items" unique_id=828435889]
+layout_mode = 2
+size_flags_horizontal = 3
+accessibility_name = "Issue tracker"
+accessibility_labeled_by_nodes = Array[NodePath]([NodePath("HBoxContainer/Meta/Title")])
+theme_override_styles/panel = SubResource("StyleBoxFlat_cx1jr")
+accessibility_region = true
+
+[node name="HBoxContainer" type="HBoxContainer" parent="Container/Padding/Layout/SplitPanel/Resources/Items/Issues" unique_id=1959402616]
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_constants/separation = 16
+
+[node name="Meta" type="VBoxContainer" parent="Container/Padding/Layout/SplitPanel/Resources/Items/Issues/HBoxContainer" unique_id=820974620]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 0
+theme_override_constants/separation = 0
+
+[node name="Title" type="Label" parent="Container/Padding/Layout/SplitPanel/Resources/Items/Issues/HBoxContainer/Meta" unique_id=669708178]
+layout_mode = 2
+size_flags_vertical = 2
+theme_type_variation = &"HeaderSmall"
+text = "Issue Tracker"
+
+[node name="IssuesButton" type="Button" parent="Container/Padding/Layout/SplitPanel/Resources/Items/Issues/HBoxContainer" unique_id=225001517]
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "Report an issue"
+accessibility_name = "Report an issue"
+theme_override_constants/icon_max_width = 18
+icon = ExtResource("4_yrmdb")
 icon_alignment = 1

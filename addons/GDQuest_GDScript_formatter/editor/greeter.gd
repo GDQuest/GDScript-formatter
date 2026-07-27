@@ -8,8 +8,8 @@ signal action_pressed(action: String)
 @onready var _formatter_version_label: Label = $Container/Padding/Layout/Versions/Formatter/Layout/Meta/Value
 @onready var _heading_label: Label = $Container/Padding/Layout/Heading/Description
 
-@onready var _docs_button: Button = $Container/Padding/Layout/Resources/Items/Docs/HBoxContainer/DocsButton
-@onready var _issues_button: Button = $Container/Padding/Layout/Resources/Items/Issues/HBoxContainer/IssuesButton
+@onready var _docs_button: Button = $Container/Padding/Layout/SplitPanel/Resources/Items/Docs/HBoxContainer/DocsButton
+@onready var _issues_button: Button = $Container/Padding/Layout/SplitPanel/Resources/Items/Issues/HBoxContainer/IssuesButton
 @onready var _formatter_button: Button = $Container/Padding/Layout/Versions/Formatter/Layout/FormatterButton
 
 var _addon_version: String = "0.0.0"
