@@ -4,6 +4,7 @@
 [ext_resource type="Texture2D" uid="uid://cp5vhsg54dmt5" path="res://addons/GDQuest_GDScript_formatter/images/gdquest_logo.svg" id="1_hq2xi"]
 [ext_resource type="Texture2D" uid="uid://pfs8d8babvcu" path="res://addons/GDQuest_GDScript_formatter/images/icons/download.svg" id="3_cku6i"]
 [ext_resource type="Texture2D" uid="uid://ctpras52nelx3" path="res://addons/GDQuest_GDScript_formatter/images/icons/link.svg" id="4_yrmdb"]
+[ext_resource type="Texture2D" uid="uid://dp30pekmsn6tt" path="res://addons/GDQuest_GDScript_formatter/images/icons/settings.svg" id="5_lrwqi"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_2dn7m"]
 bg_color = Color(0.105882354, 0.105882354, 0.105882354, 1)
@@ -35,6 +36,13 @@ bg_color = Color(0.13333334, 0.13333334, 0.13333334, 1)
 corner_radius_top_left = 8
 corner_radius_top_right = 8
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_cx1jr"]
+content_margin_left = 8.0
+content_margin_top = 8.0
+content_margin_right = 16.0
+content_margin_bottom = 8.0
+bg_color = Color(0.13333334, 0.13333334, 0.13333334, 1)
+
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_lrwqi"]
 content_margin_left = 8.0
 content_margin_top = 8.0
@@ -48,7 +56,7 @@ corner_radius_bottom_left = 8
 oversampling_override = 1.0
 title = "GDScript Formatter"
 initial_position = 1
-size = Vector2i(435, 289)
+size = Vector2i(435, 336)
 visible = false
 wrap_controls = true
 unresizable = true
@@ -236,7 +244,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 accessibility_name = "Issue tracker"
 accessibility_labeled_by_nodes = Array[NodePath]([NodePath("HBoxContainer/Meta/Title")])
-theme_override_styles/panel = SubResource("StyleBoxFlat_lrwqi")
+theme_override_styles/panel = SubResource("StyleBoxFlat_cx1jr")
 accessibility_region = true
 
 [node name="HBoxContainer" type="HBoxContainer" parent="Container/Padding/Layout/Resources/Issues" unique_id=1959402616]
@@ -263,4 +271,38 @@ tooltip_text = "Report an issue"
 accessibility_name = "Report an issue"
 theme_override_constants/icon_max_width = 18
 icon = ExtResource("4_yrmdb")
+icon_alignment = 1
+
+[node name="Settings" type="PanelContainer" parent="Container/Padding/Layout/Resources" unique_id=1686778136]
+layout_mode = 2
+size_flags_horizontal = 3
+accessibility_name = "Addon settings"
+accessibility_labeled_by_nodes = Array[NodePath]([NodePath("HBoxContainer/Meta/Title")])
+theme_override_styles/panel = SubResource("StyleBoxFlat_lrwqi")
+accessibility_region = true
+
+[node name="HBoxContainer" type="HBoxContainer" parent="Container/Padding/Layout/Resources/Settings" unique_id=1987605781]
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_constants/separation = 16
+
+[node name="Meta" type="VBoxContainer" parent="Container/Padding/Layout/Resources/Settings/HBoxContainer" unique_id=1350916315]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 0
+theme_override_constants/separation = 0
+
+[node name="Title" type="Label" parent="Container/Padding/Layout/Resources/Settings/HBoxContainer/Meta" unique_id=1328338107]
+layout_mode = 2
+size_flags_vertical = 2
+theme_type_variation = &"HeaderSmall"
+text = "Addon Settings"
+
+[node name="SettingsButton" type="Button" parent="Container/Padding/Layout/Resources/Settings/HBoxContainer" unique_id=1257919535]
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "View addon settings"
+accessibility_name = "View addon settings"
+theme_override_constants/icon_max_width = 18
+icon = ExtResource("5_lrwqi")
 icon_alignment = 1
