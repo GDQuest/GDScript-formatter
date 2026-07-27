@@ -4,13 +4,13 @@ extends Window
 
 signal action_pressed(action: String)
 
-@onready var _addon_version_label: Label = $Panel/Padding/Layout/Versions/Addon/Layout/Meta/Value
-@onready var _formatter_version_label: Label = $Panel/Padding/Layout/Versions/Formatter/Layout/Meta/Value
-@onready var _heading_label: Label = $Panel/Padding/Layout/Heading/Description
+@onready var _addon_version_label: Label = $Container/Padding/Layout/Versions/Addon/Layout/Meta/Value
+@onready var _formatter_version_label: Label = $Container/Padding/Layout/Versions/Formatter/Layout/Meta/Value
+@onready var _heading_label: Label = $Container/Padding/Layout/Heading/Description
 
-@onready var _docs_button: Button = $Panel/Padding/Layout/Links/Docs/HBoxContainer/DocsButton
-@onready var _issues_button: Button = $Panel/Padding/Layout/Links/Issues/HBoxContainer/IssuesButton
-@onready var _formatter_button: Button = $Panel/Padding/Layout/Versions/Formatter/Layout/FormatterButton
+@onready var _docs_button: Button = $Container/Padding/Layout/Links/Docs/HBoxContainer/DocsButton
+@onready var _issues_button: Button = $Container/Padding/Layout/Links/Issues/HBoxContainer/IssuesButton
+@onready var _formatter_button: Button = $Container/Padding/Layout/Versions/Formatter/Layout/FormatterButton
 
 var _addon_version: String = "0.0.0"
 var _formatter_version: String = "0.0.0"
