@@ -193,13 +193,13 @@ theme_override_constants/icon_max_width = 18
 icon = ExtResource("3_cku6i")
 icon_alignment = 1
 
-[node name="Links" type="VBoxContainer" parent="Container/Padding/Layout" unique_id=308460711]
+[node name="Resources" type="VBoxContainer" parent="Container/Padding/Layout" unique_id=308460711]
 layout_mode = 2
-accessibility_name = "Links"
+accessibility_name = "Resources"
 theme_override_constants/separation = 1
 accessibility_region = true
 
-[node name="Docs" type="PanelContainer" parent="Container/Padding/Layout/Links" unique_id=1617879850]
+[node name="Docs" type="PanelContainer" parent="Container/Padding/Layout/Resources" unique_id=1617879850]
 layout_mode = 2
 size_flags_horizontal = 3
 accessibility_name = "Documentation"
@@ -207,23 +207,23 @@ accessibility_labeled_by_nodes = Array[NodePath]([NodePath("HBoxContainer/Meta/T
 theme_override_styles/panel = SubResource("StyleBoxFlat_yrmdb")
 accessibility_region = true
 
-[node name="HBoxContainer" type="HBoxContainer" parent="Container/Padding/Layout/Links/Docs" unique_id=730529116]
+[node name="HBoxContainer" type="HBoxContainer" parent="Container/Padding/Layout/Resources/Docs" unique_id=730529116]
 layout_mode = 2
 theme_override_constants/separation = 16
 
-[node name="Meta" type="VBoxContainer" parent="Container/Padding/Layout/Links/Docs/HBoxContainer" unique_id=491611772]
+[node name="Meta" type="VBoxContainer" parent="Container/Padding/Layout/Resources/Docs/HBoxContainer" unique_id=491611772]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 0
 theme_override_constants/separation = 0
 
-[node name="Title" type="Label" parent="Container/Padding/Layout/Links/Docs/HBoxContainer/Meta" unique_id=292956704]
+[node name="Title" type="Label" parent="Container/Padding/Layout/Resources/Docs/HBoxContainer/Meta" unique_id=292956704]
 layout_mode = 2
 size_flags_vertical = 3
 theme_type_variation = &"HeaderSmall"
 text = "Documentation"
 
-[node name="DocsButton" type="Button" parent="Container/Padding/Layout/Links/Docs/HBoxContainer" unique_id=1379633793]
+[node name="DocsButton" type="Button" parent="Container/Padding/Layout/Resources/Docs/HBoxContainer" unique_id=1379633793]
 layout_mode = 2
 size_flags_vertical = 4
 tooltip_text = "View documentation"
@@ -231,7 +231,7 @@ theme_override_constants/icon_max_width = 18
 icon = ExtResource("4_yrmdb")
 icon_alignment = 1
 
-[node name="Issues" type="PanelContainer" parent="Container/Padding/Layout/Links" unique_id=828435889]
+[node name="Issues" type="PanelContainer" parent="Container/Padding/Layout/Resources" unique_id=828435889]
 layout_mode = 2
 size_flags_horizontal = 3
 accessibility_name = "Issue tracker"
@@ -239,24 +239,24 @@ accessibility_labeled_by_nodes = Array[NodePath]([NodePath("HBoxContainer/Meta/T
 theme_override_styles/panel = SubResource("StyleBoxFlat_lrwqi")
 accessibility_region = true
 
-[node name="HBoxContainer" type="HBoxContainer" parent="Container/Padding/Layout/Links/Issues" unique_id=1959402616]
+[node name="HBoxContainer" type="HBoxContainer" parent="Container/Padding/Layout/Resources/Issues" unique_id=1959402616]
 layout_mode = 2
 size_flags_vertical = 4
 theme_override_constants/separation = 16
 
-[node name="Meta" type="VBoxContainer" parent="Container/Padding/Layout/Links/Issues/HBoxContainer" unique_id=820974620]
+[node name="Meta" type="VBoxContainer" parent="Container/Padding/Layout/Resources/Issues/HBoxContainer" unique_id=820974620]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 0
 theme_override_constants/separation = 0
 
-[node name="Title" type="Label" parent="Container/Padding/Layout/Links/Issues/HBoxContainer/Meta" unique_id=669708178]
+[node name="Title" type="Label" parent="Container/Padding/Layout/Resources/Issues/HBoxContainer/Meta" unique_id=669708178]
 layout_mode = 2
 size_flags_vertical = 2
 theme_type_variation = &"HeaderSmall"
 text = "Issue Tracker"
 
-[node name="IssuesButton" type="Button" parent="Container/Padding/Layout/Links/Issues/HBoxContainer" unique_id=225001517]
+[node name="IssuesButton" type="Button" parent="Container/Padding/Layout/Resources/Issues/HBoxContainer" unique_id=225001517]
 layout_mode = 2
 size_flags_vertical = 4
 tooltip_text = "Report an issue"
