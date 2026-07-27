@@ -236,7 +236,8 @@ text = "Quick Settings"
 layout_mode = 2
 theme_override_constants/separation = 1
 
-[node name="Settings" type="PanelContainer" parent="Container/Layout/SplitPanel/QuickSettings/Items" unique_id=151495686]
+[node name="MoreSettings" type="PanelContainer" parent="Container/Layout/SplitPanel/QuickSettings/Items" unique_id=151495686]
+visible = false
 layout_mode = 2
 size_flags_horizontal = 3
 accessibility_name = "Addon settings"
@@ -244,24 +245,24 @@ accessibility_labeled_by_nodes = Array[NodePath]([NodePath("HBoxContainer/Meta/T
 theme_override_styles/panel = SubResource("StyleBoxFlat_lrwqi")
 accessibility_region = true
 
-[node name="HBoxContainer" type="HBoxContainer" parent="Container/Layout/SplitPanel/QuickSettings/Items/Settings" unique_id=948736503]
+[node name="HBoxContainer" type="HBoxContainer" parent="Container/Layout/SplitPanel/QuickSettings/Items/MoreSettings" unique_id=948736503]
 layout_mode = 2
 size_flags_vertical = 4
 theme_override_constants/separation = 16
 
-[node name="Meta" type="VBoxContainer" parent="Container/Layout/SplitPanel/QuickSettings/Items/Settings/HBoxContainer" unique_id=1723535888]
+[node name="Meta" type="VBoxContainer" parent="Container/Layout/SplitPanel/QuickSettings/Items/MoreSettings/HBoxContainer" unique_id=1723535888]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 0
 theme_override_constants/separation = 0
 
-[node name="Title" type="Label" parent="Container/Layout/SplitPanel/QuickSettings/Items/Settings/HBoxContainer/Meta" unique_id=2111755764]
+[node name="Title" type="Label" parent="Container/Layout/SplitPanel/QuickSettings/Items/MoreSettings/HBoxContainer/Meta" unique_id=2111755764]
 layout_mode = 2
 size_flags_vertical = 2
 theme_type_variation = &"HeaderSmall"
 text = "More Settings"
 
-[node name="SettingsButton" type="Button" parent="Container/Layout/SplitPanel/QuickSettings/Items/Settings/HBoxContainer" unique_id=976437207]
+[node name="MoreSettingsButton" type="Button" parent="Container/Layout/SplitPanel/QuickSettings/Items/MoreSettings/HBoxContainer" unique_id=976437207]
 layout_mode = 2
 size_flags_vertical = 4
 tooltip_text = "View addon settings"

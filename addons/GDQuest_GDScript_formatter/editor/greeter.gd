@@ -12,6 +12,10 @@ signal action_pressed(action: String)
 @onready var _issues_button: Button = $Container/Layout/SplitPanel/Resources/Items/Issues/HBoxContainer/IssuesButton
 @onready var _formatter_button: Button = $Container/Layout/Versions/Formatter/Layout/FormatterButton
 
+@onready var _more_settings_card: PanelContainer = $Container/Layout/SplitPanel/QuickSettings/Items/MoreSettings
+
+@export var enable_more_settings: bool = false
+
 var _addon_version: String = "0.0.0"
 var _formatter_version: String = "0.0.0"
 
@@ -25,6 +29,8 @@ func _ready() -> void:
 	_docs_button.button_down.connect(_handle_docs_press)
 	_issues_button.button_down.connect(_handle_issues_press)
 	_formatter_button.button_down.connect(_handle_formatter_press)
+	
+	_more_settings_card.visible = enable_more_settings
 	
 	_update_tagline()
 
