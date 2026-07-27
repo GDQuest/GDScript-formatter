@@ -153,12 +153,11 @@ accessibility_labeled_by_nodes = Array[NodePath]([NodePath("../Title")])
 theme_override_font_sizes/font_size = 14
 text = "0.0.0"
 
-[node name="Button" type="Button" parent="Container/Layout/Versions/Addon/Layout" unique_id=1381876748]
+[node name="AddonButton" type="Button" parent="Container/Layout/Versions/Addon/Layout" unique_id=1381876748]
 layout_mode = 2
 size_flags_vertical = 4
 tooltip_text = "Download update"
 theme_override_constants/icon_max_width = 18
-disabled = true
 icon = ExtResource("3_cku6i")
 icon_alignment = 1
 

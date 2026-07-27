@@ -525,6 +525,10 @@ func show_help() -> void:
 	OS.shell_open("https://www.gdquest.com/library/gdscript_formatter/")
 
 
+func update_addon() -> void:
+	OS.shell_open("https://github.com/GDQuest/GDScript-formatter/releases")
+
+
 func _on_menu_item_selected(command: String) -> void:
 	match command:
 		"format_script":
@@ -541,6 +545,8 @@ func _on_menu_item_selected(command: String) -> void:
 			report_issue()
 		"help":
 			show_help()
+		"update_addon":
+			update_addon()
 		_:
 			push_warning("Unsupported command sent from the menu: " + command)
 

@@ -11,6 +11,7 @@ signal action_pressed(action: String)
 @onready var _docs_button: Button = $Container/Layout/SplitPanel/Resources/Items/Docs/HBoxContainer/DocsButton
 @onready var _issues_button: Button = $Container/Layout/SplitPanel/Resources/Items/Issues/HBoxContainer/IssuesButton
 @onready var _formatter_button: Button = $Container/Layout/Versions/Formatter/Layout/FormatterButton
+@onready var _addon_button: Button = $Container/Layout/Versions/Addon/Layout/AddonButton
 
 @onready var _more_settings_card: PanelContainer = $Container/Layout/SplitPanel/QuickSettings/Items/MoreSettings
 
@@ -29,6 +30,7 @@ func _ready() -> void:
 	_docs_button.button_down.connect(_handle_docs_press)
 	_issues_button.button_down.connect(_handle_issues_press)
 	_formatter_button.button_down.connect(_handle_formatter_press)
+	_addon_button.button_down.connect(_handle_addon_press)
 	
 	_more_settings_card.visible = enable_more_settings
 	
@@ -62,6 +64,7 @@ func _handle_close() -> void:
 	_docs_button.button_down.disconnect(_handle_docs_press)
 	_issues_button.button_down.disconnect(_handle_issues_press)
 	_formatter_button.button_down.disconnect(_handle_formatter_press)
+	_addon_button.button_down.disconnect(_handle_addon_press)
 	
 	hide()
 
@@ -76,3 +79,7 @@ func _handle_issues_press() -> void:
 
 func _handle_formatter_press() -> void:
 	action_pressed.emit("install_update")
+
+
+func _handle_addon_press() -> void:
+	action_pressed.emit("update_addon")
