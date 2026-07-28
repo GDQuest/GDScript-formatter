@@ -148,7 +148,7 @@ theme_override_constants/separation = -4
 layout_mode = 2
 size_flags_vertical = 0
 theme_override_font_sizes/font_size = 12
-text = "Addon Version"
+text = "Addon version"
 
 [node name="Value" type="Label" parent="Container/Layout/Versions/Addon/Layout/Meta" unique_id=1344464055]
 layout_mode = 2
@@ -190,7 +190,7 @@ theme_override_constants/separation = -4
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_font_sizes/font_size = 12
-text = "Formatter Version"
+text = "Formatter version"
 
 [node name="Value" type="Label" parent="Container/Layout/Versions/Formatter/Layout/Meta" unique_id=1786751365]
 layout_mode = 2
@@ -238,7 +238,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 0
 theme_type_variation = &"HeaderSmall"
-text = "Quick Settings"
+text = "Quick settings"
 
 [node name="Items" type="VBoxContainer" parent="Container/Layout/SplitPanel/QuickSettings" unique_id=1814396095]
 layout_mode = 2
@@ -269,7 +269,7 @@ theme_override_constants/separation = 0
 layout_mode = 2
 size_flags_vertical = 2
 theme_override_font_sizes/font_size = 12
-text = "More Settings"
+text = "More settings"
 
 [node name="MoreSettingsButton" type="Button" parent="Container/Layout/SplitPanel/QuickSettings/Items/MoreSettings/HBoxContainer" unique_id=976437207]
 layout_mode = 2
@@ -367,7 +367,7 @@ layout_mode = 2
 size_flags_horizontal = 0
 size_flags_vertical = 2
 theme_override_font_sizes/font_size = 12
-text = "Issue Tracker"
+text = "Issue tracker"
 
 [node name="IssuesButton" type="Button" parent="Container/Layout/SplitPanel/Resources/Items/Issues/HBoxContainer" unique_id=225001517]
 layout_mode = 2
