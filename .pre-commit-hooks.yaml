@@ -1,6 +1,12 @@
 - id: gdscript-formatter
   name: GDScript Formatter
   description: Format GDScript files with gdscript-formatter
-  entry: gdscript-formatter --safe
+  entry: gdscript-formatter
+  language: unsupported
+  files: \.gd$
+- id: gdscript-linter
+  name: GDScript Linter
+  description: Lint GDScript files with gdscript-formatter
+  entry: gdscript-formatter lint
   language: unsupported
   files: \.gd$
