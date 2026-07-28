@@ -38,7 +38,7 @@ bg_color = Color(0.13333334, 0.13333334, 0.13333334, 1)
 corner_radius_top_right = 8
 corner_radius_bottom_right = 8
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_lrwqi"]
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_0pdmk"]
 content_margin_left = 8.0
 content_margin_top = 8.0
 content_margin_right = 8.0
@@ -46,6 +46,20 @@ content_margin_bottom = 8.0
 bg_color = Color(0.13333334, 0.13333334, 0.13333334, 1)
 corner_radius_top_left = 8
 corner_radius_top_right = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_ciixy"]
+content_margin_left = 8.0
+content_margin_top = 8.0
+content_margin_right = 8.0
+content_margin_bottom = 8.0
+bg_color = Color(0.13333334, 0.13333334, 0.13333334, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_lrwqi"]
+content_margin_left = 8.0
+content_margin_top = 8.0
+content_margin_right = 8.0
+content_margin_bottom = 8.0
+bg_color = Color(0.13333334, 0.13333334, 0.13333334, 1)
 corner_radius_bottom_right = 8
 corner_radius_bottom_left = 8
 
@@ -71,7 +85,7 @@ corner_radius_bottom_left = 8
 oversampling_override = 1.0
 title = "GDScript Formatter"
 initial_position = 1
-size = Vector2i(500, 341)
+size = Vector2i(500, 378)
 visible = false
 wrap_controls = true
 unresizable = true
@@ -243,6 +257,38 @@ text = "Quick settings"
 [node name="Items" type="VBoxContainer" parent="Container/Layout/SplitPanel/QuickSettings" unique_id=1814396095]
 layout_mode = 2
 theme_override_constants/separation = 1
+
+[node name="FormatOnSave" type="PanelContainer" parent="Container/Layout/SplitPanel/QuickSettings/Items" unique_id=839105562]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+accessibility_name = "Format on save"
+accessibility_labeled_by_nodes = Array[NodePath]([NodePath("")])
+theme_override_styles/panel = SubResource("StyleBoxFlat_0pdmk")
+accessibility_region = true
+
+[node name="Toggle" type="CheckButton" parent="Container/Layout/SplitPanel/QuickSettings/Items/FormatOnSave" unique_id=762096402]
+layout_mode = 2
+tooltip_text = "Automatically formats your code when the file is saved"
+theme_override_font_sizes/font_size = 12
+text = "Format on save"
+flat = true
+
+[node name="LintOnSave" type="PanelContainer" parent="Container/Layout/SplitPanel/QuickSettings/Items" unique_id=1685232789]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+accessibility_name = "Lint on save"
+accessibility_labeled_by_nodes = Array[NodePath]([NodePath("")])
+theme_override_styles/panel = SubResource("StyleBoxFlat_ciixy")
+accessibility_region = true
+
+[node name="Toggle" type="CheckButton" parent="Container/Layout/SplitPanel/QuickSettings/Items/LintOnSave" unique_id=693952472]
+layout_mode = 2
+tooltip_text = "Automatically checks your code for mistakes when the file is saved"
+theme_override_font_sizes/font_size = 12
+text = "Lint on save"
+flat = true
 
 [node name="MoreSettings" type="PanelContainer" parent="Container/Layout/SplitPanel/QuickSettings/Items" unique_id=151495686]
 visible = false
