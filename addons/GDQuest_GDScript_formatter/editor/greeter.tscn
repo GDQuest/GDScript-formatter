@@ -163,7 +163,7 @@ text = "0.0.0"
 layout_mode = 2
 size_flags_vertical = 4
 tooltip_text = "Download update"
-theme_override_constants/icon_max_width = 18
+theme_override_constants/icon_max_width = 16
 icon = ExtResource("3_cku6i")
 icon_alignment = 1
 
@@ -206,7 +206,7 @@ layout_mode = 2
 size_flags_horizontal = 4
 size_flags_vertical = 4
 tooltip_text = "Download update"
-theme_override_constants/icon_max_width = 18
+theme_override_constants/icon_max_width = 16
 icon = ExtResource("3_cku6i")
 icon_alignment = 1
 
@@ -276,7 +276,7 @@ layout_mode = 2
 size_flags_vertical = 4
 tooltip_text = "View addon settings"
 accessibility_name = "View addon settings"
-theme_override_constants/icon_max_width = 18
+theme_override_constants/icon_max_width = 16
 icon = ExtResource("5_cx1jr")
 icon_alignment = 1
 
@@ -339,7 +339,7 @@ text = "Documentation"
 layout_mode = 2
 size_flags_vertical = 4
 tooltip_text = "View documentation"
-theme_override_constants/icon_max_width = 18
+theme_override_constants/icon_max_width = 16
 icon = ExtResource("4_yrmdb")
 icon_alignment = 1
 
@@ -374,6 +374,6 @@ layout_mode = 2
 size_flags_vertical = 4
 tooltip_text = "Report an issue"
 accessibility_name = "Report an issue"
-theme_override_constants/icon_max_width = 18
+theme_override_constants/icon_max_width = 16
 icon = ExtResource("4_yrmdb")
 icon_alignment = 1
