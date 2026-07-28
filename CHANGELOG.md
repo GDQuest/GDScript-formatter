@@ -11,6 +11,7 @@ This file documents the changes made to the formatter with each release.
 ### Fixed
 
 - Fixed an extra comma being inserted after a trailing comment in a lambda function argument (#304)
+- fixed certain export annotations being moved out of their respective groups (#308)
 
 ## Release 0.24.0 (2026-07-25)
 
