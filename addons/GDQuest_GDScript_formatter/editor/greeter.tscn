@@ -27,6 +27,7 @@ corner_radius_bottom_left = 8
 [sub_resource type="SystemFont" id="SystemFont_cx1jr"]
 font_names = PackedStringArray("Monospace")
 font_weight = 600
+subpixel_positioning = 0
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hq2xi"]
 content_margin_left = 4.0
@@ -211,7 +212,7 @@ icon_alignment = 1
 
 [node name="SplitPanel" type="HBoxContainer" parent="Container/Layout" unique_id=1617836975]
 layout_mode = 2
-theme_override_constants/separation = 16
+theme_override_constants/separation = 8
 
 [node name="QuickSettings" type="VBoxContainer" parent="Container/Layout/SplitPanel" unique_id=255097673]
 layout_mode = 2
@@ -247,6 +248,7 @@ theme_override_constants/separation = 1
 visible = false
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 3
 accessibility_name = "Addon settings"
 accessibility_labeled_by_nodes = Array[NodePath]([NodePath("HBoxContainer/Meta/Title")])
 theme_override_styles/panel = SubResource("StyleBoxFlat_lrwqi")
@@ -260,13 +262,13 @@ theme_override_constants/separation = 16
 [node name="Meta" type="VBoxContainer" parent="Container/Layout/SplitPanel/QuickSettings/Items/MoreSettings/HBoxContainer" unique_id=1723535888]
 layout_mode = 2
 size_flags_horizontal = 3
-size_flags_vertical = 0
+size_flags_vertical = 4
 theme_override_constants/separation = 0
 
 [node name="Title" type="Label" parent="Container/Layout/SplitPanel/QuickSettings/Items/MoreSettings/HBoxContainer/Meta" unique_id=2111755764]
 layout_mode = 2
 size_flags_vertical = 2
-theme_type_variation = &"HeaderSmall"
+theme_override_font_sizes/font_size = 12
 text = "More Settings"
 
 [node name="MoreSettingsButton" type="Button" parent="Container/Layout/SplitPanel/QuickSettings/Items/MoreSettings/HBoxContainer" unique_id=976437207]
@@ -318,18 +320,19 @@ accessibility_region = true
 
 [node name="HBoxContainer" type="HBoxContainer" parent="Container/Layout/SplitPanel/Resources/Items/Docs" unique_id=730529116]
 layout_mode = 2
+size_flags_vertical = 0
 theme_override_constants/separation = 16
 
 [node name="Meta" type="VBoxContainer" parent="Container/Layout/SplitPanel/Resources/Items/Docs/HBoxContainer" unique_id=491611772]
 layout_mode = 2
 size_flags_horizontal = 3
-size_flags_vertical = 0
+size_flags_vertical = 4
 theme_override_constants/separation = 0
 
 [node name="Title" type="Label" parent="Container/Layout/SplitPanel/Resources/Items/Docs/HBoxContainer/Meta" unique_id=292956704]
 layout_mode = 2
 size_flags_vertical = 3
-theme_type_variation = &"HeaderSmall"
+theme_override_font_sizes/font_size = 12
 text = "Documentation"
 
 [node name="DocsButton" type="Button" parent="Container/Layout/SplitPanel/Resources/Items/Docs/HBoxContainer" unique_id=1379633793]
@@ -356,13 +359,14 @@ theme_override_constants/separation = 16
 [node name="Meta" type="VBoxContainer" parent="Container/Layout/SplitPanel/Resources/Items/Issues/HBoxContainer" unique_id=820974620]
 layout_mode = 2
 size_flags_horizontal = 3
-size_flags_vertical = 0
+size_flags_vertical = 4
 theme_override_constants/separation = 0
 
 [node name="Title" type="Label" parent="Container/Layout/SplitPanel/Resources/Items/Issues/HBoxContainer/Meta" unique_id=669708178]
 layout_mode = 2
+size_flags_horizontal = 0
 size_flags_vertical = 2
-theme_type_variation = &"HeaderSmall"
+theme_override_font_sizes/font_size = 12
 text = "Issue Tracker"
 
 [node name="IssuesButton" type="Button" parent="Container/Layout/SplitPanel/Resources/Items/Issues/HBoxContainer" unique_id=225001517]
