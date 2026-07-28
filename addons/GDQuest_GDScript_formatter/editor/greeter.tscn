@@ -16,19 +16,23 @@ content_margin_bottom = 16.0
 bg_color = Color(0.105882354, 0.105882354, 0.105882354, 1)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_cku6i"]
-content_margin_left = 8.0
+content_margin_left = 4.0
 content_margin_top = 4.0
-content_margin_right = 16.0
+content_margin_right = 12.0
 content_margin_bottom = 4.0
 bg_color = Color(0.13333334, 0.13333334, 0.13333334, 1)
 corner_radius_top_left = 8
 corner_radius_bottom_left = 8
 
+[sub_resource type="SystemFont" id="SystemFont_cx1jr"]
+font_names = PackedStringArray("Monospace")
+font_weight = 600
+
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hq2xi"]
-content_margin_left = 8.0
-content_margin_top = 8.0
-content_margin_right = 16.0
-content_margin_bottom = 8.0
+content_margin_left = 4.0
+content_margin_top = 4.0
+content_margin_right = 12.0
+content_margin_bottom = 4.0
 bg_color = Color(0.13333334, 0.13333334, 0.13333334, 1)
 corner_radius_top_right = 8
 corner_radius_bottom_right = 8
@@ -66,7 +70,7 @@ corner_radius_bottom_left = 8
 oversampling_override = 1.0
 title = "GDScript Formatter"
 initial_position = 1
-size = Vector2i(500, 354)
+size = Vector2i(500, 341)
 visible = false
 wrap_controls = true
 unresizable = true
@@ -137,12 +141,12 @@ theme_override_constants/separation = 16
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
-theme_override_constants/separation = 0
+theme_override_constants/separation = -4
 
 [node name="Title" type="Label" parent="Container/Layout/Versions/Addon/Layout/Meta" unique_id=1563506712]
 layout_mode = 2
 size_flags_vertical = 0
-theme_type_variation = &"HeaderSmall"
+theme_override_font_sizes/font_size = 12
 text = "Addon Version"
 
 [node name="Value" type="Label" parent="Container/Layout/Versions/Addon/Layout/Meta" unique_id=1344464055]
@@ -150,7 +154,8 @@ layout_mode = 2
 size_flags_vertical = 0
 accessibility_live = 1
 accessibility_labeled_by_nodes = Array[NodePath]([NodePath("../Title")])
-theme_override_font_sizes/font_size = 14
+theme_override_fonts/font = SubResource("SystemFont_cx1jr")
+theme_override_font_sizes/font_size = 16
 text = "0.0.0"
 
 [node name="AddonButton" type="Button" parent="Container/Layout/Versions/Addon/Layout" unique_id=1381876748]
@@ -178,11 +183,12 @@ theme_override_constants/separation = 16
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
+theme_override_constants/separation = -4
 
 [node name="Title" type="Label" parent="Container/Layout/Versions/Formatter/Layout/Meta" unique_id=265656052]
 layout_mode = 2
 size_flags_vertical = 3
-theme_type_variation = &"HeaderSmall"
+theme_override_font_sizes/font_size = 12
 text = "Formatter Version"
 
 [node name="Value" type="Label" parent="Container/Layout/Versions/Formatter/Layout/Meta" unique_id=1786751365]
@@ -190,6 +196,8 @@ layout_mode = 2
 size_flags_vertical = 2
 accessibility_live = 1
 accessibility_labeled_by_nodes = Array[NodePath]([NodePath("../Title")])
+theme_override_fonts/font = SubResource("SystemFont_cx1jr")
+theme_override_font_sizes/font_size = 16
 text = "0.0.0"
 
 [node name="FormatterButton" type="Button" parent="Container/Layout/Versions/Formatter/Layout" unique_id=1459022472]
