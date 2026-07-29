@@ -270,7 +270,7 @@ func _exit_tree() -> void:
 	installer = null
 	
 	greeter_panel.action_pressed.disconnect(_on_menu_item_selected)
-	greeter_panel.setting_changed.disconnect(set_editor_setting)
+	greeter_panel.setting_changed.disconnect(_handle_greeter_setting_change)
 	greeter_panel.queue_free()
 
 	if is_instance_valid(menu):
