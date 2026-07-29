@@ -33,6 +33,12 @@ const COMMAND_PALETTE_INSTALL_UPDATE = "Install or Update Formatter"
 const COMMAND_PALETTE_UNINSTALL = "Uninstall Formatter"
 const COMMAND_PALETTE_REPORT_ISSUE = "Report Issue"
 
+# Quick settings that are shown in the greeter
+const QUICK_SETTINGS = [
+	SETTING_FORMAT_ON_SAVE,
+	SETTING_LINT_ON_SAVE
+]
+
 var DEFAULT_SETTINGS = {
 	SETTING_FORMAT_ON_SAVE: false,
 	SETTING_USE_SPACES: false,
@@ -45,6 +51,7 @@ var DEFAULT_SETTINGS = {
 	SETTING_LINT_IGNORED_RULES: "",
 	SETTING_IGNORED_DIRECTORIES: PackedStringArray(["addons/"]),
 }
+
 
 ## Which gutter lint icons are shown in.
 ## By default, gutter 0 is for breakpoints and 1 is for things like overrides.
@@ -144,8 +151,21 @@ func _show_greeter() -> void:
 	
 	greeter_panel.popup_centered()
 	greeter_panel.action_pressed.connect(_on_menu_item_selected)
+	greeter_panel.setting_changed.connect(set_editor_setting)
+	
+	_apply_greeter_defaults()
 
 
+func _apply_greeter_defaults() -> void:
+	if not greeter_panel:
+		return
+		
+	for setting in QUICK_SETTINGS:
+		var state = get_editor_setting(setting)
+		
+		greeter_panel.set_setting_state(setting, state)
+		
+		
 func _exit_tree() -> void:
 	resource_saved.disconnect(_on_resource_saved)
 
@@ -159,6 +179,7 @@ func _exit_tree() -> void:
 	installer = null
 	
 	greeter_panel.action_pressed.disconnect(_on_menu_item_selected)
+	greeter_panel.setting_changed.disconnect(set_editor_setting)
 	greeter_panel.queue_free()
 
 	if is_instance_valid(menu):
