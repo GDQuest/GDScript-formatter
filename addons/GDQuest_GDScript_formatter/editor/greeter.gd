@@ -16,8 +16,6 @@ signal setting_changed(setting: String, value: Variant)
 @onready var _format_on_save_toggle: CheckButton = $Container/Layout/SplitPanel/QuickSettings/Items/FormatOnSave/Toggle
 @onready var _lint_on_save_toggle: CheckButton = $Container/Layout/SplitPanel/QuickSettings/Items/LintOnSave/Toggle
 
-@onready var _more_settings_card: PanelContainer = $Container/Layout/SplitPanel/QuickSettings/Items/MoreSettings
-
 @export var enable_more_settings: bool = false
 
 var _addon_version: String = "0.0.0"
@@ -37,8 +35,6 @@ func _ready() -> void:
 	_addon_button.button_down.connect(_handle_addon_press)
 	_format_on_save_toggle.toggled.connect(_handle_format_on_save_toggle)
 	_lint_on_save_toggle.toggled.connect(_handle_lint_on_save_toggle)
-
-	_more_settings_card.visible = enable_more_settings
 
 	_update_tagline()
 	_update_setting_ui()

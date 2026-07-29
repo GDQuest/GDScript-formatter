@@ -5,7 +5,6 @@
 [ext_resource type="Texture2D" uid="uid://pfs8d8babvcu" path="res://addons/GDQuest_GDScript_formatter/images/icons/download.svg" id="3_cku6i"]
 [ext_resource type="Texture2D" uid="uid://bgwq4as8xi47j" path="res://addons/GDQuest_GDScript_formatter/images/icons/resources.svg" id="4_2dn7m"]
 [ext_resource type="Texture2D" uid="uid://ctpras52nelx3" path="res://addons/GDQuest_GDScript_formatter/images/icons/link.svg" id="4_yrmdb"]
-[ext_resource type="Texture2D" uid="uid://n3171hh2ie3y" path="res://addons/GDQuest_GDScript_formatter/images/icons/arrow-right.svg" id="5_cx1jr"]
 [ext_resource type="Texture2D" uid="uid://dp30pekmsn6tt" path="res://addons/GDQuest_GDScript_formatter/images/icons/settings.svg" id="5_lrwqi"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_2dn7m"]
@@ -53,13 +52,6 @@ content_margin_top = 8.0
 content_margin_right = 8.0
 content_margin_bottom = 8.0
 bg_color = Color(0.13333334, 0.13333334, 0.13333334, 1)
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_lrwqi"]
-content_margin_left = 8.0
-content_margin_top = 8.0
-content_margin_right = 8.0
-content_margin_bottom = 8.0
-bg_color = Color(0.13333334, 0.13333334, 0.13333334, 1)
 corner_radius_bottom_right = 8
 corner_radius_bottom_left = 8
 
@@ -85,7 +77,7 @@ corner_radius_bottom_left = 8
 oversampling_override = 1.0
 title = "GDScript Formatter"
 initial_position = 1
-size = Vector2i(597, 409)
+size = Vector2i(500, 339)
 visible = false
 wrap_controls = true
 unresizable = true
@@ -236,6 +228,11 @@ accessibility_region = true
 [node name="Heading" type="HBoxContainer" parent="Container/Layout/SplitPanel/QuickSettings" unique_id=627743144]
 layout_mode = 2
 size_flags_vertical = 0
+tooltip_text = "Quick access to the most
+commonly used settings.
+
+Need more? Find them
+under your Editor Settings."
 theme_override_constants/separation = 0
 
 [node name="TextureRect" type="TextureRect" parent="Container/Layout/SplitPanel/QuickSettings/Heading" unique_id=1095513836]
@@ -267,7 +264,8 @@ accessibility_region = true
 
 [node name="Toggle" type="CheckButton" parent="Container/Layout/SplitPanel/QuickSettings/Items/FormatOnSave" unique_id=762096402]
 layout_mode = 2
-tooltip_text = "Automatically formats your code when the file is saved"
+tooltip_text = "Formats your code
+when the file is saved"
 text = "Format on save"
 flat = true
 
@@ -282,44 +280,11 @@ accessibility_region = true
 
 [node name="Toggle" type="CheckButton" parent="Container/Layout/SplitPanel/QuickSettings/Items/LintOnSave" unique_id=693952472]
 layout_mode = 2
-tooltip_text = "Automatically checks your code for mistakes when the file is saved"
+tooltip_text = "Checks your code
+for common mistakes when
+the file is saved"
 text = "Lint on save"
 flat = true
-
-[node name="MoreSettings" type="PanelContainer" parent="Container/Layout/SplitPanel/QuickSettings/Items" unique_id=151495686]
-visible = false
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
-accessibility_name = "Addon settings"
-accessibility_labeled_by_nodes = Array[NodePath]([NodePath("HBoxContainer/Meta/Title")])
-theme_override_styles/panel = SubResource("StyleBoxFlat_lrwqi")
-accessibility_region = true
-
-[node name="HBoxContainer" type="HBoxContainer" parent="Container/Layout/SplitPanel/QuickSettings/Items/MoreSettings" unique_id=948736503]
-layout_mode = 2
-size_flags_vertical = 4
-theme_override_constants/separation = 16
-
-[node name="Meta" type="VBoxContainer" parent="Container/Layout/SplitPanel/QuickSettings/Items/MoreSettings/HBoxContainer" unique_id=1723535888]
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 4
-theme_override_constants/separation = 0
-
-[node name="Title" type="Label" parent="Container/Layout/SplitPanel/QuickSettings/Items/MoreSettings/HBoxContainer/Meta" unique_id=2111755764]
-layout_mode = 2
-size_flags_vertical = 2
-text = "More settings"
-
-[node name="MoreSettingsButton" type="Button" parent="Container/Layout/SplitPanel/QuickSettings/Items/MoreSettings/HBoxContainer" unique_id=976437207]
-layout_mode = 2
-size_flags_vertical = 4
-tooltip_text = "View addon settings"
-accessibility_name = "View addon settings"
-theme_override_constants/icon_max_width = 16
-icon = ExtResource("5_cx1jr")
-icon_alignment = 1
 
 [node name="Resources" type="VBoxContainer" parent="Container/Layout/SplitPanel" unique_id=308460711]
 layout_mode = 2
