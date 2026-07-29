@@ -65,6 +65,7 @@ var menu: FormatterMenu = null
 var greeter_panel: Greeter = null
 var _has_uninstall_command := false
 var _has_formatter_command := false
+var _setting_updated_via_greeter := false
 # Used to auto detect changes to the project's .editorconfig file.
 var _editorconfig_last_modified_time := -1
 # Editorconfig allows setting rules per path glob. We track globs for the format
@@ -140,7 +141,7 @@ func _enter_tree() -> void:
 
 	update_shortcut()
 	resource_saved.connect(_on_resource_saved)
-	
+
 
 func _show_greeter() -> void:
 	if not greeter_panel:
@@ -151,10 +152,14 @@ func _show_greeter() -> void:
 	
 	greeter_panel.popup_centered()
 	greeter_panel.action_pressed.connect(_on_menu_item_selected)
-	greeter_panel.setting_changed.connect(set_editor_setting)
+	greeter_panel.setting_changed.connect(_handle_greeter_setting_change)
 	
 	_apply_greeter_defaults()
 
+func _handle_greeter_setting_change(setting: String, value: Variant) -> void:
+	_setting_updated_via_greeter = true
+	
+	set_editor_setting(setting, value)
 
 func _apply_greeter_defaults() -> void:
 	if not greeter_panel:
@@ -187,6 +192,15 @@ func _exit_tree() -> void:
 		menu.remove_formatter_menu()
 		menu.queue_free()
 		menu = null
+
+
+func _notification(what: int) -> void:
+	var has_settings_changed = what == EditorSettings.NOTIFICATION_EDITOR_SETTINGS_CHANGED
+	
+	if has_settings_changed and not _setting_updated_via_greeter:
+		_apply_greeter_defaults()
+		
+	_setting_updated_via_greeter = false
 
 
 func _shortcut_input(event: InputEvent) -> void:
