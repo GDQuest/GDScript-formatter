@@ -1669,6 +1669,14 @@ fn process_container(
                     }
                 }
             }
+            // Preserve up to one blank line used to group elements in
+            // "containers" like enums.
+            if let Some(previous_child) = previous
+                && child_kind != GDScriptNodeKind::Comment
+                && count_newlines(input.source, previous_child.end_byte(), child.start_byte()) > 1
+            {
+                render_elements.push(RenderElement::BlankLine);
+            }
             skip_next_separator = false;
             process_node(input, child, render_elements);
             if child_kind == GDScriptNodeKind::TokenComma {
@@ -2875,6 +2883,11 @@ fn process_lambda_separator(
 
     if previous_kind == GDScriptNodeKind::KeywordFunc
         && current_kind == GDScriptNodeKind::Parameters
+    {
+        return;
+    }
+
+    if current_kind == GDScriptNodeKind::Parameters && previous_kind == GDScriptNodeKind::Identifier
     {
         return;
     }

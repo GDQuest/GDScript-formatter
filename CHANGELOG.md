@@ -8,10 +8,15 @@ This file documents the changes made to the formatter with each release.
 
 - Added `--verbose` option to print one line per formatted file (#227)
 
+### Changed
+
+- Removed space between lambda function name and parameter list
+
 ### Fixed
 
 - Fixed an extra comma being inserted after a trailing comment in a lambda function argument (#304)
 - fixed certain export annotations being moved out of their respective groups (#308)
+- Preserve up to one blank line used to group elements in "containers" like enums
 
 ## Release 0.24.0 (2026-07-25)
 

@@ -70,3 +70,11 @@ func issue_301() -> void:
 # would stay on a single line.
 func issue_300(open_xr_analog_threshold_modifier_long: OpenXRAnalogThresholdModifier, other_type: Test) -> void:
 	pass
+
+
+func issue_named_lambda() -> void:
+	_beta_indicator.fold_state_changed.connect(
+		func _on_beta_indicator_fold_state_changed (is_folded: bool) -> void:
+			_user_profile.beta_indicator_folded = is_folded
+			_user_profile.save(),
+	)

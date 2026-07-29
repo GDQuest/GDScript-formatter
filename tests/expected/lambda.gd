@@ -80,3 +80,11 @@ func issue_300(
 	other_type: Test,
 ) -> void:
 	pass
+
+
+func issue_named_lambda() -> void:
+	_beta_indicator.fold_state_changed.connect(
+		func _on_beta_indicator_fold_state_changed(is_folded: bool) -> void:
+			_user_profile.beta_indicator_folded = is_folded
+			_user_profile.save(),
+	)
