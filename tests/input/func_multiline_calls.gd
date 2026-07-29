@@ -41,3 +41,20 @@ func _test() -> void:
 # (trailing '\').
 func play_tween_jump() -> void:
 	create_tween().tween_property(animated_sprite, "scale", Vector2(1.2, 0.8), 0.1).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+
+
+# A multiline argument in a function call that's not at the end of a chain of
+# function calls should not force explicit line continuations for the rest of a
+# chain. In a previous version it would break like
+#
+# S \
+#   .declare(
+func issue_298() -> void:
+	S.declare([
+		S.bind_label(item_name, title),
+		S.bind_label(item_description, description),
+		S.bind_label(cost, cost_label),
+		S.bind_label(buy_switch_text, buy_or_switch_label),
+		S.bind_visible(active, self),
+		S.bind_visible(should_show_cost, cost_container),
+	]).bind(self)

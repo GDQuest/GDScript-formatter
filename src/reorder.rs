@@ -76,26 +76,6 @@ pub enum MethodType {
     Custom,             // all other user methods
 }
 
-/// Checks whether a single `annotation` node's `identifier` child has text
-/// equal to `expected_name`.
-fn annotation_identifier_matches(
-    annotation_node: Node,
-    content: &str,
-    expected_name: &str,
-) -> bool {
-    let count = annotation_node.child_count();
-    let mut child_index = 0;
-    while child_index < count {
-        if let Some(child) = annotation_node.child(child_index as u32) {
-            if GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Identifier {
-                return get_node_text(child, content) == expected_name;
-            }
-        }
-        child_index += 1;
-    }
-    false
-}
-
 /// Slice the source string at a node's byte range.
 /// Tree-sitter byte offsets are always on UTF-8 char boundaries.
 fn get_node_text<'a>(node: Node<'a>, content: &'a str) -> &'a str {
@@ -145,10 +125,10 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
         if kind == GDScriptNodeKind::Comment || kind == GDScriptNodeKind::RegionStart {
             is_child_attached_to_declaration[child_index] = true;
         } else if kind == GDScriptNodeKind::Annotation {
-            // Make sure to keep tool at the top of the script, above class_name
-            // and extends. Otherwise it's a syntax error.
+            // Make sure to keep tool and icon at the top of the script, above
+            // class_name and extends. Otherwise it's a syntax error.
             let annotation_name = get_node_text(child, content);
-            if annotation_name.starts_with("@tool") {
+            if annotation_name.starts_with("@tool") || annotation_name.starts_with("@icon") {
                 items.push(ReorderItem {
                     child_index,
                     sub_child: None,
@@ -496,11 +476,55 @@ fn classify_child<'a>(node: Node<'a>, content: &'a str) -> ChildClassification<'
 }
 
 fn classify_variable<'a>(node: Node<'a>, content: &'a str) -> ChildClassification<'a> {
+    fn get_annotation_identifier<'a>(annotation: Node<'a>, content: &'a str) -> Option<&'a str> {
+        let child_count = annotation.child_count();
+        let mut child_index = 0;
+        while child_index < child_count {
+            if let Some(child) = annotation.child(child_index as u32) {
+                if GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Identifier {
+                    return Some(get_node_text(child, content));
+                }
+            }
+            child_index += 1;
+        }
+        None
+    }
+
     let name = extract_name(node, content).unwrap_or("unknown_var");
 
-    if has_annotation_with_name(node, content, "export") {
+    let mut has_export_annotation = false;
+    let mut has_onready_annotation = false;
+    for child_index in 0..node.child_count() {
+        let Some(child) = node.child(child_index as u32) else {
+            continue;
+        };
+        if GDScriptNodeKind::get_kind_from_ast_node(child) != GDScriptNodeKind::Annotations {
+            continue;
+        }
+
+        for annotation_index in 0..child.child_count() {
+            let Some(annotation) = child.child(annotation_index as u32) else {
+                continue;
+            };
+            if GDScriptNodeKind::get_kind_from_ast_node(annotation) != GDScriptNodeKind::Annotation
+            {
+                continue;
+            }
+
+            let Some(annotation_name) = get_annotation_identifier(annotation, content) else {
+                continue;
+            };
+            if annotation_name.starts_with("export") {
+                has_export_annotation = true;
+            } else if annotation_name == "onready" {
+                has_onready_annotation = true;
+            }
+        }
+    }
+
+    if has_export_annotation {
         ChildClassification::new(DeclarationKind::ExportVariable, name)
-    } else if has_annotation_with_name(node, content, "onready") {
+    } else if has_onready_annotation {
         ChildClassification::new(DeclarationKind::OnReadyVariable, name)
     } else if has_static_keyword_child(node) {
         ChildClassification::new(DeclarationKind::StaticVariable, name)
@@ -554,44 +578,6 @@ fn has_static_keyword_child(node: Node) -> bool {
     false
 }
 
-/// Returns true if `node` has an `annotations` child containing an
-/// `annotation` whose identifier matches `annotation_name`.
-///
-/// This replaces fragile source-text checks like `text.contains("@export")`
-/// which can falsely match comments or strings containing those substrings.
-fn has_annotation_with_name(node: Node, content: &str, annotation_name: &str) -> bool {
-    let count = node.child_count();
-    let mut child_index = 0;
-    while child_index < count {
-        if let Some(child) = node.child(child_index as u32) {
-            if GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Annotations
-                && annotations_contain_name(child, content, annotation_name)
-            {
-                return true;
-            }
-        }
-        child_index += 1;
-    }
-    false
-}
-
-/// Walks the children of an `annotations` container node and checks whether
-/// any `annotation` child has an `identifier` whose text matches `name`.
-fn annotations_contain_name(annotations_node: Node, content: &str, name: &str) -> bool {
-    let count = annotations_node.child_count();
-    let mut child_index = 0;
-    while child_index < count {
-        if let Some(child) = annotations_node.child(child_index as u32) {
-            if GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Annotation
-                && annotation_identifier_matches(child, content, name)
-            {
-                return true;
-            }
-        }
-        child_index += 1;
-    }
-    false
-}
 /// Maps built-in virtual method names to Godot lifecycle priority.
 fn get_builtin_virtual_priority(method_name: &str) -> u8 {
     match method_name {

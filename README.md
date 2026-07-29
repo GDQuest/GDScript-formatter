@@ -64,10 +64,10 @@ You can also pass multiple files or folders:
 gdscript-formatter path/to/file.gd path/to/folder
 ```
 
-Use the `--safe` flag to add a safety check that prevents overwriting files if the formatter makes unwanted changes (any change that would modify the code meaning, like removing a piece of functional code). This is most useful when formatting many files at once, running the formatter from a script or in continuous integration, or when you use a development version of the formatter:
+Use the `--verify-structure` flag to reparse the formatted output and reject it if its structure differs from the input. This is an imperfect check, not a guarantee that formatting is safe or semantically equivalent. It is most useful when formatting many files at once, running the formatter from a script or in continuous integration, or when you do not regularly use version control:
 
 ```bash
-gdscript-formatter --safe path/to/folder
+gdscript-formatter --verify-structure path/to/folder
 ```
 
 Format with check mode, to use in a build system (exit code 1 if changes needed):
@@ -84,6 +84,8 @@ To see other possible options, run `gdscript-formatter --help`.
 ## Using editorconfig
 
 You can also configure the formatter with an [EditorConfig](https://editorconfig.org/) file at the root of your project. This is a good way to share the same formatting settings with your whole team. The formatter supports the standard keys `indent_style`, `indent_size`, `max_line_length`, `insert_final_newline`, and `trim_trailing_whitespace`, plus custom keys prefixed with `gdscript_formatter_`. See the [GDScript Formatter docs](https://www.gdquest.com/library/gdscript_formatter/) for the complete list. Note that command line flags override `.editorconfig` values.
+
+To exclude files or directories, pass `--exclude` (or `-x`) one or more times, for example `gdscript-formatter . -x addons`. You can also exclude files matched by an EditorConfig section with `gdscript_formatter_exclude = true`.
 
 Use `--quote-style preserve/single/double` to automatically normalize the string quote style. You can also set the style in your `.editorconfig` file using the key `gdscript_formatter_quote_style`. The default value, `preserve`, leaves existing quotes unchanged.
 

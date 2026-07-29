@@ -56,3 +56,35 @@ func issue_287() -> void:
 			),
 		self,
 	)
+
+
+# Godot doesn't support a trailing comma in a lambda ending an argument list
+# when the lambda ends with a match statement. We make sure the formatter
+# doesn't insert a trailing comma in this case.
+func issue_301() -> void:
+	[0, 2, 3].filter(
+		func(value: int):
+			match value:
+				0:
+					return false
+				_:
+					return true
+	)
+
+
+# Verifies that this function wraps. In a previous release, the return type
+# would not be accounted for in the width calculation, so the parameter list
+# would stay on a single line.
+func issue_300(
+	open_xr_analog_threshold_modifier_long: OpenXRAnalogThresholdModifier,
+	other_type: Test,
+) -> void:
+	pass
+
+
+func issue_named_lambda() -> void:
+	_beta_indicator.fold_state_changed.connect(
+		func _on_beta_indicator_fold_state_changed(is_folded: bool) -> void:
+			_user_profile.beta_indicator_folded = is_folded
+			_user_profile.save(),
+	)

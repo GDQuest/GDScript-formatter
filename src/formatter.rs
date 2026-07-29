@@ -338,9 +338,10 @@ fn process_node(
             }
         }
         GDScriptNodeKind::Body | GDScriptNodeKind::ClassBody | GDScriptNodeKind::MatchBody => {
-            process_body(input, node, render_elements)
+            process_body(input, node, render_elements, false)
         }
         GDScriptNodeKind::Lambda => process_lambda(input, node, render_elements),
+        GDScriptNodeKind::Function => process_function(input, node, render_elements),
         GDScriptNodeKind::SetGet => process_setget(input, node, render_elements),
         GDScriptNodeKind::ParenthesizedExpression => {
             process_parenthesized_expression(input, node, render_elements)
@@ -350,6 +351,70 @@ fn process_node(
         GDScriptNodeKind::Attribute => process_attribute(input, node, render_elements),
         _ => process_children_with_spacing(input, node, render_elements),
     }
+}
+
+/// Groups a function header (the declaration line/first line) separately from
+/// its body so the complete header, including the return type, is treated as
+/// one unit when deciding whether parameters need to be wrapped onto multiple
+/// lines.
+fn process_function(
+    input: &ParseInput,
+    node: tree_sitter::Node,
+    render_elements: &mut Vec<RenderElement>,
+) {
+    let mut has_disabled_region = false;
+    let mut region_index = 0;
+    while region_index < input.disabled_regions.len() {
+        let region = input.disabled_regions[region_index];
+        if region.start < node.end_byte() && region.end > node.start_byte() {
+            has_disabled_region = true;
+            break;
+        }
+        region_index += 1;
+    }
+    // Disabled regions (fmt: off / fmt: on comment pairs) can overlap a
+    // function anywhere, so they can be anywhere in the middle of the function
+    // AST. If we encounter one we fall back to the generic formatter, which
+    // handles disabled regions correctly.
+    if has_disabled_region {
+        process_children_with_spacing(input, node, render_elements);
+        return;
+    }
+
+    let group_index = begin_group(render_elements);
+    let mut previous: Option<tree_sitter::Node> = None;
+    let mut child_index = 0;
+    while child_index < node.child_count() {
+        if let Some(child) = node.child(child_index as u32) {
+            let child_kind = GDScriptNodeKind::get_kind_from_ast_node(child);
+            if child_kind == GDScriptNodeKind::Body {
+                finish_group(render_elements, group_index);
+                if let Some(previous_child) = previous {
+                    process_separator_between_sibling_nodes(
+                        GDScriptNodeKind::Function,
+                        &previous_child,
+                        &child,
+                        render_elements,
+                    );
+                }
+                process_node(input, child, render_elements);
+                return;
+            }
+
+            if let Some(previous_child) = previous {
+                process_separator_between_sibling_nodes(
+                    GDScriptNodeKind::Function,
+                    &previous_child,
+                    &child,
+                    render_elements,
+                );
+            }
+            process_node(input, child, render_elements);
+            previous = Some(child);
+        }
+        child_index += 1;
+    }
+    finish_group(render_elements, group_index);
 }
 
 /// Returns the string with the preferred string delimiters if the user used the
@@ -551,6 +616,7 @@ fn process_body(
     input: &ParseInput,
     node: tree_sitter::Node,
     render_elements: &mut Vec<RenderElement>,
+    do_add_comma_before_trailing_comment: bool,
 ) {
     let source = input.source;
     let indent_index = begin_indent(render_elements, 1);
@@ -622,6 +688,15 @@ fn process_body(
             last_processed_child_kind = Some(GDScriptNodeKind::SemiColon);
             current_index += 1;
             continue;
+        }
+        // This is used for cases like a lambda function in a function call, we
+        // need to add a delimiter between arguments but the comma should go
+        // before any trailing comment on a given line.
+        if do_add_comma_before_trailing_comment
+            && current_child_kind == GDScriptNodeKind::Comment
+            && current_index + 1 == child_count
+        {
+            render_elements.push(RenderElement::TextStatic(","));
         }
         if let Some(previous_end) = last_processed_child_end_byte {
             if last_processed_child_kind == Some(GDScriptNodeKind::SemiColon) {
@@ -1513,7 +1588,15 @@ fn process_container(
         return;
     }
 
-    let group_index = begin_group(render_elements);
+    let is_function_parameters = node_kind == GDScriptNodeKind::Parameters
+        && node.parent().is_some_and(|parent| {
+            GDScriptNodeKind::get_kind_from_ast_node(parent) == GDScriptNodeKind::Function
+        });
+    let group_index = if is_function_parameters {
+        None
+    } else {
+        Some(begin_group(render_elements))
+    };
 
     if let Some(open) = node.child(0) {
         process_node(input, open, render_elements);
@@ -1585,6 +1668,14 @@ fn process_container(
                         );
                     }
                 }
+            }
+            // Preserve up to one blank line used to group elements in
+            // "containers" like enums.
+            if let Some(previous_child) = previous
+                && child_kind != GDScriptNodeKind::Comment
+                && count_newlines(input.source, previous_child.end_byte(), child.start_byte()) > 1
+            {
+                render_elements.push(RenderElement::BlankLine);
             }
             skip_next_separator = false;
             process_node(input, child, render_elements);
@@ -1664,14 +1755,26 @@ fn process_container(
         && node.child(1).is_some_and(|child| {
             GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Lambda
         });
+    // This works around an edge case of the GDScript parser in Godot failing to
+    // parse an unparenthesized lambda argument if its final statement is match
+    // and the formatter adds a comma to the last match branch.
+    let is_unparenthesized_lambda_with_match = is_single_lambda
+        && node_kind == GDScriptNodeKind::Arguments
+        && node.child(1).is_some_and(lambda_ends_with_match_node);
     let needs_lambda_trailing_comma = is_single_lambda
         && matches!(
             node_kind,
             GDScriptNodeKind::Array | GDScriptNodeKind::Arguments
-        );
+        )
+        && !is_unparenthesized_lambda_with_match;
+    let lambda_has_trailing_comment = is_single_lambda
+        && node
+            .child(1)
+            .is_some_and(is_lambda_body_ending_with_comment);
     if (contains_more_than_one_element || needs_lambda_trailing_comma)
         && !trailing_comma_handled
         && !last_was_comment
+        && !lambda_has_trailing_comment
     {
         let text_index = render_elements.len() + 1;
         render_elements.push(RenderElement::Branch {
@@ -1709,7 +1812,9 @@ fn process_container(
         process_node(input, close, render_elements);
     }
 
-    finish_group(render_elements, group_index);
+    if let Some(group_index) = group_index {
+        finish_group(render_elements, group_index);
+    }
 }
 
 /// Formats ParenthesizedExpression nodes with a Group. Falls back to
@@ -2535,7 +2640,12 @@ fn process_method_call_arguments(
         } else if has_lambda_argument {
             process_node(input, args, render_elements);
         } else {
+            // Prevent a multiline argument list from forcing the surrounding
+            // method call chain to use explicit line continuations (trailing
+            // "\").
+            let group_index = begin_group_until_first_line_break(render_elements);
             process_method_arguments_flat(input, args, render_elements);
+            finish_group(render_elements, group_index);
         }
     }
 }
@@ -2615,6 +2725,17 @@ fn process_lambda(
 
     let group_index = begin_group(render_elements);
 
+    let do_add_comma_before_trailing_comment = node.parent().is_some_and(|parent| {
+        let parent_kind = GDScriptNodeKind::get_kind_from_ast_node(parent);
+        matches!(
+            parent_kind,
+            GDScriptNodeKind::Array | GDScriptNodeKind::Arguments
+        ) && parent.child_count() == 3
+            && parent.child(1).is_some_and(|child| child == node)
+            && !lambda_ends_with_match_node(node)
+            && is_lambda_body_ending_with_comment(node)
+    });
+
     let mut index = 0;
     let mut previous: Option<tree_sitter::Node> = None;
     while index < child_count {
@@ -2639,7 +2760,11 @@ fn process_lambda(
                     process_lambda_separator(previous_kind, child_kind, render_elements);
                 }
             }
-            process_node(input, child, render_elements);
+            if child_kind == GDScriptNodeKind::Body && do_add_comma_before_trailing_comment {
+                process_body(input, child, render_elements, true);
+            } else {
+                process_node(input, child, render_elements);
+            }
             previous = Some(child);
         }
         index += 1;
@@ -2673,6 +2798,60 @@ fn process_lambda(
     finish_group(render_elements, group_index);
 }
 
+fn is_lambda_body_ending_with_comment(lambda: tree_sitter::Node) -> bool {
+    let mut child_index = 0;
+    while child_index < lambda.child_count() {
+        if let Some(child) = lambda.child(child_index as u32)
+            && GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Body
+        {
+            return child
+                .child(child.child_count().saturating_sub(1) as u32)
+                .is_some_and(|last_child| {
+                    GDScriptNodeKind::get_kind_from_ast_node(last_child)
+                        == GDScriptNodeKind::Comment
+                });
+        }
+        child_index += 1;
+    }
+    false
+}
+
+fn lambda_ends_with_match_node(lambda: tree_sitter::Node) -> bool {
+    let mut child_index = 0;
+    while child_index < lambda.child_count() {
+        if let Some(child) = lambda.child(child_index as u32)
+            && GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Body
+        {
+            let mut last_statement = None;
+            let mut statement_index = 0;
+            while statement_index < child.named_child_count() {
+                last_statement = child.named_child(statement_index as u32);
+                statement_index += 1;
+            }
+            return last_statement.is_some_and(|statement| {
+                if GDScriptNodeKind::get_kind_from_ast_node(statement)
+                    == GDScriptNodeKind::MatchBody
+                {
+                    return true;
+                }
+                let mut statement_child_index = 0;
+                while statement_child_index < statement.child_count() {
+                    if let Some(statement_child) = statement.child(statement_child_index as u32)
+                        && GDScriptNodeKind::get_kind_from_ast_node(statement_child)
+                            == GDScriptNodeKind::MatchBody
+                    {
+                        return true;
+                    }
+                    statement_child_index += 1;
+                }
+                false
+            });
+        }
+        child_index += 1;
+    }
+    false
+}
+
 /// Handles spacing between children of a lambda node. Deals with comments (hard
 /// line), body-like nodes (hard line), specific token pairs that need no
 /// separator, and defaults to a space.
@@ -2704,6 +2883,11 @@ fn process_lambda_separator(
 
     if previous_kind == GDScriptNodeKind::KeywordFunc
         && current_kind == GDScriptNodeKind::Parameters
+    {
+        return;
+    }
+
+    if current_kind == GDScriptNodeKind::Parameters && previous_kind == GDScriptNodeKind::Identifier
     {
         return;
     }

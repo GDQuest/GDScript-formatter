@@ -20,8 +20,10 @@ const HELP_FORMATTER: &str = "\
 
 	Options:
 	  -c, --check                                Check if files are formatted, exit 1 if not
-	  -s, --safe                                 Safe mode: abort if formatting changes code meaning
+	  -x, --exclude <PATH>                       Exclude one file or directory (you can repeat this option multiple times)
+	      --verify-structure                     Verify formatted output has the same structure as the input
 	      --stdout                               Write to stdout instead of overwriting files
+	  -v, --verbose                              Print one status line for each processed file
 	      --use-spaces                           Use spaces instead of tabs for indentation
 	      --indent-size <NUM>                    Spaces per indent level (default: 4)
 	      --reorder-code                         Reorder code to match the style guide
@@ -47,6 +49,7 @@ Arguments:
   <FILES>...                 GDScript files or directories to lint
 
 Options:
+  -x, --exclude <PATH>         Exclude a file or directory (may be repeated)
       --disable <RULES>       Disable specific rules (comma-separated)
       --max-line-length <NUM>  Maximum line length allowed (default: 100)
       --list-rules            List all available linting rules
@@ -59,6 +62,8 @@ Options:
 pub struct CliArguments {
     /// List of input file paths or directories to process.
     pub input_file_paths: Vec<PathBuf>,
+    /// Files or directories to skip during discovery.
+    pub excluded_paths: Vec<PathBuf>,
     /// Which command to run.
     pub command: Command,
 }
@@ -71,6 +76,8 @@ pub enum Command {
         /// If true, prints the formatted output to stdout instead of writing to
         /// files.
         do_print_to_stdout: bool,
+        /// If true, prints one status line for each processed file.
+        use_verbose_output: bool,
         /// If true, only checks if the files are formatted, without modifying
         /// them. Returns error code ERROR_CODE_NOT_FORMATTED if any of the input
         /// files are not formatted.
@@ -79,9 +86,9 @@ pub enum Command {
         use_spaces: Option<bool>,
         /// Number of spaces to use for indentation.
         indent_size: Option<usize>,
-        /// If true, the formatter will re-parse the formatted code to ensure it
-        /// matches the original code semantics before writing it to files.
-        use_safe_mode: bool,
+        /// If true, the formatter will re-parse the formatted code and verify it
+        /// has the same structure as the original before writing it to files.
+        use_verify_structure: bool,
         /// If true, the formatter will reorder code to follow the official
         /// GDScript style guide's recommended order of code elements.
         do_reorder_code: bool,
@@ -124,11 +131,13 @@ pub fn parse_args() -> CliArguments {
     let mut active_command = ActiveCommand::Format;
 
     let mut input_file_paths: Vec<PathBuf> = Vec::new();
+    let mut excluded_paths: Vec<PathBuf> = Vec::new();
     let mut format_do_print_to_stdout = false;
+    let mut format_use_verbose_output = false;
     let mut format_do_check_formatted_only = false;
     let mut format_use_spaces: Option<bool> = None;
     let mut format_indent_size: Option<usize> = None;
-    let mut format_use_safe_mode = false;
+    let mut format_use_verify_structure = false;
     let mut format_do_reorder_code = false;
     let mut format_max_line_length: Option<usize> = None;
     let mut format_blank_lines_around_definitions: Option<u16> = None;
@@ -179,9 +188,22 @@ pub fn parse_args() -> CliArguments {
             let (flag_name, assigned_value) = split_flag_and_value(flag_without_prefix);
             match active_command {
                 ActiveCommand::Format => match flag_name {
+                    "exclude" => {
+                        let value = consume_flag_value(
+                            assigned_value,
+                            &argument_list,
+                            &mut current_argument_index,
+                            "--exclude",
+                        );
+                        excluded_paths.push(PathBuf::from(value));
+                    }
                     "stdout" => {
                         require_no_value(assigned_value, "--stdout");
                         format_do_print_to_stdout = true;
+                    }
+                    "verbose" => {
+                        require_no_value(assigned_value, "--verbose");
+                        format_use_verbose_output = true;
                     }
                     "check" => {
                         require_no_value(assigned_value, "--check");
@@ -191,9 +213,17 @@ pub fn parse_args() -> CliArguments {
                         require_no_value(assigned_value, "--use-spaces");
                         format_use_spaces = Some(true);
                     }
+                    "verify-structure" => {
+                        require_no_value(assigned_value, "--verify-structure");
+                        format_use_verify_structure = true;
+                    }
                     "safe" => {
+                        // DEPRECATED: We keep this flag for anyone who already
+                        // used it as part of a CI or of their workflow. But
+                        // it's now replaced by --verify-structure, which is a
+                        // more accurate name for this mode.
                         require_no_value(assigned_value, "--safe");
-                        format_use_safe_mode = true;
+                        format_use_verify_structure = true;
                     }
                     "reorder-code" => {
                         require_no_value(assigned_value, "--reorder-code");
@@ -280,6 +310,15 @@ pub fn parse_args() -> CliArguments {
                     )),
                 },
                 ActiveCommand::Lint => match flag_name {
+                    "exclude" => {
+                        let value = consume_flag_value(
+                            assigned_value,
+                            &argument_list,
+                            &mut current_argument_index,
+                            "--exclude",
+                        );
+                        excluded_paths.push(PathBuf::from(value));
+                    }
                     "disable" => {
                         let value = consume_flag_value(
                             assigned_value,
@@ -320,6 +359,17 @@ pub fn parse_args() -> CliArguments {
             }
         } else if current_argument.starts_with('-') && current_argument.len() > 1 {
             let short_flags = &current_argument[1..];
+            if short_flags == "x" {
+                let value = consume_flag_value(
+                    None,
+                    &argument_list,
+                    &mut current_argument_index,
+                    "-x/--exclude",
+                );
+                excluded_paths.push(PathBuf::from(value));
+                current_argument_index += 1;
+                continue;
+            }
             for flag_char in short_flags.chars() {
                 match flag_char {
                     'c' => {
@@ -332,7 +382,13 @@ pub fn parse_args() -> CliArguments {
                         if matches!(active_command, ActiveCommand::Lint) {
                             print_error_invalid_argument("unexpected argument '-s'");
                         }
-                        format_use_safe_mode = true;
+                        format_use_verify_structure = true;
+                    }
+                    'v' => {
+                        if matches!(active_command, ActiveCommand::Lint) {
+                            print_error_invalid_argument("unexpected argument '-v'");
+                        }
+                        format_use_verbose_output = true;
                     }
                     _ => print_error_invalid_argument(&format!(
                         "unexpected argument '-{}'",
@@ -349,12 +405,14 @@ pub fn parse_args() -> CliArguments {
     match active_command {
         ActiveCommand::Format => CliArguments {
             input_file_paths,
+            excluded_paths,
             command: Command::Format {
                 do_print_to_stdout: format_do_print_to_stdout,
+                use_verbose_output: format_use_verbose_output,
                 do_check_formatted_only: format_do_check_formatted_only,
                 use_spaces: format_use_spaces,
                 indent_size: format_indent_size,
-                use_safe_mode: format_use_safe_mode,
+                use_verify_structure: format_use_verify_structure,
                 do_reorder_code: format_do_reorder_code,
                 max_line_length: format_max_line_length,
                 blank_lines_around_definitions: format_blank_lines_around_definitions,
@@ -364,6 +422,7 @@ pub fn parse_args() -> CliArguments {
         },
         ActiveCommand::Lint => CliArguments {
             input_file_paths,
+            excluded_paths,
             command: Command::Lint {
                 disabled_linter_rules: lint_disabled_rules,
                 max_line_length: lint_max_line_length,

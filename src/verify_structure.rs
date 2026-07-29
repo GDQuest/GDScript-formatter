@@ -1,23 +1,31 @@
-//! Safe-mode structural comparison of input and output CSTs.
+//! This module compares and verifies the structure of the input and output
+//! syntax trees (before and after running the formatter).
 //!
-//! The formatter can make three structurally-significant but semantically-neutral
-//! changes to the CST:
+//! This helps with verifying that the formatter does not drop syntax on very
+//! large code files and catching cases where the formatter would break code
+//! semantics. It's not a perfect check because the AST does not necessarily
+//! capture everything there is to know about the code (the parser may be
+//! incomplete; we use this project to test and refine it) and the parser itself
+//! may have bugs.
 //!
-//! 1. **Annotation merge**: `@export\nvar x = 1` (annotation sibling + variable
+//! Note that the formatter causes some changes to the AST structure that are
+//! not semantic changes. So this module has to account for those to avoid false
+//! positives. These are:
+//!
+//! 1. Annotation merge: `@export\nvar x = 1` (annotation sibling + variable
 //!    sibling) may become `@export var x = 1` (single variable_statement with
 //!    annotations child inside), or vice versa.
 //!
-//! 2. **Extends split**: when reorder is active, `class_name Foo extends Bar`
-//!    (class_name_statement with inline extends child) becomes
-//!    `class_name Foo` + `extends Bar` (two siblings).
+//! 2. Splitting statements. E.g., `class_name Foo extends Bar`
+//!    (class_name_statement with inline extends child) becomes `class_name
+//!    Foo\nextends Bar` (two siblings).
 //!
-//! 3. **Expression wrapping**: the formatter may add parentheses around a long
-//!    expression so it can wrap safely. Parenthesized expressions normalize to
-//!    their inner expression.
+//! 3. Wrapping expressions: the formatter may add parentheses around a long
+//!    expression so it can wrap safely. Parenthesized expressions are ignored and
+//!    normalized to their inner expression before checking.
 //!
-//! Normalization walks both trees recursively, applies these canonical forms,
-//! then compares the normalized trees structurally (kind + children match).
-
+//! We normalize ASTs recursively checking for these things before comparing
+//! them (i.e. verify that node kind + children match).
 use crate::node_kind::GDScriptNodeKind;
 use tree_sitter::Node;
 

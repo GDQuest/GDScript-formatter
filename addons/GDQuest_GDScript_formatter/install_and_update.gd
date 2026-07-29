@@ -32,10 +32,10 @@ func install_or_update_formatter() -> void:
 
 
 func _on_request_completed(
-		_http_result: int,
-		response_code: int,
-		_http_headers: PackedStringArray,
-		body: PackedByteArray,
+	_http_result: int,
+	response_code: int,
+	_http_headers: PackedStringArray,
+	body: PackedByteArray,
 ) -> void:
 	if response_code != 200:
 		var error_message := "HTTP request failed. Response code: " + str(response_code)
@@ -78,11 +78,7 @@ func _process_response_latest_release(body: PackedByteArray) -> void:
 		installation_failed.emit(error_message)
 		return
 
-	print(
-		"Found compatible release, starting download...\n",
-		"Download URL: ",
-		download_url,
-	)
+	print("Found compatible release, starting download...\n", "Download URL: ", download_url)
 
 	http_request_state = HttpRequestState.DOWNLOADING_BINARY
 	http_request.request(download_url)
@@ -109,12 +105,7 @@ func _process_response_download_file(body: PackedByteArray) -> void:
 		return
 
 	print(
-		"\n".join(
-			[
-				"GDScript formatter installed successfully!",
-				"Binary location: " + binary_path,
-			],
-		),
+		"\n".join(["GDScript formatter installed successfully!", "Binary location: " + binary_path]),
 	)
 	installation_completed.emit(binary_path)
 
@@ -124,7 +115,10 @@ func _get_platform_info() -> Dictionary:
 	var processor_name := OS.get_processor_name().to_lower()
 	var architecture := "x86_64"
 
-	if processor_name.contains("aarch64") or processor_name.contains("arm64") or processor_name.contains("apple"):
+	if (
+		processor_name.contains("aarch64") or processor_name.contains("arm64")
+		or processor_name.contains("apple")
+	):
 		architecture = "aarch64"
 	elif processor_name.contains("x86_64") or processor_name.contains("amd64"):
 		architecture = "x86_64"
@@ -133,10 +127,7 @@ func _get_platform_info() -> Dictionary:
 	if os_name.contains("windows"):
 		binary_name = "gdscript-formatter.exe"
 
-	var platform_info := {
-		"architecture": architecture,
-		"binary_name": binary_name,
-	}
+	var platform_info := { "architecture": architecture, "binary_name": binary_name }
 
 	if os_name.contains("windows"):
 		platform_info["os"] = "windows"
@@ -153,7 +144,11 @@ func _find_matching_asset(assets: Array, tag: String) -> String:
 	if platform_info.is_empty():
 		return ""
 
-	var expected_pattern := "gdscript-formatter-%s-%s-%s" % [tag, platform_info["os"], platform_info["architecture"]]
+	var expected_pattern := "gdscript-formatter-%s-%s-%s" % [
+		tag,
+		platform_info["os"],
+		platform_info["architecture"],
+	]
 	if platform_info["os"] == "windows":
 		expected_pattern += ".exe"
 	expected_pattern += ".zip"
@@ -229,15 +224,14 @@ func _download_and_install_binary(zip_data: PackedByteArray, platform_info: Dict
 	if not OS.get_name().to_lower().contains("windows"):
 		# This should be equivalent to setting the binary to permissions 755
 		const UNIX_EXECUTABLE_PERMISSIONS = (
-			FileAccess.UNIX_READ_OWNER
-			| FileAccess.UNIX_WRITE_OWNER
-			| FileAccess.UNIX_EXECUTE_OWNER
-			| FileAccess.UNIX_READ_GROUP
-			| FileAccess.UNIX_EXECUTE_GROUP
-			| FileAccess.UNIX_READ_OTHER
-			| FileAccess.UNIX_EXECUTE_OTHER
+			FileAccess.UNIX_READ_OWNER | FileAccess.UNIX_WRITE_OWNER
+			| FileAccess.UNIX_EXECUTE_OWNER | FileAccess.UNIX_READ_GROUP
+			| FileAccess.UNIX_EXECUTE_GROUP | FileAccess.UNIX_READ_OTHER | FileAccess.UNIX_EXECUTE_OTHER
 		)
-		var permissions_error := FileAccess.set_unix_permissions(binary_path, UNIX_EXECUTABLE_PERMISSIONS)
+		var permissions_error := FileAccess.set_unix_permissions(
+			binary_path,
+			UNIX_EXECUTABLE_PERMISSIONS,
+		)
 		if permissions_error != OK:
 			push_error("Failed to make formatter executable: ", binary_path)
 			DirAccess.remove_absolute(binary_path)

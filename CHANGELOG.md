@@ -2,7 +2,36 @@
 
 This file documents the changes made to the formatter with each release.
 
-## Unrelease - 0.23.0
+## Unreleased
+
+### Added
+
+- Added `--verbose` option to print one line per formatted file (#227)
+
+### Changed
+
+- Removed space between lambda function name and parameter list
+
+### Fixed
+
+- Fixed an extra comma being inserted after a trailing comment in a lambda function argument (#304)
+- fixed certain export annotations being moved out of their respective groups (#308)
+- Preserve up to one blank line used to group elements in "containers" like enums
+
+## Release 0.24.0 (2026-07-25)
+
+### Added
+
+- You can now exclude files and folders using the `--exclude/-x` flag or `gdscript_formatter_exclude` in your editorconfig files (#299)
+
+### Fixed
+
+- Fixed edge case when a lambda is at the end of an argument list and ends with a match statement, causing the formatter to insert a trailing comma (#301)
+- Fixed a case of a long function definition that would not wrap on multiple lines despite being a little over 100 characters (#300)
+- Fixed a multiline argument in a function call that's not at the end of a chain of function calls forcing explicit line continuations for the rest of the chain (#298)
+
+
+## Release 0.23.0 (2026-07-24)
 
 ### Added
 
@@ -11,10 +40,14 @@ This file documents the changes made to the formatter with each release.
 ### Changed
 
 - Force short lines that were manually wrapped on multiple lines with commas to merge back into one line when they fit within the max line length (this behavior was a leftover from the old formatter implementation)
+- Changed editor settings for safe and reorder mode; they're now a single format mode
+- Deprecated `--safe` flag, renamed into `--verify-structure`
 
 ### Fixed
 
 - Fix type casts with type subscripts wrapping when placed at the end of long lines (e.g. `[long, array] as Array[SomeType]`)
+- Fix icon annotation being reordered below class_name when extends was before class_name (#295)
+- Godot addon: Fix error when running the formatter with both safe and reorder mode active; they're now mutually exclusive in the editor settings (#286)
 
 ## Release 0.22.2 (2026-07-22)
 

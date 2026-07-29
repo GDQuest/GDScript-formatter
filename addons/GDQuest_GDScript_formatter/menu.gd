@@ -25,7 +25,9 @@ func _ready() -> void:
 	var script_editor := EditorInterface.get_script_editor()
 	var last_menu_button := _find_last_menu_button(script_editor)
 	if not is_instance_valid(last_menu_button):
-		push_warning("GDScript Formatter: Could not find valid menu button in script editor. Menu will not be available. Use the command palette instead.")
+		push_warning(
+			"GDScript Formatter: Could not find valid menu button in script editor. Menu will not be available. Use the command palette instead."
+		)
 		return
 
 	menu_button = MenuButton.new()
@@ -101,7 +103,10 @@ func _populate_menu(show_uninstall: bool = true) -> void:
 
 	popup_menu.add_item(MENU_ITEMS["format_script"], current_item_index)
 	popup_menu.set_item_metadata(current_item_index, "format_script")
-	popup_menu.set_item_tooltip(current_item_index, "Run the GDScript Formatter over the current script")
+	popup_menu.set_item_tooltip(
+		current_item_index,
+		"Run the GDScript Formatter over the current script",
+	)
 
 	current_item_index += 1
 	popup_menu.add_item(MENU_ITEMS["lint_script"], current_item_index)
@@ -111,7 +116,10 @@ func _populate_menu(show_uninstall: bool = true) -> void:
 	current_item_index += 1
 	popup_menu.add_item(MENU_ITEMS["reorder_code"], current_item_index)
 	popup_menu.set_item_metadata(current_item_index, "reorder_code")
-	popup_menu.set_item_tooltip(current_item_index, "Reorder the code elements in the current script according to the GDScript Style Guide")
+	popup_menu.set_item_tooltip(
+		current_item_index,
+		"Reorder the code elements in the current script according to the GDScript Style Guide",
+	)
 
 	popup_menu.add_separator()
 
@@ -121,13 +129,19 @@ func _populate_menu(show_uninstall: bool = true) -> void:
 	current_item_index += 2
 	popup_menu.add_item(MENU_ITEMS["install_update"], current_item_index)
 	popup_menu.set_item_metadata(current_item_index, "install_update")
-	popup_menu.set_item_tooltip(current_item_index, "Download the latest version of the GDScript Formatter")
+	popup_menu.set_item_tooltip(
+		current_item_index,
+		"Download the latest version of the GDScript Formatter",
+	)
 
 	if show_uninstall:
 		current_item_index += 1
 		popup_menu.add_item(MENU_ITEMS["uninstall"], current_item_index)
 		popup_menu.set_item_metadata(current_item_index, "uninstall")
-		popup_menu.set_item_tooltip(current_item_index, "Remove the GDScript Formatter installed through this add-on from your computer")
+		popup_menu.set_item_tooltip(
+			current_item_index,
+			"Remove the GDScript Formatter installed through this add-on from your computer",
+		)
 
 	popup_menu.add_separator()
 
