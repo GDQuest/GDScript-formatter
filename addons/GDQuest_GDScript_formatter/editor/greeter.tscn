@@ -85,7 +85,7 @@ corner_radius_bottom_left = 8
 oversampling_override = 1.0
 title = "GDScript Formatter"
 initial_position = 1
-size = Vector2i(500, 378)
+size = Vector2i(597, 409)
 visible = false
 wrap_controls = true
 unresizable = true
@@ -126,7 +126,7 @@ stretch_mode = 4
 [node name="Description" type="Label" parent="Container/Layout/Heading" unique_id=1391782465]
 layout_mode = 2
 size_flags_vertical = 0
-theme_override_font_sizes/font_size = 16
+theme_override_font_sizes/font_size = 14
 text = "A faster code formatter for GDScript and Godot 4"
 horizontal_alignment = 1
 vertical_alignment = 1
@@ -161,7 +161,6 @@ theme_override_constants/separation = -4
 [node name="Title" type="Label" parent="Container/Layout/Versions/Addon/Layout/Meta" unique_id=1563506712]
 layout_mode = 2
 size_flags_vertical = 0
-theme_override_font_sizes/font_size = 12
 text = "Addon version"
 
 [node name="Value" type="Label" parent="Container/Layout/Versions/Addon/Layout/Meta" unique_id=1344464055]
@@ -203,7 +202,6 @@ theme_override_constants/separation = -4
 [node name="Title" type="Label" parent="Container/Layout/Versions/Formatter/Layout/Meta" unique_id=265656052]
 layout_mode = 2
 size_flags_vertical = 3
-theme_override_font_sizes/font_size = 12
 text = "Formatter version"
 
 [node name="Value" type="Label" parent="Container/Layout/Versions/Formatter/Layout/Meta" unique_id=1786751365]
@@ -270,7 +268,6 @@ accessibility_region = true
 [node name="Toggle" type="CheckButton" parent="Container/Layout/SplitPanel/QuickSettings/Items/FormatOnSave" unique_id=762096402]
 layout_mode = 2
 tooltip_text = "Automatically formats your code when the file is saved"
-theme_override_font_sizes/font_size = 12
 text = "Format on save"
 flat = true
 
@@ -286,7 +283,6 @@ accessibility_region = true
 [node name="Toggle" type="CheckButton" parent="Container/Layout/SplitPanel/QuickSettings/Items/LintOnSave" unique_id=693952472]
 layout_mode = 2
 tooltip_text = "Automatically checks your code for mistakes when the file is saved"
-theme_override_font_sizes/font_size = 12
 text = "Lint on save"
 flat = true
 
@@ -314,7 +310,6 @@ theme_override_constants/separation = 0
 [node name="Title" type="Label" parent="Container/Layout/SplitPanel/QuickSettings/Items/MoreSettings/HBoxContainer/Meta" unique_id=2111755764]
 layout_mode = 2
 size_flags_vertical = 2
-theme_override_font_sizes/font_size = 12
 text = "More settings"
 
 [node name="MoreSettingsButton" type="Button" parent="Container/Layout/SplitPanel/QuickSettings/Items/MoreSettings/HBoxContainer" unique_id=976437207]
@@ -378,7 +373,6 @@ theme_override_constants/separation = 0
 [node name="Title" type="Label" parent="Container/Layout/SplitPanel/Resources/Items/Docs/HBoxContainer/Meta" unique_id=292956704]
 layout_mode = 2
 size_flags_vertical = 3
-theme_override_font_sizes/font_size = 12
 text = "Documentation"
 
 [node name="DocsButton" type="Button" parent="Container/Layout/SplitPanel/Resources/Items/Docs/HBoxContainer" unique_id=1379633793]
@@ -410,9 +404,7 @@ theme_override_constants/separation = 0
 
 [node name="Title" type="Label" parent="Container/Layout/SplitPanel/Resources/Items/Issues/HBoxContainer/Meta" unique_id=669708178]
 layout_mode = 2
-size_flags_horizontal = 0
 size_flags_vertical = 2
-theme_override_font_sizes/font_size = 12
 text = "Issue tracker"
 
 [node name="IssuesButton" type="Button" parent="Container/Layout/SplitPanel/Resources/Items/Issues/HBoxContainer" unique_id=225001517]
