@@ -11,8 +11,8 @@ signal setting_changed(setting: String, value: Variant)
 
 @onready var _docs_button: Button = $Container/Layout/SplitPanel/Resources/Items/Docs/HBoxContainer/DocsButton
 @onready var _issues_button: Button = $Container/Layout/SplitPanel/Resources/Items/Issues/HBoxContainer/IssuesButton
-@onready var _formatter_button: Button = $Container/Layout/Versions/Formatter/Layout/FormatterButton
-@onready var _addon_button: Button = $Container/Layout/Versions/Addon/Layout/AddonButton
+@onready var _formatter_install_button: Button = $Container/Layout/Versions/Formatter/Layout/InstallButton
+@onready var _addon_install_button: Button = $Container/Layout/Versions/Addon/Layout/InstallButton
 @onready var _format_on_save_toggle: CheckButton = $Container/Layout/SplitPanel/QuickSettings/Items/FormatOnSave/Toggle
 @onready var _lint_on_save_toggle: CheckButton = $Container/Layout/SplitPanel/QuickSettings/Items/LintOnSave/Toggle
 
@@ -29,8 +29,8 @@ func _ready() -> void:
 
 	_docs_button.button_down.connect(_handle_docs_press)
 	_issues_button.button_down.connect(_handle_issues_press)
-	_formatter_button.button_down.connect(_handle_formatter_press)
-	_addon_button.button_down.connect(_handle_addon_press)
+	_formatter_install_button.button_down.connect(_handle_formatter_press)
+	_addon_install_button.button_down.connect(_handle_addon_press)
 	_format_on_save_toggle.toggled.connect(_handle_format_on_save_toggle)
 	_lint_on_save_toggle.toggled.connect(_handle_lint_on_save_toggle)
 
@@ -83,8 +83,8 @@ func _handle_close() -> void:
 
 	_docs_button.button_down.disconnect(_handle_docs_press)
 	_issues_button.button_down.disconnect(_handle_issues_press)
-	_formatter_button.button_down.disconnect(_handle_formatter_press)
-	_addon_button.button_down.disconnect(_handle_addon_press)
+	_formatter_install_button.button_down.disconnect(_handle_formatter_press)
+	_addon_install_button.button_down.disconnect(_handle_addon_press)
 
 	hide()
 
