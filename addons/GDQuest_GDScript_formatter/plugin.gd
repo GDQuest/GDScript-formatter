@@ -604,6 +604,9 @@ func _update_formatter_version() -> void:
 		
 	var formatter_version = get_formatter_version()
 	
+	if not formatter_version:
+		return
+	
 	greeter_panel.set_formatter_version(formatter_version)
 
 
@@ -627,6 +630,9 @@ func _update_addon_version() -> void:
 		return
 		
 	var addon_version = get_addon_version()
+	
+	if not addon_version:
+		return
 	
 	greeter_panel.set_addon_version(addon_version)
 
