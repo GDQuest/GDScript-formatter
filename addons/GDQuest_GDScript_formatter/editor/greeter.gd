@@ -18,8 +18,8 @@ signal setting_changed(setting: String, value: Variant)
 
 @export var enable_more_settings: bool = false
 
-var _addon_version: String = "0.0.0"
-var _formatter_version: String = "0.0.0"
+var _addon_version: String = "-"
+var _formatter_version: String = "-"
 var _setting_states: Dictionary = { }
 
 
