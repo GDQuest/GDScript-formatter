@@ -16,8 +16,6 @@ signal setting_changed(setting: String, value: Variant)
 @onready var _format_on_save_toggle: CheckButton = $Container/Layout/SplitPanel/QuickSettings/Items/FormatOnSave/Toggle
 @onready var _lint_on_save_toggle: CheckButton = $Container/Layout/SplitPanel/QuickSettings/Items/LintOnSave/Toggle
 
-@export var enable_more_settings: bool = false
-
 var _addon_version: String = "-"
 var _formatter_version: String = "-"
 var _setting_states: Dictionary = { }
