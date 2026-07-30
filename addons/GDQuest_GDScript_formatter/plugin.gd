@@ -608,6 +608,13 @@ func _update_formatter_version() -> void:
 		return
 	
 	greeter_panel.set_formatter_version(formatter_version)
+	
+	
+func _reset_formatter_version() -> void:
+	if not greeter_panel:
+		return
+		
+	greeter_panel.set_formatter_version("-")
 
 
 func get_addon_version():
@@ -663,6 +670,7 @@ func uninstall_formatter() -> void:
 		add_format_command()
 		remove_uninstall_command()
 		add_uninstall_command()
+		_reset_formatter_version()
 		if is_instance_valid(menu):
 			menu.update_menu(false)
 	else:
