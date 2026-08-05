@@ -1,0 +1,20 @@
+[package]
+name = "gdscript-formatter-gdextension"
+version = "0.22.2"
+edition = "2024"
+description = "A GDExtension for the formatter"
+license = "MIT"
+repository = "https://github.com/gdquest/gdscript-formatter"
+readme = "README.md"
+keywords = ["godot", "gdscript", "format", "lint"]
+categories = ["development-tools"]
+rust-version = "1.94"
+
+[lib]
+name = "gdscript_formatter_gdextension"
+path = "src/lib.rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+gdscript-formatter = { path = "../" }
+godot = "0.5.4"
