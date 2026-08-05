@@ -10,6 +10,7 @@ extends EditorPlugin
 
 const FormatterInstaller = preload("install_and_update.gd")
 const FormatterMenu = preload("menu.gd")
+const GreeterPanel = preload("editor/greeter.tscn")
 
 const EDITOR_SETTINGS_CATEGORY = "gdquest_gdscript_formatter/"
 const SETTING_FORMAT_ON_SAVE = "format_on_save"
@@ -57,6 +58,12 @@ const COMMAND_PALETTE_INSTALL_UPDATE = "Install or Update Formatter"
 const COMMAND_PALETTE_UNINSTALL = "Uninstall Formatter"
 const COMMAND_PALETTE_REPORT_ISSUE = "Report Issue"
 
+# Quick settings that are shown in the greeter
+const QUICK_SETTINGS = [
+	SETTING_FORMAT_ON_SAVE,
+	SETTING_LINT_ON_SAVE
+]
+
 var DEFAULT_SETTINGS = {
 	SETTING_FORMAT_ON_SAVE: false,
 	SETTING_USE_SPACES: false,
@@ -69,6 +76,7 @@ var DEFAULT_SETTINGS = {
 	SETTING_IGNORED_DIRECTORIES: PackedStringArray(["addons/"]),
 }
 
+
 ## Which gutter lint icons are shown in.
 ## By default, gutter 0 is for breakpoints and 1 is for things like overrides.
 const GUTTER_LINT_ICON_INDEX = 2
@@ -78,17 +86,21 @@ var connection_list: Array[Resource] = []
 var installer: FormatterInstaller = null
 var formatter_cache_dir: String
 var menu: FormatterMenu = null
+var greeter_panel: Greeter = null
 var _has_uninstall_command := false
 var _has_formatter_command := false
 var _has_format_command := false
 var _has_lint_command := false
 var _already_warned_about_reorder_on_save := false
+var _setting_updated_via_greeter := false
 # Used to auto detect changes to the project's .editorconfig file.
 var _editorconfig_last_modified_time := -1
 # Editorconfig allows setting rules per path glob. We track globs for the format
 # on save rule here so users can enable it selectively for specific folders.
 var _editorconfig_format_on_save_rules: Array[Dictionary] = []
 
+# Used to detect the formatter
+const FORMATTER_BINARY_NAME = "gdscript-formatter"
 
 func _init() -> void:
 	migrate_format_mode_setting()
@@ -167,6 +179,10 @@ func migrate_format_mode_setting() -> void:
 		version = 2
 
 
+func _enable_plugin() -> void:
+	_show_greeter()
+
+
 func _enter_tree() -> void:
 	formatter_cache_dir = EditorInterface.get_editor_paths().get_cache_dir().path_join("gdquest")
 	installer = FormatterInstaller.new(formatter_cache_dir)
@@ -182,6 +198,9 @@ func _enter_tree() -> void:
 				return
 			add_format_command()
 			add_lint_command()
+			
+			_update_formatter_version()
+			
 			# After installing the formatter we can add the menu option to show the uninstall command
 			if is_instance_valid(menu):
 				menu.update_menu(true),
@@ -190,7 +209,10 @@ func _enter_tree() -> void:
 		func _on_installation_failed (error_message: String) -> void:
 			push_error("Formatter installation failed: ", error_message),
 	)
-
+	
+	greeter_panel = GreeterPanel.instantiate() as Greeter
+	add_child(greeter_panel)
+	
 	_has_formatter_command = has_command(get_editor_setting(SETTING_FORMATTER_PATH))
 	add_format_command()
 	add_lint_command()
@@ -207,6 +229,34 @@ func _enter_tree() -> void:
 	resource_saved.connect(_on_resource_saved)
 
 
+func _show_greeter() -> void:
+	if not greeter_panel:
+		return
+	
+	_update_addon_version()
+	_update_formatter_version()
+	
+	greeter_panel.popup_centered()
+	greeter_panel.action_pressed.connect(_on_menu_item_selected)
+	greeter_panel.setting_changed.connect(_handle_greeter_setting_change)
+	
+	_apply_greeter_defaults()
+
+func _handle_greeter_setting_change(setting: String, value: Variant) -> void:
+	_setting_updated_via_greeter = true
+	
+	set_editor_setting(setting, value)
+
+func _apply_greeter_defaults() -> void:
+	if not greeter_panel:
+		return
+		
+	for setting in QUICK_SETTINGS:
+		var state = get_editor_setting(setting)
+		
+		greeter_panel.set_setting_state(setting, state)
+		
+		
 func _exit_tree() -> void:
 	resource_saved.disconnect(_on_resource_saved)
 
@@ -218,12 +268,25 @@ func _exit_tree() -> void:
 
 	installer.queue_free()
 	installer = null
+	
+	greeter_panel.action_pressed.disconnect(_on_menu_item_selected)
+	greeter_panel.setting_changed.disconnect(_handle_greeter_setting_change)
+	greeter_panel.queue_free()
 
 	if is_instance_valid(menu):
 		menu.menu_item_selected.disconnect(_on_menu_item_selected)
 		menu.remove_formatter_menu()
 		menu.queue_free()
 		menu = null
+
+
+func _notification(what: int) -> void:
+	var has_settings_changed = what == EditorSettings.NOTIFICATION_EDITOR_SETTINGS_CHANGED
+	
+	if has_settings_changed and not _setting_updated_via_greeter:
+		_apply_greeter_defaults()
+		
+	_setting_updated_via_greeter = false
 
 
 func _shortcut_input(event: InputEvent) -> void:
@@ -501,6 +564,85 @@ func has_command(command: String) -> bool:
 	var exit_code := OS.execute(command, ["--version"], output, true)
 	return exit_code == OK
 
+func _get_binary_path() -> String:
+	var binary_name := FORMATTER_BINARY_NAME
+
+	if OS.get_name().to_lower().contains("windows"):
+		binary_name = binary_name + ".exe"
+
+	return formatter_cache_dir.path_join(binary_name)
+
+func _parse_formatter_version(version: Array) -> String:
+	var version_raw: String = ""
+
+	for index in version.size():
+		version_raw += version[index]
+
+	if version_raw.begins_with(FORMATTER_BINARY_NAME):
+		version_raw = version_raw.trim_prefix(FORMATTER_BINARY_NAME)
+
+	return version_raw.strip_edges()
+
+func get_formatter_version():
+	var binary_path = _get_binary_path()
+
+	if not FileAccess.file_exists(binary_path):
+		return
+
+	var version_stdout: Array = []
+	var exit_code = OS.execute(binary_path, ["--version"], version_stdout)
+
+	if not exit_code == OK:
+		return
+
+	return _parse_formatter_version(version_stdout)
+
+
+func _update_formatter_version() -> void:
+	if not greeter_panel:
+		return
+		
+	var formatter_version = get_formatter_version()
+	
+	if not formatter_version:
+		return
+	
+	greeter_panel.set_formatter_version(formatter_version)
+	
+	
+func _reset_formatter_version() -> void:
+	if not greeter_panel:
+		return
+		
+	greeter_panel.set_formatter_version("-")
+
+
+func get_addon_version():
+	var menu = FormatterMenu.new()
+	print(menu.get_path())
+
+	var plugin_config = ConfigFile.new()
+	var config_loaded = plugin_config.load(get_script().resource_path.get_base_dir() + "/plugin.cfg")
+
+	if not config_loaded == OK:
+		push_error("Unable to load plugin config")
+
+		return
+
+	return plugin_config.get_value("plugin", "version")
+
+
+func _update_addon_version() -> void:
+	if not greeter_panel:
+		return
+		
+	var addon_version = get_addon_version()
+	
+	if not addon_version:
+		return
+	
+	greeter_panel.set_addon_version(addon_version)
+
 
 func is_formatter_available() -> bool:
 	if _has_formatter_command:
@@ -510,18 +652,12 @@ func is_formatter_available() -> bool:
 
 
 func is_formatter_installed_locally() -> bool:
-	var binary_name := "gdscript-formatter"
-	if OS.get_name().to_lower().contains("windows"):
-		binary_name = "gdscript-formatter.exe"
-	var binary_path := formatter_cache_dir.path_join(binary_name)
+	var binary_path = _get_binary_path()
 	return FileAccess.file_exists(binary_path)
 
 
 func uninstall_formatter() -> void:
-	var binary_name := "gdscript-formatter"
-	if OS.get_name().to_lower().contains("windows"):
-		binary_name = "gdscript-formatter.exe"
-	var binary_path := formatter_cache_dir.path_join(binary_name)
+	var binary_path = _get_binary_path()
 
 	if FileAccess.file_exists(binary_path):
 		DirAccess.remove_absolute(binary_path)
@@ -534,6 +670,7 @@ func uninstall_formatter() -> void:
 		add_format_command()
 		remove_uninstall_command()
 		add_uninstall_command()
+		_reset_formatter_version()
 		if is_instance_valid(menu):
 			menu.update_menu(false)
 	else:
@@ -569,6 +706,10 @@ func show_help() -> void:
 	OS.shell_open("https://www.gdquest.com/library/gdscript_formatter/")
 
 
+func update_addon() -> void:
+	OS.shell_open("https://github.com/GDQuest/GDScript-formatter/releases")
+
+
 func _on_menu_item_selected(command: String) -> void:
 	match command:
 		"format_script":
@@ -585,6 +726,8 @@ func _on_menu_item_selected(command: String) -> void:
 			report_issue()
 		"help":
 			show_help()
+		"update_addon":
+			update_addon()
 		_:
 			push_warning("Unsupported command sent from the menu: " + command)
 
