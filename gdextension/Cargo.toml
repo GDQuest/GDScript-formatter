@@ -8,7 +8,7 @@ repository = "https://github.com/gdquest/gdscript-formatter"
 readme = "README.md"
 keywords = ["godot", "gdscript", "format", "lint"]
 categories = ["development-tools"]
-rust-version = "1.85"
+rust-version = "1.94"
 
 [lib]
 name = "gdscript_formatter_gdextension"
@@ -17,4 +17,4 @@ crate-type = ["cdylib"]
 
 [dependencies]
 gdscript-formatter = { path = "../" }
-godot = { git = "https://github.com/godot-rust/gdext", branch = "master" }
+godot = "0.5.4"
