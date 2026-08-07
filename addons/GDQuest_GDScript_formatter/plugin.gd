@@ -83,6 +83,7 @@ var _has_formatter_command := false
 var _has_format_command := false
 var _has_lint_command := false
 var _already_warned_about_reorder_on_save := false
+var _already_warned_about_builtin_format_on_save := false
 # Used to auto detect changes to the project's .editorconfig file.
 var _editorconfig_last_modified_time := -1
 # Editorconfig allows setting rules per path glob. We track globs for the format
@@ -172,7 +173,7 @@ func _enter_tree() -> void:
 	installer = FormatterInstaller.new(formatter_cache_dir)
 	add_child(installer)
 	installer.installation_completed.connect(
-		func _on_installation_completed (binary_path: String) -> void:
+		func _on_installation_completed(binary_path: String) -> void:
 			set_editor_setting(SETTING_FORMATTER_PATH, binary_path)
 			_has_formatter_command = has_command(binary_path)
 			if not _has_formatter_command:
@@ -187,7 +188,7 @@ func _enter_tree() -> void:
 				menu.update_menu(true),
 	)
 	installer.installation_failed.connect(
-		func _on_installation_failed (error_message: String) -> void:
+		func _on_installation_failed(error_message: String) -> void:
 			push_error("Formatter installation failed: ", error_message),
 	)
 
@@ -304,13 +305,35 @@ func update_shortcut() -> void:
 func _on_resource_saved(saved_resource: Resource) -> void:
 	if saved_resource is not GDScript:
 		return
-
 	var script := saved_resource as GDScript
+	# We should normally never hit this condition, I'm adding it as a
+	# safety check and to document issues with format on save and built-in
+	# scripts. We support formatting built-in scripts, but not formatting them
+	# on save:
+	# - There's no way to retrieve built-in scripts and when their enclosing
+	# scene is saved efficiently
+	# - You would have to re-save the scene after formatting
+	#
+	# That would add complexity and slowdowns so we don't support it at the
+	# moment. We may revisit this if multiple users depend on this feature (I
+	# generally don't recommend built-in scripts because of their limitations
+	# for debugging, error reporting, VCS... they have too many limitations for
+	# their benefit)
+	if script.is_built_in():
+		if do_format_on_save and not _already_warned_about_builtin_format_on_save:
+			push_warning(
+				"GDScript Formatter: Format on save is not supported for built-in scripts. "
+				+ "Format this script manually instead."
+			)
+			_already_warned_about_builtin_format_on_save = true
+		return
+
 	var do_format_on_save := get_editor_setting(SETTING_FORMAT_ON_SAVE) as bool
 	var editorconfig_format_on_save = get_editorconfig_format_on_save(script.resource_path)
 	if editorconfig_format_on_save != null:
 		do_format_on_save = editorconfig_format_on_save as bool
 	var lint_on_save := get_editor_setting(SETTING_LINT_ON_SAVE) as bool
+
 	if (
 		do_format_on_save and get_format_mode() == FormatMode.REORDER_CODE
 		and not _already_warned_about_reorder_on_save
@@ -705,7 +728,11 @@ func editorconfig_section_matches(pattern: String, relative_script_path: String)
 ## the editor and requests formatting without having saved their changes (in
 ## that case, the code they're editing only exists in the script editor's open
 ## tab).
-func format_code(script: GDScript, force_reorder := false, source_content: Variant = null) -> String:
+func format_code(
+	script: GDScript,
+	force_reorder := false,
+	source_content: Variant = null,
+) -> String:
 	var script_path := script.resource_path
 	if source_content == null and script_path.is_empty():
 		push_error("GDScript Formatter Error: Can't format an unsaved script.")
