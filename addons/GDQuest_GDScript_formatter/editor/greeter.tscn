@@ -119,7 +119,6 @@ stretch_mode = 4
 [node name="Description" type="Label" parent="Container/Layout/Heading" unique_id=1391782465]
 layout_mode = 2
 size_flags_vertical = 0
-theme_override_font_sizes/font_size = 14
 text = "A faster code formatter for GDScript and Godot 4"
 horizontal_alignment = 1
 vertical_alignment = 1
@@ -162,7 +161,6 @@ size_flags_vertical = 0
 accessibility_live = 1
 accessibility_labeled_by_nodes = Array[NodePath]([NodePath("../Title")])
 theme_override_fonts/font = SubResource("SystemFont_cx1jr")
-theme_override_font_sizes/font_size = 16
 text = "-"
 
 [node name="InstallButton" type="Button" parent="Container/Layout/Versions/Addon/Layout" unique_id=1381876748]
@@ -204,7 +202,6 @@ size_flags_vertical = 2
 accessibility_live = 1
 accessibility_labeled_by_nodes = Array[NodePath]([NodePath("../Title")])
 theme_override_fonts/font = SubResource("SystemFont_cx1jr")
-theme_override_font_sizes/font_size = 16
 text = "-"
 
 [node name="Actions" type="HBoxContainer" parent="Container/Layout/Versions/Formatter/Layout" unique_id=568154137]
