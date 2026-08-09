@@ -334,6 +334,19 @@ auto-format = true
 
 If you lose work because of the formatter, you can usually get it back with a simple "undo" (Cmd/Ctrl + Z). This will show you the "undo reload from disk" popup. You can also check the local history by right-clicking on the file in the project explorer and selecting `Local History > Show History`.
 
+### Sublime Text
+
+Using the SublimeLinter package, you can have GDScript-formatter lint your code
+as you work:
+
+1. Install GDScript-formatter somewhere in your `$PATH`.
+2. In Sublime Text, [install Package Control](https://packagecontrol.io/installation) if you haven't already.
+3. Open the command palette by pressing Ctrl+Shift+p or Cmd+Shift+p if you're on a Mac, then choose "Package Control: Install Package".
+4. If you haven't already installed it, install the "GDScript" package so Sublime Text knows about `.gd` files.
+5. Install the "SublimeLinter-contrib-GDScriptFormatterLinter" package.
+
+See the [GDScript-formatter-linter](https://worktree.ca/taffer/GDScript-formatter-linter) plugin's README for additional settings.
+
 ## Contributing
 
 Contributions are welcome! I've compiled some guides and guidelines below to help you get started with contributing to the GDScript formatter. If you need more information or want to discuss ideas for the formatter, please get in touch on the [GDQuest Discord](https://discord.gg/87NNb3Z).

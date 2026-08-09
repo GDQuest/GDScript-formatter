@@ -744,7 +744,7 @@ fn process_body(
                                 false,
                             );
                         }
-                    } else if statement_has_inline_comment && current_is_declaration {
+                    } else if statement_has_inline_comment {
                         let needs_two_blank_lines = needs_two_blank_lines(current_child_kind);
                         add_spacing_between_body_children(
                             previous_end,

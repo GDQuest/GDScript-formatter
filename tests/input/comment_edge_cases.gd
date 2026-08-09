@@ -26,3 +26,20 @@ func test3():
 
 	else:
 		pass
+
+func test_inline_comment_preserves_blank_line():
+	some_call() # inline comment
+
+	another_call()
+
+
+func test_inline_comment_no_blank_line():
+	some_call() # inline comment
+	another_call()
+
+
+func test_inline_comment_multiple_blank_lines_collapse():
+	some_call() # inline comment
+
+
+	another_call()

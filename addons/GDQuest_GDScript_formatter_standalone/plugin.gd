@@ -1,0 +1,641 @@
+## This plug-in adds support for automatically formatting GDScript files on save
+## and via a command in the Godot Editor, using the GDQuest GDScript Formatter.
+##
+## It also provides an option to install or update the formatter binary from the GitHub releases.
+##
+## See our website for more information on the formatter and how to use it:
+## https://www.gdquest.com/library/gdscript_formatter/
+@tool
+extends EditorPlugin
+
+const FormatterMenu = preload("menu.gd")
+
+const EDITOR_SETTINGS_CATEGORY = "gdquest_gdscript_formatter/"
+const SETTING_FORMAT_ON_SAVE = "format_on_save"
+const SETTING_SHORTCUT = "shortcut"
+const SETTING_USE_SPACES = "use_spaces"
+const SETTING_INDENT_SIZE = "indent_size"
+const SETTING_REORDER_CODE = "reorder_code"
+const SETTING_SAFE_MODE = "safe_mode"
+const SETTING_LINT_ON_SAVE = "lint_on_save"
+const SETTING_LINT_LINE_LENGTH = "lint_line_length"
+const SETTING_LINT_IGNORED_RULES = "lint_ignored_rules"
+# Directories to ignore when Format on Save is enabled
+const SETTING_IGNORED_DIRECTORIES = "format_on_save_ignored_directories"
+
+const COMMAND_PALETTE_CATEGORY = "gdquest gdscript formatter/"
+const COMMAND_PALETTE_FORMAT_SCRIPT = "Format GDScript"
+const COMMAND_PALETTE_LINT_SCRIPT = "Lint GDScript"
+const COMMAND_PALETTE_UPDATE = "Update Formatter"
+const COMMAND_PALETTE_REPORT_ISSUE = "Report Issue"
+
+var DEFAULT_SETTINGS = {
+	SETTING_FORMAT_ON_SAVE: false,
+	SETTING_USE_SPACES: false,
+	SETTING_INDENT_SIZE: 4,
+	SETTING_REORDER_CODE: false,
+	SETTING_SAFE_MODE: true,
+	SETTING_LINT_ON_SAVE: false,
+	SETTING_LINT_LINE_LENGTH: 100,
+	SETTING_LINT_IGNORED_RULES: "",
+	SETTING_IGNORED_DIRECTORIES: PackedStringArray(["addons/"]),
+}
+
+## Which gutter lint icons are shown in.
+## By default, gutter 0 is for breakpoints and 1 is for things like overrides.
+const GUTTER_LINT_ICON_INDEX = 2
+const GUTTER_LINT_ICONS_NAME = "gdscript_formatter_lint_icons"
+
+var connection_list: Array[Resource] = []
+var menu: FormatterMenu = null
+# Used to auto detect changes to the project's .editorconfig file.
+var _editorconfig_last_modified_time := -1
+# Editorconfig allows setting rules per path glob. We track globs for the format
+# on save rule here so users can enable it selectively for specific folders.
+var _editorconfig_format_on_save_rules: Array[Dictionary] = []
+
+
+func _init() -> void:
+	for setting: String in DEFAULT_SETTINGS.keys():
+		if not has_editor_setting(setting):
+			set_editor_setting(setting, DEFAULT_SETTINGS[setting])
+
+	if not has_editor_setting(SETTING_SHORTCUT):
+		var default_shortcut := InputEventKey.new()
+		default_shortcut.echo = false
+		default_shortcut.pressed = true
+		default_shortcut.keycode = KEY_I
+		default_shortcut.ctrl_pressed = true
+		default_shortcut.shift_pressed = false
+		default_shortcut.alt_pressed = true
+
+		var shortcut := Shortcut.new()
+		shortcut.events.push_back(default_shortcut)
+
+		set_editor_setting(SETTING_SHORTCUT, shortcut)
+
+
+func _enter_tree() -> void:
+	add_format_command()
+	add_lint_command()
+	add_update_command()
+	add_report_issue_command()
+
+	menu = FormatterMenu.new()
+	add_child(menu)
+	menu.menu_item_selected.connect(_on_menu_item_selected)
+	menu.update_menu()
+
+	update_shortcut()
+	resource_saved.connect(_on_resource_saved)
+
+
+func _exit_tree() -> void:
+	resource_saved.disconnect(_on_resource_saved)
+
+	remove_format_command()
+	remove_lint_command()
+	remove_update_command()
+	remove_report_issue_command()
+
+	if is_instance_valid(menu):
+		menu.menu_item_selected.disconnect(_on_menu_item_selected)
+		menu.remove_formatter_menu()
+		menu.queue_free()
+		menu = null
+
+
+func _shortcut_input(event: InputEvent) -> void:
+	var shortcut := get_editor_setting(SETTING_SHORTCUT) as Shortcut
+	if not is_instance_valid(shortcut):
+		return
+	if not shortcut.matches_event(event) or not event.is_pressed() or event.is_echo():
+		return
+	if format_current_script():
+		get_tree().root.set_input_as_handled()
+
+
+func format_current_script() -> bool:
+	if not EditorInterface.get_script_editor().is_visible_in_tree():
+		return false
+	var current_script := EditorInterface.get_script_editor().get_current_script()
+	if not is_instance_valid(current_script) or not current_script is GDScript:
+		return false
+	var code_edit: CodeEdit = EditorInterface.get_script_editor().get_current_editor().get_base_editor()
+
+	var formatted_code := format_code(current_script, false, code_edit.text)
+	if formatted_code.is_empty():
+		return false
+
+	reload_code_edit(code_edit, formatted_code)
+	return true
+
+
+func lint_current_script() -> bool:
+	if not EditorInterface.get_script_editor().is_visible_in_tree():
+		return false
+
+	var current_script := EditorInterface.get_script_editor().get_current_script()
+	if not is_instance_valid(current_script) or not current_script is GDScript:
+		return false
+
+	var code_edit: CodeEdit = EditorInterface.get_script_editor().get_current_editor().get_base_editor()
+
+	var lint_issues := lint_code(current_script)
+	if lint_issues.is_empty():
+		print("No linting issues found.")
+		clear_lint_highlights(code_edit)
+		return true
+
+	apply_lint_highlights(code_edit, lint_issues)
+	print_lint_summary(lint_issues, current_script.resource_path)
+
+	return true
+
+
+func update_shortcut() -> void:
+	for obj: Resource in connection_list:
+		obj.changed.disconnect(update_shortcut)
+
+	connection_list.clear()
+
+	var shortcut := get_editor_setting(SETTING_SHORTCUT) as Shortcut
+	if is_instance_valid(shortcut):
+		for event: InputEvent in shortcut.events:
+			if is_instance_valid(event):
+				event.changed.connect(update_shortcut)
+				connection_list.push_back(event)
+
+	remove_format_command()
+	add_format_command()
+
+
+func _on_resource_saved(saved_resource: Resource) -> void:
+	if saved_resource is not GDScript:
+		return
+
+	var script := saved_resource as GDScript
+	var do_format_on_save := get_editor_setting(SETTING_FORMAT_ON_SAVE) as bool
+	var editorconfig_format_on_save = get_editorconfig_format_on_save(script.resource_path)
+	if editorconfig_format_on_save != null:
+		do_format_on_save = editorconfig_format_on_save as bool
+	var lint_on_save := get_editor_setting(SETTING_LINT_ON_SAVE) as bool
+
+	if not do_format_on_save and not lint_on_save:
+		return
+
+	var ignored_directories = get_editor_setting(SETTING_IGNORED_DIRECTORIES)
+	var path = script.resource_path.trim_prefix("res://")
+
+	var script_path_parts := path.split("/")
+
+	for directory: String in ignored_directories:
+		var normalized_dir := directory.trim_prefix("res://")
+		var directory_parts := normalized_dir.split("/")
+
+		var matches := true
+		for i in range(directory_parts.size()):
+			if directory_parts[i] != script_path_parts[i]:
+				matches = false
+				break
+
+		if matches:
+			return
+
+	if not is_instance_valid(script):
+		return
+
+	if do_format_on_save:
+		var formatted_code := format_code(script, false)
+		if formatted_code.is_empty():
+			return
+
+		script.source_code = formatted_code
+		ResourceSaver.save(script)
+		# The argument (keep_state parameter) tells Godot to try to preserve the
+		# state of the script instance, like static variables. Without this,
+		# attempting to reload tool scripts will fail with an error because they
+		# are already instantiated in the editor and instantiated scripts are
+		# not allowed to force reload without unloading first.
+		script.reload(true)
+
+		var script_editor := EditorInterface.get_script_editor()
+		var open_script_editors := script_editor.get_open_script_editors()
+		var open_scripts := script_editor.get_open_scripts()
+
+		if not open_scripts.has(script):
+			return
+
+		if script_editor.get_current_script() == script:
+			reload_code_edit(script_editor.get_current_editor().get_base_editor(), formatted_code, true)
+		elif open_scripts.size() == open_script_editors.size():
+			for i: int in range(open_scripts.size()):
+				if open_scripts[i] == script:
+					reload_code_edit(open_script_editors[i].get_base_editor(), formatted_code, true)
+					return
+		else:
+			push_error("GDScript Formatter error: Unknown situation, can't reload code editor in Editor. Please report this issue.")
+
+	if lint_on_save:
+		var code_edit: CodeEdit = EditorInterface.get_script_editor().get_current_editor().get_base_editor()
+		var lint_issues := lint_code(script)
+		if lint_issues.is_empty():
+			clear_lint_highlights(code_edit)
+		else:
+			apply_lint_highlights(code_edit, lint_issues)
+			print_lint_summary(lint_issues, script.resource_path)
+
+
+func add_format_command() -> void:
+	var shortcut := get_editor_setting(SETTING_SHORTCUT) as Shortcut
+	EditorInterface.get_command_palette().add_command(
+		COMMAND_PALETTE_FORMAT_SCRIPT,
+		COMMAND_PALETTE_CATEGORY + COMMAND_PALETTE_FORMAT_SCRIPT,
+		format_current_script,
+		shortcut.get_as_text() if is_instance_valid(shortcut) else "None",
+	)
+
+
+func remove_format_command() -> void:
+	EditorInterface.get_command_palette().remove_command(COMMAND_PALETTE_CATEGORY + COMMAND_PALETTE_FORMAT_SCRIPT)
+
+
+func add_lint_command() -> void:
+	EditorInterface.get_command_palette().add_command(
+		COMMAND_PALETTE_LINT_SCRIPT,
+		COMMAND_PALETTE_CATEGORY + COMMAND_PALETTE_LINT_SCRIPT,
+		lint_current_script,
+	)
+
+
+func remove_lint_command() -> void:
+	EditorInterface.get_command_palette().remove_command(
+		COMMAND_PALETTE_CATEGORY + COMMAND_PALETTE_LINT_SCRIPT,
+	)
+
+
+func add_update_command() -> void:
+	EditorInterface.get_command_palette().add_command(
+		COMMAND_PALETTE_UPDATE,
+		COMMAND_PALETTE_CATEGORY + COMMAND_PALETTE_UPDATE,
+		# TODO: Implement me
+		func() -> void: push_error("Update command not implemented!"),
+	)
+
+
+func remove_update_command() -> void:
+	EditorInterface.get_command_palette().remove_command(COMMAND_PALETTE_CATEGORY + COMMAND_PALETTE_UPDATE)
+
+
+func add_report_issue_command() -> void:
+	EditorInterface.get_command_palette().add_command(
+		COMMAND_PALETTE_REPORT_ISSUE,
+		COMMAND_PALETTE_CATEGORY + COMMAND_PALETTE_REPORT_ISSUE,
+		report_issue,
+	)
+
+
+func remove_report_issue_command() -> void:
+	EditorInterface.get_command_palette().remove_command(
+			COMMAND_PALETTE_CATEGORY + COMMAND_PALETTE_REPORT_ISSUE)
+
+
+func reorder_code() -> bool:
+	if not EditorInterface.get_script_editor().is_visible_in_tree():
+		return false
+	var current_script := EditorInterface.get_script_editor().get_current_script()
+	if not is_instance_valid(current_script) or not current_script is GDScript:
+		return false
+	var code_edit: CodeEdit = EditorInterface.get_script_editor().get_current_editor().get_base_editor()
+
+	var formatted_code := format_code(current_script, true, code_edit.text)
+	if formatted_code.is_empty():
+		return false
+
+	reload_code_edit(code_edit, formatted_code)
+	return true
+
+
+func report_issue() -> void:
+	OS.shell_open("https://github.com/GDQuest/GDScript-formatter/issues")
+
+
+func show_help() -> void:
+	OS.shell_open("https://www.gdquest.com/library/gdscript_formatter/")
+
+
+func _on_menu_item_selected(command: String) -> void:
+	match command:
+		"format_script":
+			format_current_script()
+		"lint_script":
+			lint_current_script()
+		"reorder_code":
+			reorder_code()
+		"update":
+			# TODO: Implement me
+			push_error("update not implemented!")
+		"report_issue":
+			report_issue()
+		"help":
+			show_help()
+		_:
+			push_warning("Unsupported command sent from the menu: " + command)
+
+
+## Reloads the code editor with new text while preserving editor state.
+## This includes cursor position, scroll position, breakpoints, bookmarks, and folds.
+func reload_code_edit(
+		code_edit: CodeEdit,
+		new_text: String,
+		tag_saved := false,
+) -> void:
+	var editor_state := CodeEditState.new(code_edit)
+	code_edit.text = new_text
+	if tag_saved:
+		code_edit.tag_saved_version()
+	editor_state.restore_to_editor(code_edit)
+	code_edit.update_minimum_size()
+	code_edit.text_changed.emit()
+
+
+func get_editor_setting(setting_name: String) -> Variant:
+	var editor_settings := EditorInterface.get_editor_settings()
+	var full_setting_key := EDITOR_SETTINGS_CATEGORY + setting_name
+	if editor_settings.has_setting(full_setting_key):
+		return editor_settings.get_setting(full_setting_key)
+	return DEFAULT_SETTINGS[setting_name]
+
+
+func set_editor_setting(setting_name: String, value: Variant) -> void:
+	var editor_settings := EditorInterface.get_editor_settings()
+	var full_setting_key := EDITOR_SETTINGS_CATEGORY + setting_name
+	editor_settings.set_setting(full_setting_key, value)
+
+
+func has_editor_setting(setting_name: String) -> bool:
+	var editor_settings := EditorInterface.get_editor_settings()
+	var full_setting_key := EDITOR_SETTINGS_CATEGORY + setting_name
+	return editor_settings.has_setting(full_setting_key)
+
+
+## Returns true if this script should be formatted automatically on save, based
+## on the project's .editorconfig file. Returns false if the config says not to
+## format on save. Returns null if no rule matches (then it's the user editor
+## settings that take over).
+func get_editorconfig_format_on_save(script_path: String) -> Variant:
+	var editorconfig_path := ProjectSettings.globalize_path("res://.editorconfig")
+	var modified_time := FileAccess.get_modified_time(editorconfig_path)
+	if modified_time != _editorconfig_last_modified_time:
+		_editorconfig_last_modified_time = modified_time
+		_editorconfig_format_on_save_rules.clear()
+		load_editorconfig_format_on_save_rules(editorconfig_path)
+
+	var relative_script_path := script_path.trim_prefix("res://")
+	var format_on_save = null
+	for rule: Dictionary in _editorconfig_format_on_save_rules:
+		var pattern := rule["pattern"] as String
+		if pattern.is_empty() or editorconfig_section_matches(pattern, relative_script_path):
+			format_on_save = rule["format_on_save"]
+
+	return format_on_save
+
+
+## Loads the project editorconfig file and parses format on save rules.
+func load_editorconfig_format_on_save_rules(editorconfig_path: String) -> void:
+	var editorconfig_file := FileAccess.open(editorconfig_path, FileAccess.READ)
+	if editorconfig_file == null:
+		return
+
+	var pattern := ""
+
+	while not editorconfig_file.eof_reached():
+		var line := editorconfig_file.get_line().strip_edges()
+		if line.is_empty() or line.begins_with("#") or line.begins_with(";"):
+			continue
+
+		if line.begins_with("[") and line.ends_with("]"):
+			pattern = line.trim_prefix("[").trim_suffix("]")
+			continue
+
+		if not line.contains("="):
+			continue
+
+		var key_and_value := line.split("=", true, 1)
+		if key_and_value[0].strip_edges().to_lower() != "gdscript_formatter_format_on_save":
+			continue
+
+		match key_and_value[1].strip_edges().to_lower():
+			"true":
+				_editorconfig_format_on_save_rules.append({"pattern": pattern, "format_on_save": true})
+			"false":
+				_editorconfig_format_on_save_rules.append({"pattern": pattern, "format_on_save": false})
+
+	editorconfig_file.close()
+
+
+## Returns true if an EditorConfig section applies to a saved script.
+## pattern: The EditorConfig pattern to match against.
+## relative_script_path: The path of the script relative to the project root.
+func editorconfig_section_matches(pattern: String, relative_script_path: String) -> bool:
+	if pattern.is_empty():
+		return false
+
+	var normalized_pattern := pattern.trim_prefix("/")
+	var matching_path := relative_script_path
+	# If there's no / in the pattern it means this pattern targets a filename.
+	# It's not a folder/path glob pattern.
+	if not normalized_pattern.contains("/"):
+		matching_path = relative_script_path.get_file()
+
+	return matching_path.match(normalized_pattern)
+
+
+## Formats GDScript code using the GDScript Formatter and returns it as a string.
+## When source_content is null, reads the code from the GDScript resource directly.
+## Otherwise, formats source_content without reading from the file.
+##
+## Pass a string through source_content when the user is editing the script in
+## the editor and requests formatting without having saved their changes (in
+## that case, the code they're editing only exists in the script editor's open
+## tab).
+func format_code(script: GDScript, force_reorder := false, source_content: Variant = null) -> String:
+	var script_path := script.resource_path
+	if source_content == null and script_path.is_empty():
+		push_error("GDScript Formatter Error: Can't format an unsaved script.")
+		return ""
+
+	if source_content == null:
+		source_content = script.source_code
+
+	var printer_config := {}
+	var formatter_config := { printer = printer_config }
+	if get_editor_setting(SETTING_USE_SPACES):
+		printer_config[SETTING_USE_SPACES] = true
+		printer_config[SETTING_INDENT_SIZE] = get_editor_setting(SETTING_INDENT_SIZE)
+	if force_reorder or get_editor_setting(SETTING_REORDER_CODE):
+		formatter_config[SETTING_REORDER_CODE] = true
+	if get_editor_setting(SETTING_SAFE_MODE):
+		formatter_config[SETTING_SAFE_MODE] = true
+
+	return GDScriptFormatter.format_gdscript(source_content, formatter_config)
+
+
+## Lints a GDScript file using the GDScript Formatter's linter,
+## and returns an array of lint issues.
+func lint_code(script: GDScript) -> Array:
+	if script.resource_path.is_empty():
+		push_error("GDScript Formatter Error: Can't format an unsaved script.")
+		return []
+
+	var linter_config := {
+		max_line_length = get_editor_setting(SETTING_LINT_LINE_LENGTH) as int,
+		disabled_rules = ",".split(
+				get_editor_setting(SETTING_LINT_IGNORED_RULES) as String),
+	}
+	return GDScriptFormatter.lint_gdscript(script.source_code, linter_config)
+
+
+## Applies lint highlighting to the code editor
+func apply_lint_highlights(code_edit: CodeEdit, issues: Array) -> void:
+	clear_lint_highlights(code_edit)
+
+	# Add and set up gutter for lint icons if not already present.
+	# We check by name to avoid conflicts with gutters added by other addons.
+	# Once added, the gutter is never removed so the layout doesn't shift on clear.
+	var has_lint_gutter := false
+	for i: int in code_edit.get_gutter_count():
+		if code_edit.get_gutter_name(i) == GUTTER_LINT_ICONS_NAME:
+			has_lint_gutter = true
+			break
+	if not has_lint_gutter:
+		code_edit.add_gutter(GUTTER_LINT_ICON_INDEX)
+		code_edit.set_gutter_name(GUTTER_LINT_ICON_INDEX, GUTTER_LINT_ICONS_NAME)
+		code_edit.set_gutter_type(GUTTER_LINT_ICON_INDEX, CodeEdit.GutterType.GUTTER_TYPE_ICON)
+		const EDITOR_ICON_DEFAULT_WIDTH = 16.0
+		code_edit.set_gutter_width(GUTTER_LINT_ICON_INDEX, EDITOR_ICON_DEFAULT_WIDTH * EditorInterface.get_editor_scale())
+
+	for issue in issues:
+		var line_number: int = issue.line - 1 # Convert to zero-indexed
+		var severity: String = issue.severity
+
+		var color := Color(1, 0, 0, 0.1) if severity == "error" else Color(1, 1, 0, 0.1)
+		code_edit.set_line_background_color(line_number, color)
+		var icon_name := "StatusError" if severity == "error" else "StatusWarning"
+		var icon := EditorInterface.get_editor_theme().get_icon(icon_name, "EditorIcons")
+		code_edit.set_line_gutter_icon(line_number, GUTTER_LINT_ICON_INDEX, icon)
+
+
+## Prints a detailed summary of lint issues to the output
+func print_lint_summary(issues: Array, script_path: String) -> void:
+	print_rich("\n[b]=== Linting Results for %s ===[/b]\n" % script_path)
+	print_rich("[b]Found [i]%s[/i] issue(s)\n[/b]" % issues.size())
+
+	for issue in issues:
+		var line_display = str(issue.line)
+		var severity_label = issue.severity.to_upper()
+		print_rich(
+			"[color=%s]%s[/color] on line [color=cyan]%s[/color] ([i]%s[/i])" % [
+				"red" if severity_label == "ERROR" else "yellow",
+				severity_label,
+				line_display,
+				issue.rule,
+			],
+		)
+		print_rich("[i]%s[/i]\n" % [issue.message])
+
+	print_rich("[b]=== End Linting Results ===[/b]\n")
+
+
+## Clears all lint highlighting from the code editor.
+## The lint gutter is intentionally kept so the layout does not shift.
+func clear_lint_highlights(code_edit: CodeEdit) -> void:
+	var lint_gutter_index := -1
+	for i: int in code_edit.get_gutter_count():
+		if code_edit.get_gutter_name(i) == GUTTER_LINT_ICONS_NAME:
+			lint_gutter_index = i
+			break
+
+	for line in range(code_edit.get_line_count()):
+		code_edit.set_line_background_color(line, Color(0, 0, 0, 0))
+		if lint_gutter_index != -1:
+			code_edit.set_line_gutter_icon(line, lint_gutter_index, null)
+
+
+## Data structure to hold code editor state information
+class CodeEditState:
+	var caret_line: int
+	var caret_column: int
+	var horizontal_scroll: int
+	var vertical_scroll: int
+	var breakpoints: Dictionary[int, String] = { }
+	var bookmarks: Dictionary[int, String] = { }
+	var folds: Dictionary[int, String] = { }
+	var code_edit: CodeEdit
+
+
+	func _init(code_edit: CodeEdit) -> void:
+		self.code_edit = code_edit
+		caret_line = code_edit.get_caret_line()
+		caret_column = code_edit.get_caret_column()
+		horizontal_scroll = code_edit.scroll_horizontal
+		vertical_scroll = code_edit.scroll_vertical
+
+		for line in code_edit.get_breakpointed_lines():
+			breakpoints[line] = code_edit.get_line(line)
+		for line in code_edit.get_bookmarked_lines():
+			bookmarks[line] = code_edit.get_line(line)
+		for line in code_edit.get_folded_lines():
+			folds[line] = code_edit.get_line(line)
+
+
+	func restore_to_editor(code_edit: CodeEdit) -> void:
+		var new_line_count := code_edit.get_line_count()
+
+		_restore_line_features(breakpoints, code_edit.set_line_as_breakpoint, new_line_count)
+		_restore_line_features(bookmarks, code_edit.set_line_as_bookmarked, new_line_count)
+		_restore_line_features(folds, func(line: int, _is_folded: bool) -> void: code_edit.fold_line(line), new_line_count)
+
+		code_edit.set_caret_line(caret_line)
+		code_edit.set_caret_column(caret_column)
+
+		code_edit.scroll_horizontal = horizontal_scroll
+		code_edit.scroll_vertical = vertical_scroll
+
+
+	## Restores line-based features (breakpoints, bookmarks, folds) by finding the best matching lines
+	## in the new text based on similarity to the original line text.
+	##
+	## Big thanks to https://github.com/Daylily-Zeleen/GDScript-Formatter for this approach.
+	func _restore_line_features(
+			stored_features: Dictionary,
+			set_line_func: Callable,
+			new_line_count: int,
+	) -> void:
+		var stored_lines := PackedInt64Array(stored_features.keys())
+		for line_index in range(stored_lines.size()):
+			var original_line := stored_lines[line_index] as int
+			var original_text := stored_features[original_line] as String
+
+			# After formatting lines can move, so we need to find the best match for the original line
+			# to restore the breakpoints, bookmarks, and folds.
+			# We first check the same line, then we expand our search outwards until we find a match.
+			# We use a similarity threshold of 0.9 to account for minor changes in the line text.
+			# This should be sufficient for most cases, but might need adjustment for edge cases.
+			# If no match is found, we skip restoring this feature
+			if original_line < new_line_count and code_edit.get_line(original_line).similarity(original_text) > 0.9:
+				set_line_func.call(original_line, true)
+				continue
+
+			var line_above := original_line - 1
+			var line_below := original_line + 1
+			while line_above >= 0 or line_below < new_line_count:
+				if line_below < new_line_count and code_edit.get_line(line_below).similarity(original_text) > 0.9:
+					set_line_func.call(line_below, true)
+					break
+				if line_above >= 0 and code_edit.get_line(line_above).similarity(original_text) > 0.9:
+					set_line_func.call(line_above, true)
+					break
+
+				line_above -= 1
+				line_below += 1

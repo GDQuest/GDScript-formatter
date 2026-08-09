@@ -17,6 +17,7 @@ This file documents the changes made to the formatter with each release.
 - Fixed an extra comma being inserted after a trailing comment in a lambda function argument (#304)
 - fixed certain export annotations being moved out of their respective groups (#308)
 - Preserve up to one blank line used to group elements in "containers" like enums
+- Fixed losing blank line between statements in a body if the previous statement has an inline comment (#320, thanks @Buitragox for the fix)
 
 ## Release 0.24.0 (2026-07-25)
 
