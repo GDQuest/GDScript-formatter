@@ -18,6 +18,7 @@ This file documents the changes made to the formatter with each release.
 - fixed certain export annotations being moved out of their respective groups (#308)
 - Preserve up to one blank line used to group elements in "containers" like enums
 - Fixed losing blank line between statements in a body if the previous statement has an inline comment (#320, thanks @Buitragox for the fix)
+- Fixed the Godot addon ignoring the project's `.editorconfig` when formatting. The addon formats a temporary copy of the script, and that copy now sits next to the original file so the formatter finds the project's `.editorconfig` (#315, #316)
 
 ## Release 0.24.0 (2026-07-25)
 

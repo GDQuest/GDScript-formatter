@@ -766,10 +766,31 @@ func format_code(
 		source_content = source_file.get_as_text()
 		source_file.close()
 
-	var path_temporary_file := OS.get_temp_dir().path_join(
-		"gdscript_formatter_%d.gd" % Time.get_ticks_msec()
-	)
-	var temporary_file := FileAccess.open(path_temporary_file, FileAccess.WRITE)
+	# The formatter looks for `.editorconfig` files by walking up the folders
+	# above the file it formats, so the temporary file has to sit next to the
+	# script it stands in for. Put it anywhere else, like the system's temporary
+	# folder, and the project's `.editorconfig` is never found.
+	#
+	# The leading dot in the file name keeps Godot's filesystem scanner from
+	# picking the temporary file up while it briefly exists.
+	var temporary_file_name := ".gdscript_formatter_%d.gd" % Time.get_ticks_msec()
+	var script_directory := ""
+	if not script_path.is_empty():
+		script_directory = ProjectSettings.globalize_path(script_path).get_base_dir()
+
+	var path_temporary_file := ""
+	var temporary_file: FileAccess = null
+	if not script_directory.is_empty():
+		path_temporary_file = script_directory.path_join(temporary_file_name)
+		temporary_file = FileAccess.open(path_temporary_file, FileAccess.WRITE)
+
+	# Unsaved scripts have no folder to sit next to, and a project folder can be
+	# read-only. Both fall back to the system's temporary folder, where
+	# `.editorconfig` lookup can't work, rather than failing to format at all.
+	if temporary_file == null:
+		path_temporary_file = OS.get_temp_dir().path_join(temporary_file_name)
+		temporary_file = FileAccess.open(path_temporary_file, FileAccess.WRITE)
+
 	if temporary_file == null:
 		push_error("GDScript Formatter Error: Cannot create temporary file: " + path_temporary_file)
 		return ""
