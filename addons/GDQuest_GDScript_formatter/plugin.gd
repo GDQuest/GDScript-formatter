@@ -353,7 +353,10 @@ func _on_resource_saved(saved_resource: Resource) -> void:
 	var script_path_parts := path.split("/")
 
 	for directory: String in ignored_directories:
-		var normalized_dir := directory.trim_prefix("res://")
+		# Remove any trailing "/" so splitting doesn't leave an empty
+		# string at the end (e.g. "addons/" -> ["addons", ""]), which
+		# would never match a real path segment.
+		var normalized_dir := directory.trim_prefix("res://").trim_suffix("/")
 		var directory_parts := normalized_dir.split("/")
 
 		var matches := true
