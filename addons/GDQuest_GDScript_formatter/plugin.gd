@@ -347,16 +347,36 @@ func _on_resource_saved(saved_resource: Resource) -> void:
 	if not do_format_on_save and not lint_on_save:
 		return
 
-	var ignored_directories = get_editor_setting(SETTING_IGNORED_DIRECTORIES)
-	var path = script.resource_path.trim_prefix("res://")
+	var ignored_directories: PackedStringArray = get_editor_setting(SETTING_IGNORED_DIRECTORIES)
 
-	var script_path_parts := path.split("/")
-
+	# Normalize and validate every ignored directory entry before any matching happens.
+	# This guarantees blank entries are always warned about, regardless of their position in the list.
+	var normalized_dirs: Array[String] = []
 	for directory: String in ignored_directories:
 		# Remove any trailing "/" so splitting doesn't leave an empty
 		# string at the end (e.g. "addons/" -> ["addons", ""]), which
 		# would never match a real path segment.
 		var normalized_dir := directory.trim_prefix("res://").trim_suffix("/")
+
+		# Skip blank entries (e.g. "", "res://", or "/") so we don't
+		# split into [""] and compare against an empty path segment.
+		if normalized_dir.is_empty():
+			push_warning(
+				"GDScript Formatter: Format on Save Ignored Directories entry \"%s\" " % directory
+				+ "has no path after removing \"res://\" and trailing slashes, and will be skipped. "
+				+ "This may mean you're trying to ignore the entire project, which isn't supported here. "
+				+ "Please remove it from the list, enter a valid path, or turn off format on save instead."
+			)
+			continue
+
+		normalized_dirs.push_back(normalized_dir)
+
+
+	var path = script.resource_path.trim_prefix("res://")
+
+	var script_path_parts := path.split("/")
+
+	for normalized_dir: String in normalized_dirs:
 		var directory_parts := normalized_dir.split("/")
 
 		# Skip this directory if it has more segments than the script's path.
