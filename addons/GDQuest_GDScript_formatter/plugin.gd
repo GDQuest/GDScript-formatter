@@ -352,6 +352,12 @@ func _on_resource_saved(saved_resource: Resource) -> void:
 	# Normalize and validate every ignored directory entry before any matching happens.
 	# This guarantees blank entries are always warned about, regardless of their position in the list.
 	var normalized_dirs: Array[String] = []
+
+	# Tracks normalized directories we've already seen, mapped to the original
+	# raw entry that produced them, so duplicate warnings can reference
+	# both the current and the earlier conflicting entry.
+	var seen_normalized_dirs: Dictionary[String, String] = {}
+
 	for directory: String in ignored_directories:
 		# Remove any trailing "/" so splitting doesn't leave an empty
 		# string at the end (e.g. "addons/" -> ["addons", ""]), which
@@ -369,6 +375,18 @@ func _on_resource_saved(saved_resource: Resource) -> void:
 			)
 			continue
 
+		# Skip entries that are effectively the same directory as one already
+		# seen, even if written differently (e.g. "res://addons" and "addons/").
+		var seen_normalized_dir: Variant = seen_normalized_dirs.get(normalized_dir)
+		if seen_normalized_dir != null:
+			push_warning(
+				"GDScript Formatter: Format on Save Ignored Directories entry \"%s\" " % directory
+				+ "refers to the same directory as entry \"%s\" " % seen_normalized_dir
+				+ "and will be skipped. Please remove the duplicate entry from the list."
+			)
+			continue
+
+		seen_normalized_dirs[normalized_dir] = directory
 		normalized_dirs.push_back(normalized_dir)
 
 
