@@ -359,6 +359,12 @@ func _on_resource_saved(saved_resource: Resource) -> void:
 		var normalized_dir := directory.trim_prefix("res://").trim_suffix("/")
 		var directory_parts := normalized_dir.split("/")
 
+		# Skip this directory if it has more segments than the script's path.
+		# A directory with more segments than the script's path cannot be a prefix match,
+		# and comparing would index past the end of script_path_parts below.
+		if directory_parts.size() > script_path_parts.size():
+			continue
+
 		var matches := true
 		for i in range(directory_parts.size()):
 			if directory_parts[i] != script_path_parts[i]:
