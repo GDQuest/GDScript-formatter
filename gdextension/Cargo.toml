@@ -17,4 +17,4 @@ crate-type = ["cdylib"]
 
 [dependencies]
 gdscript-formatter = { path = "../" }
-godot = "0.5.4"
+godot = "=0.5.4"

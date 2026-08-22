@@ -297,6 +297,7 @@ const MAP_TREE_SITTER_TO_GDSCRIPT_NODE_KIND: &[(&str, GDScriptNodeKind)] = &[
     ("typed_default_parameter", GDScriptNodeKind::Parameter),
     ("(", GDScriptNodeKind::TokenParen),
     (")", GDScriptNodeKind::TokenParen),
+    ("()", GDScriptNodeKind::TokenParen),
     ("[", GDScriptNodeKind::TokenBracket),
     ("]", GDScriptNodeKind::TokenBracket),
     ("{", GDScriptNodeKind::TokenBrace),

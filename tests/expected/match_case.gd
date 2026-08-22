@@ -30,3 +30,6 @@ func foo():
 			animation.play("right")
 		_:
 			animation.play("right")
+	match value:
+		1 or 2:
+			print("1 or 2")

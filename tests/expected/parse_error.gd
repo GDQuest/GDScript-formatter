@@ -1,5 +1,4 @@
-# Valid declarations around declarations with parse errors should still be
-# formatted.
+# If there is any parse error in the file, it should be left untouched.
 var valid = 1
 var name.bla = value
 var also_valid = 2

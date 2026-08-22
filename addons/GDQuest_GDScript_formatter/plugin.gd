@@ -369,6 +369,8 @@ func _on_resource_saved(saved_resource: Resource) -> void:
 	if saved_resource is not GDScript:
 		return
 	var script := saved_resource as GDScript
+	var do_format_on_save := get_editor_setting(SETTING_FORMAT_ON_SAVE) as bool
+
 	# We should normally never hit this condition, I'm adding it as a
 	# safety check and to document issues with format on save and built-in
 	# scripts. We support formatting built-in scripts, but not formatting them
@@ -391,7 +393,6 @@ func _on_resource_saved(saved_resource: Resource) -> void:
 			_already_warned_about_builtin_format_on_save = true
 		return
 
-	var do_format_on_save := get_editor_setting(SETTING_FORMAT_ON_SAVE) as bool
 	var editorconfig_format_on_save = get_editorconfig_format_on_save(script.resource_path)
 	if editorconfig_format_on_save != null:
 		do_format_on_save = editorconfig_format_on_save as bool
@@ -409,18 +410,42 @@ func _on_resource_saved(saved_resource: Resource) -> void:
 	if not do_format_on_save and not lint_on_save:
 		return
 
-	var ignored_directories = get_editor_setting(SETTING_IGNORED_DIRECTORIES)
-	var path = script.resource_path.trim_prefix("res://")
+	var ignored_directories_normalized: Array[String] = []
+	var ignored_directories_seen: Dictionary[String, String] = { }
+	for directory: String in get_editor_setting(SETTING_IGNORED_DIRECTORIES):
+		# We split paths on "/", we trim trailing slashes to avoid empty path
+		# segments that would never match when checking ignored directories.
+		var directory_normalized := directory.trim_prefix("res://").trim_suffix("/")
+		if directory_normalized.is_empty():
+			push_warning(
+				"GDScript Formatter: Format on Save Ignored Directories entry \"%s\" " % directory
+				+ "has no path after removing \"res://\" and trailing slashes, and will be skipped. "
+				+ "This may mean you're trying to ignore the entire project, which isn't supported here. "
+				+ "Please remove it from the list, enter a valid path, or turn off format on save instead."
+			)
+			continue
 
-	var script_path_parts := path.split("/")
+		if ignored_directories_seen.has(directory_normalized):
+			push_warning(
+				"GDScript Formatter: Format on Save Ignored Directories entry \"%s\" " % directory
+				+ "refers to the same directory as entry \"%s\" "
+				% ignored_directories_seen[directory_normalized]
+				+ "and will be skipped. Please remove the duplicate entry from the list."
+			)
+			continue
 
-	for directory: String in ignored_directories:
-		var normalized_dir := directory.trim_prefix("res://")
-		var directory_parts := normalized_dir.split("/")
+		ignored_directories_seen[directory_normalized] = directory
+		ignored_directories_normalized.push_back(directory_normalized)
+
+	var saved_script_path_segments := script.resource_path.trim_prefix("res://").split("/")
+	for ignored_directory_path: String in ignored_directories_normalized:
+		var ignored_directory_segments := ignored_directory_path.split("/")
+		if ignored_directory_segments.size() > saved_script_path_segments.size():
+			continue
 
 		var matches := true
-		for i in range(directory_parts.size()):
-			if directory_parts[i] != script_path_parts[i]:
+		for i in range(ignored_directory_segments.size()):
+			if ignored_directory_segments[i] != saved_script_path_segments[i]:
 				matches = false
 				break
 

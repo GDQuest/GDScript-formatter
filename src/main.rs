@@ -27,21 +27,29 @@ use gdscript_formatter::linter::rule_config::{
     get_all_rule_names, parse_disabled_rules, validate_rule_names,
 };
 use gdscript_formatter::{
-    FormatterConfiguration, QuoteStyle, RenderElement, format_gdscript,
+    FormatErrors, FormatterConfiguration, QuoteStyle, RenderElement, format_gdscript,
     format_gdscript_with_buffers, linter::LinterConfig,
 };
 use std::collections::HashSet;
 
 use cli::{Command, parse_args};
 
-const ERROR_CODE_NOT_FORMATTED: i32 = 1;
+#[repr(i32)]
+enum FormatterExitCodes {
+    NotFormatted = 1,
+    ParseErrors = 2,
+}
 
-#[derive(Debug, Clone)]
 struct FormatterOutput {
     index: usize,
     file_path: PathBuf,
     formatted_content: String,
     is_formatted: bool,
+}
+
+enum FormatterFileProcessingResult {
+    SkippedParseErrors { index: usize, file_path: PathBuf },
+    Formatted(FormatterOutput),
 }
 
 #[derive(Clone, Copy)]
@@ -160,7 +168,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             &current_directory.join("stdin.gd"),
             config_overrides,
         );
-        let formatted_content = format_gdscript(&input_content, &stdin_config)?;
+        let formatted_content = match format_gdscript(&input_content, &stdin_config) {
+            Ok(formatted_content) => formatted_content,
+            Err(FormatErrors::ParseErrors) => {
+                eprintln!(
+                    "Skipping formatting stdin: the input GDScript code contains parse errors"
+                );
+                std::process::exit(FormatterExitCodes::ParseErrors as i32);
+            }
+            Err(error) => return Err(error.into()),
+        };
 
         if do_check_formatted_only {
             if input_content != formatted_content {
@@ -197,7 +214,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let _ = io::stdout().flush();
     }
 
-    let mut sorted_outputs: Vec<Result<FormatterOutput, String>> =
+    let mut sorted_outputs: Vec<Result<FormatterFileProcessingResult, String>> =
         format_files_parallel(&input_gdscript_files, &config, config_overrides);
 
     sorted_outputs.sort_by(compare_output_index);
@@ -205,9 +222,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut all_formatted = true;
     let mut modified_file_count = 0;
     let mut unformatted_files = Vec::new();
+    let mut skipped_parse_error_files = Vec::new();
     for output in sorted_outputs {
         match output {
-            Ok(output) => {
+            Ok(FormatterFileProcessingResult::SkippedParseErrors { file_path, .. }) => {
+                skipped_parse_error_files.push(file_path);
+            }
+            Ok(FormatterFileProcessingResult::Formatted(output)) => {
                 if do_check_formatted_only {
                     if use_verbose_output {
                         eprintln!(
@@ -267,6 +288,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    if !skipped_parse_error_files.is_empty() {
+        for file_path in skipped_parse_error_files {
+            eprintln!(
+                "Skipped formatting file {}: the input GDScript code contains parse errors",
+                file_path.display()
+            );
+        }
+        std::process::exit(FormatterExitCodes::ParseErrors as i32);
+    }
+
     if do_check_formatted_only {
         if !use_verbose_output {
             terminal_clear_line();
@@ -282,7 +313,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             for file_path in unformatted_files {
                 eprintln!("{}", file_path.display());
             }
-            std::process::exit(ERROR_CODE_NOT_FORMATTED);
+            std::process::exit(FormatterExitCodes::NotFormatted as i32);
         }
     } else if !do_print_to_stdout {
         if !use_verbose_output {
@@ -356,7 +387,7 @@ fn format_one_file(
     config_overrides: FormatterConfigOverrides,
     render_elements: &mut Vec<RenderElement>,
     output: &mut String,
-) -> Result<FormatterOutput, String> {
+) -> Result<FormatterFileProcessingResult, String> {
     let input_content = fs::read_to_string(file_path)
         .map_err(|error| format!("Failed to read file {}: {}", file_path.display(), error))?;
 
@@ -364,17 +395,31 @@ fn format_one_file(
     // match different EditorConfig files and rules.
     let mut file_config = config.clone();
     config_apply_editorconfig_then_cli_overrides(&mut file_config, file_path, config_overrides);
-    format_gdscript_with_buffers(&input_content, &file_config, render_elements, output)
-        .map_err(|error| format!("Failed to format file {}: {}", file_path.display(), error))?;
+    match format_gdscript_with_buffers(&input_content, &file_config, render_elements, output) {
+        Ok(()) => {}
+        Err(FormatErrors::ParseErrors) => {
+            return Ok(FormatterFileProcessingResult::SkippedParseErrors {
+                index,
+                file_path: file_path.clone(),
+            });
+        }
+        Err(error) => {
+            return Err(format!(
+                "Failed to format file {}: {}",
+                file_path.display(),
+                error
+            ));
+        }
+    }
 
     let is_formatted = input_content == *output;
 
-    Ok(FormatterOutput {
+    Ok(FormatterFileProcessingResult::Formatted(FormatterOutput {
         index,
         file_path: file_path.clone(),
         formatted_content: output.clone(),
         is_formatted,
-    })
+    }))
 }
 
 /// Applies project editorconfig settings first and CLI settings second.
@@ -415,7 +460,7 @@ fn format_files_parallel(
     files: &[PathBuf],
     config: &FormatterConfiguration,
     config_overrides: FormatterConfigOverrides,
-) -> Vec<Result<FormatterOutput, String>> {
+) -> Vec<Result<FormatterFileProcessingResult, String>> {
     if files.is_empty() {
         return Vec::new();
     }
@@ -450,7 +495,7 @@ fn format_chunk(
     chunk_size: usize,
     config: &FormatterConfiguration,
     config_overrides: FormatterConfigOverrides,
-) -> Vec<Result<FormatterOutput, String>> {
+) -> Vec<Result<FormatterFileProcessingResult, String>> {
     let mut results = Vec::with_capacity(chunk.len());
     let mut render_elements: Vec<RenderElement> = Vec::new();
     let mut output = String::new();
@@ -553,15 +598,17 @@ fn is_path_excluded(path: &Path, excluded_paths: &[PathBuf]) -> bool {
 }
 
 fn compare_output_index(
-    left: &Result<FormatterOutput, String>,
-    right: &Result<FormatterOutput, String>,
+    left: &Result<FormatterFileProcessingResult, String>,
+    right: &Result<FormatterFileProcessingResult, String>,
 ) -> std::cmp::Ordering {
     let left_index = match left {
-        Ok(formatter_output) => formatter_output.index,
+        Ok(FormatterFileProcessingResult::Formatted(formatter_output)) => formatter_output.index,
+        Ok(FormatterFileProcessingResult::SkippedParseErrors { index, .. }) => *index,
         Err(_) => usize::MAX,
     };
     let right_index = match right {
-        Ok(formatter_output) => formatter_output.index,
+        Ok(FormatterFileProcessingResult::Formatted(formatter_output)) => formatter_output.index,
+        Ok(FormatterFileProcessingResult::SkippedParseErrors { index, .. }) => *index,
         Err(_) => usize::MAX,
     };
     left_index.cmp(&right_index)
