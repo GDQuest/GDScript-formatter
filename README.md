@@ -109,6 +109,7 @@ repos:
     rev: 0.21.0  # use the tag of the version you want to use
     hooks:
       - id: gdscript-formatter
+      - id: gdscript-linter
 ```
 
 See the [formatter documentation](http://gdquest.com/library/gdscript_formatter#formatting-automatically-on-commit) for some more detailed information on this.
