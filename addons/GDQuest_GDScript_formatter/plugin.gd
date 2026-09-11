@@ -10,7 +10,7 @@ extends EditorPlugin
 
 const FormatterInstaller = preload("install_and_update.gd")
 const FormatterMenu = preload("menu.gd")
-const GreeterPanel = preload("editor/greeter.tscn")
+const QuickSetupWindowScene = preload("editor/quick_setup_window.tscn")
 
 const EDITOR_SETTINGS_CATEGORY = "gdquest_gdscript_formatter/"
 const SETTING_FORMAT_ON_SAVE = "format_on_save"
@@ -80,14 +80,14 @@ var connection_list: Array[Resource] = []
 var installer: FormatterInstaller = null
 var formatter_cache_dir: String
 var menu: FormatterMenu = null
-var greeter_panel: Greeter = null
+var quick_setup_window: QuickSetupWindow = null
 var _has_uninstall_command := false
 var _has_formatter_command := false
 var _has_format_command := false
 var _has_lint_command := false
 var _already_warned_about_reorder_on_save := false
 var _already_warned_about_builtin_format_on_save := false
-var _setting_updated_via_greeter := false
+var _setting_updated_via_quick_setup := false
 # Used to auto detect changes to the project's .editorconfig file.
 var _editorconfig_last_modified_time := -1
 # Editorconfig allows setting rules per path glob. We track globs for the format
@@ -186,13 +186,13 @@ func _enable_plugin() -> void:
 	if config_loaded == OK:
 		var addon_version = plugin_config.get_value("plugin", "version")
 		if addon_version:
-			greeter_panel.set_addon_version(addon_version)
+			quick_setup_window.set_addon_version(addon_version)
 	else:
 		push_error("Unable to load plugin config")
 
 	_update_formatter_version()
-	greeter_panel.popup_centered()
-	_update_greeter_settings_display()
+	quick_setup_window.popup_centered()
+	_update_quick_setup_settings_display()
 
 
 func _enter_tree() -> void:
@@ -222,28 +222,28 @@ func _enter_tree() -> void:
 			push_error("Formatter installation failed: ", error_message),
 	)
 
-	greeter_panel = GreeterPanel.instantiate() as Greeter
-	add_child(greeter_panel)
-	greeter_panel.button_pressed.connect(
-		func(action: Greeter.ButtonActions) -> void:
+	quick_setup_window = QuickSetupWindowScene.instantiate() as QuickSetupWindow
+	add_child(quick_setup_window)
+	quick_setup_window.button_pressed.connect(
+		func(action: QuickSetupWindow.ButtonActions) -> void:
 			match action:
-				Greeter.ButtonActions.INSTALL_UPDATE:
+				QuickSetupWindow.ButtonActions.INSTALL_UPDATE:
 					installer.install_or_update_formatter()
-				Greeter.ButtonActions.UNINSTALL:
+				QuickSetupWindow.ButtonActions.UNINSTALL:
 					uninstall_formatter()
-				Greeter.ButtonActions.REPORT_ISSUE:
+				QuickSetupWindow.ButtonActions.REPORT_ISSUE:
 					report_issue()
-				Greeter.ButtonActions.HELP:
+				QuickSetupWindow.ButtonActions.HELP:
 					show_help()
-				Greeter.ButtonActions.UPDATE_ADDON:
+				QuickSetupWindow.ButtonActions.UPDATE_ADDON:
 					update_addon()
-				Greeter.ButtonActions.OPEN_WEBSITE:
+				QuickSetupWindow.ButtonActions.OPEN_WEBSITE:
 					OS.shell_open("https://www.gdquest.com/")
 	)
-	greeter_panel.setting_change_requested.connect(
-		func(setting: Greeter.Settings, value: Variant) -> void:
-			_setting_updated_via_greeter = true
-			set_editor_setting(_get_greeter_setting_name(setting), value),
+	quick_setup_window.setting_change_requested.connect(
+		func(setting: QuickSetupWindow.Settings, value: Variant) -> void:
+			_setting_updated_via_quick_setup = true
+			set_editor_setting(_get_quick_setup_setting_name(setting), value),
 	)
 
 	_has_formatter_command = has_command(get_editor_setting(SETTING_FORMATTER_PATH))
@@ -262,17 +262,17 @@ func _enter_tree() -> void:
 	resource_saved.connect(_on_resource_saved)
 
 
-func _update_greeter_settings_display() -> void:
-	for setting: Greeter.Settings in [Greeter.Settings.FORMAT_ON_SAVE, Greeter.Settings.LINT_ON_SAVE]:
-		var state = get_editor_setting(_get_greeter_setting_name(setting))
-		greeter_panel.set_setting_state(setting, state)
+func _update_quick_setup_settings_display() -> void:
+	for setting: QuickSetupWindow.Settings in [QuickSetupWindow.Settings.FORMAT_ON_SAVE, QuickSetupWindow.Settings.LINT_ON_SAVE]:
+		var state = get_editor_setting(_get_quick_setup_setting_name(setting))
+		quick_setup_window.set_setting_state(setting, state)
 
 
-func _get_greeter_setting_name(setting: Greeter.Settings) -> String:
+func _get_quick_setup_setting_name(setting: QuickSetupWindow.Settings) -> String:
 	match setting:
-		Greeter.Settings.FORMAT_ON_SAVE:
+		QuickSetupWindow.Settings.FORMAT_ON_SAVE:
 			return SETTING_FORMAT_ON_SAVE
-		Greeter.Settings.LINT_ON_SAVE:
+		QuickSetupWindow.Settings.LINT_ON_SAVE:
 			return SETTING_LINT_ON_SAVE
 	return ""
 
@@ -289,8 +289,8 @@ func _exit_tree() -> void:
 	installer.queue_free()
 	installer = null
 
-	greeter_panel.queue_free()
-	greeter_panel = null
+	quick_setup_window.queue_free()
+	quick_setup_window = null
 
 	if is_instance_valid(menu):
 		menu.menu_item_selected.disconnect(_on_menu_item_selected)
@@ -302,10 +302,10 @@ func _exit_tree() -> void:
 func _notification(what: int) -> void:
 	var has_settings_changed = what == EditorSettings.NOTIFICATION_EDITOR_SETTINGS_CHANGED
 
-	if has_settings_changed and not _setting_updated_via_greeter:
-		_update_greeter_settings_display()
+	if has_settings_changed and not _setting_updated_via_quick_setup:
+		_update_quick_setup_settings_display()
 
-	_setting_updated_via_greeter = false
+	_setting_updated_via_quick_setup = false
 
 
 func _shortcut_input(event: InputEvent) -> void:
@@ -660,7 +660,7 @@ func _update_formatter_version() -> void:
 	if not formatter_version:
 		return
 
-	greeter_panel.set_formatter_version(formatter_version)
+	quick_setup_window.set_formatter_version(formatter_version)
 
 
 func is_formatter_available() -> bool:
@@ -689,7 +689,7 @@ func uninstall_formatter() -> void:
 		add_format_command()
 		remove_uninstall_command()
 		add_uninstall_command()
-		greeter_panel.set_formatter_version("-")
+		quick_setup_window.set_formatter_version("-")
 		if is_instance_valid(menu):
 			menu.update_menu(false)
 	else:

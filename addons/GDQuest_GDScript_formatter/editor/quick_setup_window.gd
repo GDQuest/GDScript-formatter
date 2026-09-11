@@ -1,7 +1,7 @@
 ## Quick setup wizard window that we display when the user first enables the
 ## plugin.
 @tool
-class_name Greeter
+class_name QuickSetupWindow
 extends Window
 
 enum ButtonActions {
