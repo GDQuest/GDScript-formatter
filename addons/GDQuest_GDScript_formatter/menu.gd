@@ -1,19 +1,30 @@
 ## This module handles adding a menu to the script editor with formatter commands.
 ## It safely locates the script editor's menu bar and adds our custom menu.
 @tool
+class_name FormatterMenu
 extends Node
 
-signal menu_item_selected(command: String)
+enum MenuActions {
+	FORMAT_SCRIPT,
+	LINT_SCRIPT,
+	REORDER_CODE,
+	INSTALL_UPDATE,
+	UNINSTALL,
+	REPORT_ISSUE,
+	HELP,
+}
+
+signal menu_item_selected(action: MenuActions)
 
 const MENU_TEXT = "Format"
 const MENU_ITEMS = {
-	"format_script": "Format Current Script",
-	"lint_script": "Lint Current Script",
-	"reorder_code": "Reorder Code",
-	"install_update": "Install or Update Formatter",
-	"uninstall": "Uninstall Formatter",
-	"report_issue": "Report Issue",
-	"help": "Help",
+	MenuActions.FORMAT_SCRIPT: "Format Current Script",
+	MenuActions.LINT_SCRIPT: "Lint Current Script",
+	MenuActions.REORDER_CODE: "Reorder Code",
+	MenuActions.INSTALL_UPDATE: "Install or Update Formatter",
+	MenuActions.UNINSTALL: "Uninstall Formatter",
+	MenuActions.REPORT_ISSUE: "Report Issue",
+	MenuActions.HELP: "Help",
 }
 
 var menu_button: MenuButton = null
@@ -101,21 +112,21 @@ func _populate_menu(show_uninstall: bool = true) -> void:
 
 	var current_item_index := 0
 
-	popup_menu.add_item(MENU_ITEMS["format_script"], current_item_index)
-	popup_menu.set_item_metadata(current_item_index, "format_script")
+	popup_menu.add_item(MENU_ITEMS[MenuActions.FORMAT_SCRIPT], current_item_index)
+	popup_menu.set_item_metadata(current_item_index, MenuActions.FORMAT_SCRIPT)
 	popup_menu.set_item_tooltip(
 		current_item_index,
 		"Run the GDScript Formatter over the current script",
 	)
 
 	current_item_index += 1
-	popup_menu.add_item(MENU_ITEMS["lint_script"], current_item_index)
-	popup_menu.set_item_metadata(current_item_index, "lint_script")
+	popup_menu.add_item(MENU_ITEMS[MenuActions.LINT_SCRIPT], current_item_index)
+	popup_menu.set_item_metadata(current_item_index, MenuActions.LINT_SCRIPT)
 	popup_menu.set_item_tooltip(current_item_index, "Check the current script for linting issues")
 
 	current_item_index += 1
-	popup_menu.add_item(MENU_ITEMS["reorder_code"], current_item_index)
-	popup_menu.set_item_metadata(current_item_index, "reorder_code")
+	popup_menu.add_item(MENU_ITEMS[MenuActions.REORDER_CODE], current_item_index)
+	popup_menu.set_item_metadata(current_item_index, MenuActions.REORDER_CODE)
 	popup_menu.set_item_tooltip(
 		current_item_index,
 		"Reorder the code elements in the current script according to the GDScript Style Guide",
@@ -127,8 +138,8 @@ func _populate_menu(show_uninstall: bool = true) -> void:
 	# That's why we have to increase it even on separators. Otherwise the
 	# tooltip will lose sync.
 	current_item_index += 2
-	popup_menu.add_item(MENU_ITEMS["install_update"], current_item_index)
-	popup_menu.set_item_metadata(current_item_index, "install_update")
+	popup_menu.add_item(MENU_ITEMS[MenuActions.INSTALL_UPDATE], current_item_index)
+	popup_menu.set_item_metadata(current_item_index, MenuActions.INSTALL_UPDATE)
 	popup_menu.set_item_tooltip(
 		current_item_index,
 		"Download the latest version of the GDScript Formatter",
@@ -136,8 +147,8 @@ func _populate_menu(show_uninstall: bool = true) -> void:
 
 	if show_uninstall:
 		current_item_index += 1
-		popup_menu.add_item(MENU_ITEMS["uninstall"], current_item_index)
-		popup_menu.set_item_metadata(current_item_index, "uninstall")
+		popup_menu.add_item(MENU_ITEMS[MenuActions.UNINSTALL], current_item_index)
+		popup_menu.set_item_metadata(current_item_index, MenuActions.UNINSTALL)
 		popup_menu.set_item_tooltip(
 			current_item_index,
 			"Remove the GDScript Formatter installed through this add-on from your computer",
@@ -147,13 +158,13 @@ func _populate_menu(show_uninstall: bool = true) -> void:
 
 	# Bumped index by 1 extra step because of the previous separator.
 	current_item_index += 2
-	popup_menu.add_item(MENU_ITEMS["report_issue"], current_item_index)
-	popup_menu.set_item_metadata(current_item_index, "report_issue")
+	popup_menu.add_item(MENU_ITEMS[MenuActions.REPORT_ISSUE], current_item_index)
+	popup_menu.set_item_metadata(current_item_index, MenuActions.REPORT_ISSUE)
 	popup_menu.set_item_tooltip(current_item_index, "Tell us about problems or bugs you found")
 
 	current_item_index += 1
-	popup_menu.add_item(MENU_ITEMS["help"], current_item_index)
-	popup_menu.set_item_metadata(current_item_index, "help")
+	popup_menu.add_item(MENU_ITEMS[MenuActions.HELP], current_item_index)
+	popup_menu.set_item_metadata(current_item_index, MenuActions.HELP)
 	popup_menu.set_item_tooltip(current_item_index, "Learn how to use the GDScript Formatter")
 
 
@@ -161,6 +172,5 @@ func _on_menu_item_pressed(id: int) -> void:
 	if not is_instance_valid(popup_menu):
 		return
 
-	var command: String = popup_menu.get_item_metadata(id)
-	if not command.is_empty():
-		menu_item_selected.emit(command)
+	var action: MenuActions = popup_menu.get_item_metadata(id)
+	menu_item_selected.emit(action)
