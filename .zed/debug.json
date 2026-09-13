@@ -1,0 +1,15 @@
+[
+  {
+    "label": "Debug format current file",
+    "adapter": "CodeLLDB",
+    "request": "launch",
+    "program": "$ZED_WORKTREE_ROOT/target/debug/gdscript-formatter",
+    "cwd": "$ZED_WORKTREE_ROOT",
+    "args": ["--stdout", "$ZED_FILE"],
+    "build": {
+      "command": "cargo",
+      "args": ["build"],
+    },
+    "sourceLanguages": ["rust"],
+  },
+]
