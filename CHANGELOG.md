@@ -2,7 +2,11 @@
 
 This file documents the changes made to the formatter with each release.
 
-## Unreleased
+## Release 0.26.0 (2026-09-13)
+
+### Added
+
+- Godot addon: Added a new quick setup wizard that appears when first enabling the addon (thanks @NoahGreer)
 
 ### Fixed
 
