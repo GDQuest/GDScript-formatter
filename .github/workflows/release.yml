@@ -93,19 +93,23 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Create godot-addon.zip
-        run: zip -r godot-addon.zip addons/
+        run: |
+          zip -r godscript-formatter.zip addons/GDQuest_GDScript_formatter/
+          zip -r godscript-formatter-standalone.zip addons/GDQuest_GDScript_formatter_standalone/
         shell: bash
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
           name: godot-addon
-          path: godot-addon.zip
+          path: |
+            godot-addon.zip
+            godot-addon-gdextension.zip
           if-no-files-found: error
           retention-days: 10
 
   publish-release:
-    name: Publish release
+    name: Publish GitHub release
     needs:
       - build-binaries
       - package-godot-addon
@@ -134,3 +138,29 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
+
+  winget:
+    name: Publish to WinGet
+    runs-on: windows-latest
+    needs: publish-release
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Setup WingetCreate
+        run: curl.exe -L https://aka.ms/wingetcreate/latest -o wingetcreate.exe
+        shell: pwsh
+        
+      - name: Publish to WinGet
+        run: |
+          $version = "${{ github.ref_name }}"
+
+          $urls = @(
+          "https://github.com/GDQuest/GDScript-formatter/releases/download/$version/gdscript-formatter-$version-windows-x86_64.exe.zip|x64",
+          "https://github.com/GDQuest/GDScript-formatter/releases/download/$version/gdscript-formatter-$version-windows-aarch64.exe.zip|arm64"
+          )
+
+          .\wingetcreate.exe update GDQuest.GDScript.Formatter --version $version --urls $urls --submit
+        env:
+          WINGET_CREATE_GITHUB_TOKEN: ${{ secrets.WINGET_PAT }}
+        shell: pwsh
