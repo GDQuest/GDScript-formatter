@@ -103,8 +103,8 @@ jobs:
         with:
           name: godot-addon
           path: |
-            godscript-formatter.zip
-            godscript-formatter-standalone.zip
+            godot-addon.zip
+            godot-addon-gdextension.zip
           if-no-files-found: error
           retention-days: 10
 
