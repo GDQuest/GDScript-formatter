@@ -1,8 +1,8 @@
-# Valid declarations around declarations with parse errors should still be
-# formatted.
-var valid=1
+# If there is any parse error in the file, it should be left untouched.
+var valid = 1
 var name.bla = value
-var also_valid=2
+var also_valid = 2
+
 
 func valid_function():
-    return 1
+	return 1

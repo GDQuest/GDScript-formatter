@@ -2,16 +2,43 @@
 
 This file documents the changes made to the formatter with each release.
 
-## Unreleased
+## Release 0.26.0 (2026-09-13)
+
+### Added
+
+- Godot addon: Added a new quick setup wizard that appears when first enabling the addon (thanks @NoahGreer)
+
+### Fixed
+
+- Fixed format and reorder commands having a different result with blank lines around regions containing functions (#337). The formatter will now apply blank line rules across region markers.
+- Fix long parenthesized expression chained with a method call in an assignment, not wrapping past the max line length (#338).
+- Fixed line length calculation for long expression chains with subscript accesses and other cases like attribute access with parenthesized expressions (#342)
+- Fixed ternary expression with a single line continuation being split before the `else` branch which could cause invalid GDScript (#336)
+
+## Release 0.25.0 (2026-09-06)
 
 ### Added
 
 - Added `--verbose` option to print one line per formatted file (#227)
 
+### Changed
+
+- Removed space between lambda function name and parameter list
+- Force @export and @onready annotations to stay on the same line as a variable, but keep other annotations separate, including annotations on local variables (#333)
+- Stop trying to format any code containing parse errors. Until now we tried to still format definitions around the code with errors, but this can lead to cases where the formatter produces invalid code
+- Add line wrapping for annotation arguments (#330)
+
 ### Fixed
 
 - Fixed an extra comma being inserted after a trailing comment in a lambda function argument (#304)
 - fixed certain export annotations being moved out of their respective groups (#308)
+- Preserve up to one blank line used to group elements in "containers" like enums
+- Fixed losing blank line between statements in a body if the previous statement has an inline comment (#320, thanks @Buitragox for the fix)
+- Fixed various edge cases with ignored directories: paths are now normalized before comparison
+- Fixed special get syntax with parentheses having an extra space (#314)
+- Output warnings to stderr when using reorder and safe mode together (#332)
+- Removed the space between `...` and variadic parameter names (#331)
+- Fixed incorrect indentation for match patterns using `and` or `or` (#328)
 
 ## Release 0.24.0 (2026-07-25)
 

@@ -2,11 +2,11 @@
   name: GDScript Formatter
   description: Format GDScript files with gdscript-formatter
   entry: gdscript-formatter
-  language: unsupported
+  language: rust
   files: \.gd$
 - id: gdscript-linter
   name: GDScript Linter
   description: Lint GDScript files with gdscript-formatter
   entry: gdscript-formatter lint
-  language: unsupported
+  language: rust
   files: \.gd$

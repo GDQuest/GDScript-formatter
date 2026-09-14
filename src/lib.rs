@@ -25,6 +25,34 @@ pub mod verify_structure;
 
 pub use renderer::{PrinterConfiguration, RenderElement};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FormatErrors {
+    FailedToParseInput,
+    ParseErrors,
+    FailedToParseFormattedOutput,
+    StructureChanged,
+}
+
+impl std::fmt::Display for FormatErrors {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let message = match self {
+            Self::FailedToParseInput => {
+                "We failed to parse input, the parser did not produce a valid AST"
+            }
+            Self::ParseErrors => "The input GDScript code contains parse errors",
+            Self::FailedToParseFormattedOutput => {
+                "The parser could not parse the formatted output, it did not produce a valid AST"
+            }
+            Self::StructureChanged => {
+                "The formatted output is structurally different from the input. Please report this to the bug tracker with a copy of the input code: https://github.com/GDQuest/GDScript-formatter/issues/"
+            }
+        };
+        formatter.write_str(message)
+    }
+}
+
+impl std::error::Error for FormatErrors {}
+
 /// Selects which delimiters the formatter prefers for string literals.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum QuoteStyle {
@@ -81,7 +109,10 @@ impl Default for FormatterConfiguration {
 ///
 /// For formatting multiple files, prefer [format_gdscript_with_buffers] to
 /// reuse pre-allocated buffers across multiple calls.
-pub fn format_gdscript(source: &str, config: &FormatterConfiguration) -> Result<String, String> {
+pub fn format_gdscript(
+    source: &str,
+    config: &FormatterConfiguration,
+) -> Result<String, FormatErrors> {
     let mut render_elements = Vec::new();
     let mut output = String::new();
     format_gdscript_with_buffers(source, config, &mut render_elements, &mut output)?;
@@ -96,9 +127,11 @@ pub fn format_gdscript_with_buffers(
     config: &FormatterConfiguration,
     render_elements: &mut Vec<RenderElement>,
     output: &mut String,
-) -> Result<(), String> {
-    let parsed = parser::ParseInput::new(source, config)
-        .ok_or_else(|| "Failed to parse input".to_string())?;
+) -> Result<(), FormatErrors> {
+    let parsed = parser::ParseInput::new(source, config).ok_or(FormatErrors::FailedToParseInput)?;
+    if parsed.has_parse_errors {
+        return Err(FormatErrors::ParseErrors);
+    }
     formatter::build_formatter_intermediate_representation(&parsed, render_elements);
 
     // The renderer clamps every blank-line run to `maximum_blank_lines`. If a
@@ -114,17 +147,13 @@ pub fn format_gdscript_with_buffers(
 
     if config.safe {
         let reparsed = parser::ParseInput::new(output, config)
-            .ok_or_else(|| "Verify structure: formatted output does not parse".to_string())?;
-        if !verify_structure::trees_structurally_equal(
+            .ok_or(FormatErrors::FailedToParseFormattedOutput)?;
+        if !verify_structure::are_syntax_trees_structurally_equal(
             &parsed.tree,
             &reparsed.tree,
             parsed.kind_lookup,
         ) {
-            return Err(
-                "Verify structure: formatted output is structurally different from input. \
-                 Keeping original source."
-                    .to_string(),
-            );
+            return Err(FormatErrors::StructureChanged);
         }
     }
 

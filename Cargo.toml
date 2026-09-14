@@ -1,6 +1,6 @@
 [package]
 name = "gdscript-formatter"
-version = "0.24.0"
+version = "0.26.0"
 edition = "2024"
 description = "A GDScript code formatter using Tree-sitter"
 license = "MIT"
@@ -10,6 +10,11 @@ keywords = ["godot", "gdscript", "format", "lint"]
 categories = ["command-line-utilities", "development-tools"]
 default-run = "gdscript-formatter"
 rust-version = "1.85"
+
+[workspace]
+members = [
+  "gdextension",
+]
 
 [lints.clippy]
 dbg_macro = "warn"
@@ -46,7 +51,7 @@ manual_flatten = "allow"
 manual_try_fold = "allow"
 
 [dependencies]
-tree-sitter-gdscript  = { git = "https://github.com/GDQuest/tree-sitter-gdscript.git", branch = "gdquest/gdscript-formatter" }
+tree-sitter-gdscript  = { git = "https://github.com/GDQuest/tree-sitter-gdscript.git", rev = "7739bfa6674dbad32a7869677fdcbf4a7c42db32" }
 tree-sitter = "=0.26.8"
 regex = "=1.12.3"
 # Official editorconfig parser

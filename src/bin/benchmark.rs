@@ -19,7 +19,9 @@
 //! cargo run --bin benchmark --release >> benchmark_results.txt
 //! git checkout -
 //! ```
-use gdscript_formatter::{FormatterConfiguration, RenderElement, format_gdscript_with_buffers};
+use gdscript_formatter::{
+    FormatErrors, FormatterConfiguration, RenderElement, format_gdscript_with_buffers,
+};
 use std::{
     env, fs,
     hint::black_box,
@@ -51,7 +53,11 @@ impl BenchmarkRunner {
         }
     }
 
-    fn format(&mut self, source: &str, config: &FormatterConfiguration) -> Result<(), String> {
+    fn format(
+        &mut self,
+        source: &str,
+        config: &FormatterConfiguration,
+    ) -> Result<(), FormatErrors> {
         format_gdscript_with_buffers(
             black_box(source),
             black_box(config),
@@ -66,7 +72,7 @@ impl BenchmarkRunner {
         &mut self,
         source: &str,
         config: &FormatterConfiguration,
-    ) -> Result<BenchmarkMeasurement, String> {
+    ) -> Result<BenchmarkMeasurement, FormatErrors> {
         let warmup_start = Instant::now();
         while warmup_start.elapsed() < WARMUP_DURATION {
             self.format(source, config)?;

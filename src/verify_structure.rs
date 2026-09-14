@@ -39,7 +39,7 @@ struct NormalizedNode {
 
 /// Entry point: compare two tree-sitter trees for structural equivalence,
 /// accounting for formatting-induced CST changes.
-pub fn trees_structurally_equal(
+pub fn are_syntax_trees_structurally_equal(
     input_tree: &tree_sitter::Tree,
     output_tree: &tree_sitter::Tree,
     lookup: &[GDScriptNodeKind; 256],
@@ -265,7 +265,7 @@ mod tests {
     fn structurally_equal(a: &str, b: &str) -> bool {
         let ta = parse(a);
         let tb = parse(b);
-        trees_structurally_equal(&ta, &tb, lookup())
+        are_syntax_trees_structurally_equal(&ta, &tb, lookup())
     }
 
     #[test]

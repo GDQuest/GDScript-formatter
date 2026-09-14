@@ -119,8 +119,11 @@ fn test_file_with_config(
     let expected_content = fs::read_to_string(&expected_path)
         .unwrap_or_else(|_| panic!("Failed to read {}", expected_path.display()));
 
-    let result = format_gdscript(&input_content, config)
-        .unwrap_or_else(|_| panic!("Failed to format {}", input_path.display()));
+    let result = match format_gdscript(&input_content, config) {
+        Ok(result) => result,
+        Err(gdscript_formatter::FormatErrors::ParseErrors) => input_content.clone(),
+        Err(error) => panic!("Failed to format {}: {}", input_path.display(), error),
+    };
 
     assert_formatted_eq(
         &result,
@@ -130,8 +133,11 @@ fn test_file_with_config(
     );
 
     if check_idempotence {
-        let second_result = format_gdscript(&result, config)
-            .unwrap_or_else(|_| panic!("Failed to format {}", input_path.display()));
+        let second_result = match format_gdscript(&result, config) {
+            Ok(result) => result,
+            Err(gdscript_formatter::FormatErrors::ParseErrors) => result.clone(),
+            Err(error) => panic!("Failed to format {}: {}", input_path.display(), error),
+        };
         assert_formatted_eq(
             &second_result,
             &result,
@@ -195,16 +201,17 @@ lines"""
 }
 
 #[test]
-fn parse_errors_disable_reordering_without_disabling_formatting() {
+fn parse_errors_are_rejected_before_formatting() {
     let input = "var b=1\nvar name.bla = value\nvar a=2\n";
     let config = FormatterConfiguration {
         reorder_code: true,
         ..Default::default()
     };
 
-    let output = format_gdscript(input, &config).unwrap();
-
-    assert_eq!(output, "var b = 1\nvar name.bla = value\nvar a = 2\n");
+    assert!(matches!(
+        format_gdscript(input, &config),
+        Err(gdscript_formatter::FormatErrors::ParseErrors)
+    ));
 }
 
 #[test]

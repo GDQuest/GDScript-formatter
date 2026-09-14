@@ -1,0 +1,418 @@
+[gd_scene format=3 uid="uid://2ffo6diluqkm"]
+
+[ext_resource type="Script" uid="uid://chtdytdwey3un" path="res://addons/GDQuest_GDScript_formatter/editor/quick_setup_window.gd" id="1_cku6i"]
+[ext_resource type="Texture2D" uid="uid://cp5vhsg54dmt5" path="res://addons/GDQuest_GDScript_formatter/images/gdquest_logo.svg" id="1_hq2xi"]
+[ext_resource type="Texture2D" uid="uid://pfs8d8babvcu" path="res://addons/GDQuest_GDScript_formatter/images/icons/download.svg" id="3_cku6i"]
+[ext_resource type="Texture2D" uid="uid://bgwq4as8xi47j" path="res://addons/GDQuest_GDScript_formatter/images/icons/resources.svg" id="4_2dn7m"]
+[ext_resource type="Texture2D" uid="uid://ctpras52nelx3" path="res://addons/GDQuest_GDScript_formatter/images/icons/link.svg" id="4_yrmdb"]
+[ext_resource type="Texture2D" uid="uid://c25vn7jgshggh" path="res://addons/GDQuest_GDScript_formatter/images/icons/trash.svg" id="5_cx1jr"]
+[ext_resource type="Texture2D" uid="uid://dp30pekmsn6tt" path="res://addons/GDQuest_GDScript_formatter/images/icons/settings.svg" id="5_lrwqi"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_2dn7m"]
+content_margin_left = 16.0
+content_margin_top = 16.0
+content_margin_right = 16.0
+content_margin_bottom = 16.0
+bg_color = Color(0.105882354, 0.105882354, 0.105882354, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_cku6i"]
+content_margin_left = 4.0
+content_margin_top = 4.0
+content_margin_right = 12.0
+content_margin_bottom = 4.0
+bg_color = Color(0.13333334, 0.13333334, 0.13333334, 1)
+corner_radius_top_left = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="SystemFont" id="SystemFont_cx1jr"]
+font_names = PackedStringArray("Monospace")
+font_weight = 600
+subpixel_positioning = 0
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hq2xi"]
+content_margin_left = 4.0
+content_margin_top = 4.0
+content_margin_right = 12.0
+content_margin_bottom = 4.0
+bg_color = Color(0.13333334, 0.13333334, 0.13333334, 1)
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_0pdmk"]
+content_margin_left = 8.0
+content_margin_top = 8.0
+content_margin_right = 8.0
+content_margin_bottom = 8.0
+bg_color = Color(0.13333334, 0.13333334, 0.13333334, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_ciixy"]
+content_margin_left = 8.0
+content_margin_top = 8.0
+content_margin_right = 8.0
+content_margin_bottom = 8.0
+bg_color = Color(0.13333334, 0.13333334, 0.13333334, 1)
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_yrmdb"]
+content_margin_left = 8.0
+content_margin_top = 8.0
+content_margin_right = 8.0
+content_margin_bottom = 8.0
+bg_color = Color(0.13333334, 0.13333334, 0.13333334, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_cx1jr"]
+content_margin_left = 8.0
+content_margin_top = 8.0
+content_margin_right = 8.0
+content_margin_bottom = 8.0
+bg_color = Color(0.13333334, 0.13333334, 0.13333334, 1)
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[node name="QuickSetupWindow" type="Window" unique_id=1090372278]
+oversampling_override = 1.0
+title = "Quick setup"
+initial_position = 1
+size = Vector2i(432, 332)
+visible = false
+wrap_controls = true
+unresizable = true
+minimize_disabled = true
+maximize_disabled = true
+keep_title_visible = true
+script = ExtResource("1_cku6i")
+
+[node name="Container" type="PanelContainer" parent="." unique_id=1370421606]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_styles/panel = SubResource("StyleBoxFlat_2dn7m")
+metadata/_edit_use_anchors_ = true
+
+[node name="Layout" type="VBoxContainer" parent="Container" unique_id=1291116102]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 16
+
+[node name="Heading" type="VBoxContainer" parent="Container/Layout" unique_id=262249124]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Description" type="Label" parent="Container/Layout/Heading" unique_id=1472081466]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(400, 0)
+layout_mode = 2
+size_flags_vertical = 0
+text = "Review the formatter version and choose the options you want to use."
+horizontal_alignment = 1
+vertical_alignment = 1
+autowrap_mode = 3
+
+[node name="Versions" type="HBoxContainer" parent="Container/Layout" unique_id=1913214120]
+layout_mode = 2
+size_flags_vertical = 0
+accessibility_name = "Versions"
+accessibility_description = "Addon and formatter versions"
+theme_override_constants/separation = 1
+accessibility_region = true
+
+[node name="Addon" type="PanelContainer" parent="Container/Layout/Versions" unique_id=502298473]
+layout_mode = 2
+size_flags_horizontal = 3
+accessibility_name = "Addon version"
+accessibility_described_by_nodes = Array[NodePath]([NodePath("Layout/Meta/AddonVersionLabel")])
+accessibility_labeled_by_nodes = Array[NodePath]([NodePath("Layout/Meta/Title")])
+theme_override_styles/panel = SubResource("StyleBoxFlat_cku6i")
+accessibility_region = true
+
+[node name="Layout" type="HBoxContainer" parent="Container/Layout/Versions/Addon" unique_id=330984618]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Meta" type="VBoxContainer" parent="Container/Layout/Versions/Addon/Layout" unique_id=1191408725]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+theme_override_constants/separation = -4
+
+[node name="Title" type="Label" parent="Container/Layout/Versions/Addon/Layout/Meta" unique_id=2142585577]
+layout_mode = 2
+size_flags_vertical = 0
+text = "Addon version"
+
+[node name="AddonVersionLabel" type="Label" parent="Container/Layout/Versions/Addon/Layout/Meta" unique_id=473625867]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 0
+accessibility_live = 1
+accessibility_labeled_by_nodes = Array[NodePath]([NodePath("../Title")])
+theme_override_fonts/font = SubResource("SystemFont_cx1jr")
+text = "-"
+
+[node name="AddonInstallButton" type="Button" parent="Container/Layout/Versions/Addon/Layout" unique_id=866644622]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "Download the latest version
+from GitHub"
+theme_override_constants/icon_max_width = 16
+icon = ExtResource("4_yrmdb")
+icon_alignment = 1
+
+[node name="Formatter" type="PanelContainer" parent="Container/Layout/Versions" unique_id=64248743]
+layout_mode = 2
+size_flags_horizontal = 3
+accessibility_name = "Formatter version"
+accessibility_described_by_nodes = Array[NodePath]([NodePath("Layout/Meta/FormatterVersionLabel")])
+accessibility_labeled_by_nodes = Array[NodePath]([NodePath("Layout/Meta/Title")])
+theme_override_styles/panel = SubResource("StyleBoxFlat_hq2xi")
+accessibility_region = true
+
+[node name="Layout" type="HBoxContainer" parent="Container/Layout/Versions/Formatter" unique_id=1203026614]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Meta" type="VBoxContainer" parent="Container/Layout/Versions/Formatter/Layout" unique_id=376277655]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+theme_override_constants/separation = -4
+
+[node name="Title" type="Label" parent="Container/Layout/Versions/Formatter/Layout/Meta" unique_id=523014360]
+layout_mode = 2
+size_flags_vertical = 3
+text = "Formatter version"
+
+[node name="FormatterVersionLabel" type="Label" parent="Container/Layout/Versions/Formatter/Layout/Meta" unique_id=413169287]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 2
+accessibility_live = 1
+accessibility_labeled_by_nodes = Array[NodePath]([NodePath("../Title")])
+theme_override_fonts/font = SubResource("SystemFont_cx1jr")
+text = "-"
+
+[node name="Actions" type="HBoxContainer" parent="Container/Layout/Versions/Formatter/Layout" unique_id=1352071696]
+layout_mode = 2
+size_flags_vertical = 4
+
+[node name="FormatterInstallButton" type="Button" parent="Container/Layout/Versions/Formatter/Layout/Actions" unique_id=44883375]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+tooltip_text = "Installs or updates
+the formatter"
+theme_override_constants/icon_max_width = 16
+icon = ExtResource("3_cku6i")
+icon_alignment = 1
+
+[node name="FormatterUninstallButton" type="Button" parent="Container/Layout/Versions/Formatter/Layout/Actions" unique_id=905387703]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+tooltip_text = "Removes the formatter
+from your system"
+theme_override_constants/icon_max_width = 16
+disabled = true
+icon = ExtResource("5_cx1jr")
+icon_alignment = 1
+
+[node name="SplitPanel" type="HBoxContainer" parent="Container/Layout" unique_id=451807448]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="QuickSettings" type="VBoxContainer" parent="Container/Layout/SplitPanel" unique_id=762058636]
+layout_mode = 2
+size_flags_horizontal = 3
+accessibility_name = "Resources"
+theme_override_constants/separation = 4
+accessibility_region = true
+
+[node name="Heading" type="HBoxContainer" parent="Container/Layout/SplitPanel/QuickSettings" unique_id=1746249992]
+layout_mode = 2
+size_flags_vertical = 0
+tooltip_text = "Quick access to the most
+commonly used settings.
+
+Need more? Find them
+under your Editor Settings."
+theme_override_constants/separation = 0
+
+[node name="QuickSettingsIcon" type="TextureRect" parent="Container/Layout/SplitPanel/QuickSettings/Heading" unique_id=29259362]
+unique_name_in_owner = true
+custom_maximum_size = Vector2(18, 18)
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+texture = ExtResource("5_lrwqi")
+
+[node name="Label" type="Label" parent="Container/Layout/SplitPanel/QuickSettings/Heading" unique_id=1029108396]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 0
+theme_type_variation = &"HeaderSmall"
+text = "Quick settings"
+
+[node name="Items" type="VBoxContainer" parent="Container/Layout/SplitPanel/QuickSettings" unique_id=1642592454]
+layout_mode = 2
+theme_override_constants/separation = 1
+
+[node name="FormatOnSave" type="PanelContainer" parent="Container/Layout/SplitPanel/QuickSettings/Items" unique_id=1031168548]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+accessibility_name = "Format on save"
+accessibility_labeled_by_nodes = Array[NodePath]([NodePath("")])
+theme_override_styles/panel = SubResource("StyleBoxFlat_0pdmk")
+accessibility_region = true
+
+[node name="FormatOnSaveToggle" type="CheckButton" parent="Container/Layout/SplitPanel/QuickSettings/Items/FormatOnSave" unique_id=454317394]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Formats your code
+when the file is saved"
+text = "Format on save"
+flat = true
+
+[node name="LintOnSave" type="PanelContainer" parent="Container/Layout/SplitPanel/QuickSettings/Items" unique_id=1914659548]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+accessibility_name = "Lint on save"
+accessibility_labeled_by_nodes = Array[NodePath]([NodePath("")])
+theme_override_styles/panel = SubResource("StyleBoxFlat_ciixy")
+accessibility_region = true
+
+[node name="LintOnSaveToggle" type="CheckButton" parent="Container/Layout/SplitPanel/QuickSettings/Items/LintOnSave" unique_id=1467833312]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Checks your code
+for common mistakes when
+the file is saved"
+text = "Lint on save"
+flat = true
+
+[node name="Resources" type="VBoxContainer" parent="Container/Layout/SplitPanel" unique_id=455407789]
+layout_mode = 2
+size_flags_horizontal = 3
+accessibility_name = "Resources"
+theme_override_constants/separation = 4
+accessibility_region = true
+
+[node name="Heading" type="HBoxContainer" parent="Container/Layout/SplitPanel/Resources" unique_id=2022780704]
+layout_mode = 2
+size_flags_vertical = 0
+theme_override_constants/separation = 0
+
+[node name="ResourcesIcon" type="TextureRect" parent="Container/Layout/SplitPanel/Resources/Heading" unique_id=2118555130]
+unique_name_in_owner = true
+custom_maximum_size = Vector2(18, 18)
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+texture = ExtResource("4_2dn7m")
+
+[node name="Label" type="Label" parent="Container/Layout/SplitPanel/Resources/Heading" unique_id=545106214]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 0
+theme_type_variation = &"HeaderSmall"
+text = "Resources"
+
+[node name="Items" type="VBoxContainer" parent="Container/Layout/SplitPanel/Resources" unique_id=1998613279]
+layout_mode = 2
+theme_override_constants/separation = 1
+
+[node name="Docs" type="PanelContainer" parent="Container/Layout/SplitPanel/Resources/Items" unique_id=1340727308]
+layout_mode = 2
+size_flags_horizontal = 3
+accessibility_name = "Documentation"
+accessibility_labeled_by_nodes = Array[NodePath]([NodePath("HBoxContainer/Meta/Title")])
+theme_override_styles/panel = SubResource("StyleBoxFlat_yrmdb")
+accessibility_region = true
+
+[node name="HBoxContainer" type="HBoxContainer" parent="Container/Layout/SplitPanel/Resources/Items/Docs" unique_id=1417773300]
+layout_mode = 2
+size_flags_vertical = 0
+theme_override_constants/separation = 16
+
+[node name="Meta" type="VBoxContainer" parent="Container/Layout/SplitPanel/Resources/Items/Docs/HBoxContainer" unique_id=1182312636]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+theme_override_constants/separation = 0
+
+[node name="Title" type="Label" parent="Container/Layout/SplitPanel/Resources/Items/Docs/HBoxContainer/Meta" unique_id=764405891]
+layout_mode = 2
+size_flags_vertical = 3
+text = "Documentation"
+
+[node name="DocsButton" type="Button" parent="Container/Layout/SplitPanel/Resources/Items/Docs/HBoxContainer" unique_id=419240940]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "View documentation"
+theme_override_constants/icon_max_width = 16
+icon = ExtResource("4_yrmdb")
+icon_alignment = 1
+
+[node name="Issues" type="PanelContainer" parent="Container/Layout/SplitPanel/Resources/Items" unique_id=905390970]
+layout_mode = 2
+size_flags_horizontal = 3
+accessibility_name = "Issue tracker"
+accessibility_labeled_by_nodes = Array[NodePath]([NodePath("HBoxContainer/Meta/Title")])
+theme_override_styles/panel = SubResource("StyleBoxFlat_cx1jr")
+accessibility_region = true
+
+[node name="HBoxContainer" type="HBoxContainer" parent="Container/Layout/SplitPanel/Resources/Items/Issues" unique_id=910490745]
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_constants/separation = 16
+
+[node name="Meta" type="VBoxContainer" parent="Container/Layout/SplitPanel/Resources/Items/Issues/HBoxContainer" unique_id=1364135114]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+theme_override_constants/separation = 0
+
+[node name="Title" type="Label" parent="Container/Layout/SplitPanel/Resources/Items/Issues/HBoxContainer/Meta" unique_id=1975650866]
+layout_mode = 2
+size_flags_vertical = 2
+text = "Issue tracker"
+
+[node name="IssuesButton" type="Button" parent="Container/Layout/SplitPanel/Resources/Items/Issues/HBoxContainer" unique_id=1505520439]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "Report an issue"
+accessibility_name = "Report an issue"
+theme_override_constants/icon_max_width = 16
+icon = ExtResource("4_yrmdb")
+icon_alignment = 1
+
+[node name="Branding" type="CenterContainer" parent="Container/Layout" unique_id=1129641325]
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 8
+
+[node name="Logo" type="TextureButton" parent="Container/Layout/Branding" unique_id=1596880248]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(96, 29.6)
+layout_mode = 2
+tooltip_text = "Visit GDQuest"
+mouse_default_cursor_shape = 2
+texture_normal = ExtResource("1_hq2xi")
+ignore_texture_size = true
+stretch_mode = 4

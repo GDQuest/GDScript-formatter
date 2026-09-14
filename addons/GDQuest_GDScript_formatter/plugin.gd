@@ -10,6 +10,7 @@ extends EditorPlugin
 
 const FormatterInstaller = preload("install_and_update.gd")
 const FormatterMenu = preload("menu.gd")
+const QuickSetupWindowScene = preload("editor/quick_setup_window.tscn")
 
 const EDITOR_SETTINGS_CATEGORY = "gdquest_gdscript_formatter/"
 const SETTING_FORMAT_ON_SAVE = "format_on_save"
@@ -69,6 +70,7 @@ var DEFAULT_SETTINGS = {
 	SETTING_IGNORED_DIRECTORIES: PackedStringArray(["addons/"]),
 }
 
+
 ## Which gutter lint icons are shown in.
 ## By default, gutter 0 is for breakpoints and 1 is for things like overrides.
 const GUTTER_LINT_ICON_INDEX = 2
@@ -78,16 +80,22 @@ var connection_list: Array[Resource] = []
 var installer: FormatterInstaller = null
 var formatter_cache_dir: String
 var menu: FormatterMenu = null
+var quick_setup_window: QuickSetupWindow = null
 var _has_uninstall_command := false
 var _has_formatter_command := false
 var _has_format_command := false
 var _has_lint_command := false
 var _already_warned_about_reorder_on_save := false
+var _already_warned_about_builtin_format_on_save := false
+var _setting_updated_via_quick_setup := false
 # Used to auto detect changes to the project's .editorconfig file.
 var _editorconfig_last_modified_time := -1
 # Editorconfig allows setting rules per path glob. We track globs for the format
 # on save rule here so users can enable it selectively for specific folders.
 var _editorconfig_format_on_save_rules: Array[Dictionary] = []
+
+# Used to detect the formatter
+const FORMATTER_BINARY_NAME = "gdscript-formatter"
 
 
 func _init() -> void:
@@ -167,12 +175,32 @@ func migrate_format_mode_setting() -> void:
 		version = 2
 
 
+func _enable_plugin() -> void:
+	# This is called by Godot when the user enables the plugin in their project
+	# settings. Here we get version information about the formator program and
+	# the plugin itself to show in the quick setup window.
+	var plugin_config := ConfigFile.new()
+	var config_loaded := plugin_config.load(
+		get_script().resource_path.get_base_dir() + "/plugin.cfg"
+	)
+	if config_loaded == OK:
+		var addon_version = plugin_config.get_value("plugin", "version")
+		if addon_version:
+			quick_setup_window.set_addon_version(addon_version)
+	else:
+		push_error("Unable to load plugin config")
+
+	_update_formatter_version()
+	quick_setup_window.popup_centered()
+	_update_quick_setup_settings_display()
+
+
 func _enter_tree() -> void:
 	formatter_cache_dir = EditorInterface.get_editor_paths().get_cache_dir().path_join("gdquest")
 	installer = FormatterInstaller.new(formatter_cache_dir)
 	add_child(installer)
 	installer.installation_completed.connect(
-		func _on_installation_completed (binary_path: String) -> void:
+		func _on_installation_completed(binary_path: String) -> void:
 			set_editor_setting(SETTING_FORMATTER_PATH, binary_path)
 			_has_formatter_command = has_command(binary_path)
 			if not _has_formatter_command:
@@ -182,13 +210,40 @@ func _enter_tree() -> void:
 				return
 			add_format_command()
 			add_lint_command()
+
+			_update_formatter_version()
+
 			# After installing the formatter we can add the menu option to show the uninstall command
 			if is_instance_valid(menu):
 				menu.update_menu(true),
 	)
 	installer.installation_failed.connect(
-		func _on_installation_failed (error_message: String) -> void:
+		func _on_installation_failed(error_message: String) -> void:
 			push_error("Formatter installation failed: ", error_message),
+	)
+
+	quick_setup_window = QuickSetupWindowScene.instantiate() as QuickSetupWindow
+	add_child(quick_setup_window)
+	quick_setup_window.button_pressed.connect(
+		func(action: QuickSetupWindow.ButtonActions) -> void:
+			match action:
+				QuickSetupWindow.ButtonActions.INSTALL_UPDATE:
+					installer.install_or_update_formatter()
+				QuickSetupWindow.ButtonActions.UNINSTALL:
+					uninstall_formatter()
+				QuickSetupWindow.ButtonActions.REPORT_ISSUE:
+					report_issue()
+				QuickSetupWindow.ButtonActions.HELP:
+					show_help()
+				QuickSetupWindow.ButtonActions.UPDATE_ADDON:
+					update_addon()
+				QuickSetupWindow.ButtonActions.OPEN_WEBSITE:
+					OS.shell_open("https://www.gdquest.com/")
+	)
+	quick_setup_window.setting_change_requested.connect(
+		func(setting: QuickSetupWindow.Settings, value: Variant) -> void:
+			_setting_updated_via_quick_setup = true
+			set_editor_setting(_get_quick_setup_setting_name(setting), value),
 	)
 
 	_has_formatter_command = has_command(get_editor_setting(SETTING_FORMATTER_PATH))
@@ -207,6 +262,21 @@ func _enter_tree() -> void:
 	resource_saved.connect(_on_resource_saved)
 
 
+func _update_quick_setup_settings_display() -> void:
+	for setting: QuickSetupWindow.Settings in [QuickSetupWindow.Settings.FORMAT_ON_SAVE, QuickSetupWindow.Settings.LINT_ON_SAVE]:
+		var state = get_editor_setting(_get_quick_setup_setting_name(setting))
+		quick_setup_window.set_setting_state(setting, state)
+
+
+func _get_quick_setup_setting_name(setting: QuickSetupWindow.Settings) -> String:
+	match setting:
+		QuickSetupWindow.Settings.FORMAT_ON_SAVE:
+			return SETTING_FORMAT_ON_SAVE
+		QuickSetupWindow.Settings.LINT_ON_SAVE:
+			return SETTING_LINT_ON_SAVE
+	return ""
+
+
 func _exit_tree() -> void:
 	resource_saved.disconnect(_on_resource_saved)
 
@@ -219,11 +289,23 @@ func _exit_tree() -> void:
 	installer.queue_free()
 	installer = null
 
+	quick_setup_window.queue_free()
+	quick_setup_window = null
+
 	if is_instance_valid(menu):
 		menu.menu_item_selected.disconnect(_on_menu_item_selected)
 		menu.remove_formatter_menu()
 		menu.queue_free()
 		menu = null
+
+
+func _notification(what: int) -> void:
+	var has_settings_changed = what == EditorSettings.NOTIFICATION_EDITOR_SETTINGS_CHANGED
+
+	if has_settings_changed and not _setting_updated_via_quick_setup:
+		_update_quick_setup_settings_display()
+
+	_setting_updated_via_quick_setup = false
 
 
 func _shortcut_input(event: InputEvent) -> void:
@@ -304,13 +386,36 @@ func update_shortcut() -> void:
 func _on_resource_saved(saved_resource: Resource) -> void:
 	if saved_resource is not GDScript:
 		return
-
 	var script := saved_resource as GDScript
 	var do_format_on_save := get_editor_setting(SETTING_FORMAT_ON_SAVE) as bool
+
+	# We should normally never hit this condition, I'm adding it as a
+	# safety check and to document issues with format on save and built-in
+	# scripts. We support formatting built-in scripts, but not formatting them
+	# on save:
+	# - There's no way to retrieve built-in scripts and when their enclosing
+	# scene is saved efficiently
+	# - You would have to re-save the scene after formatting
+	#
+	# That would add complexity and slowdowns so we don't support it at the
+	# moment. We may revisit this if multiple users depend on this feature (I
+	# generally don't recommend built-in scripts because of their limitations
+	# for debugging, error reporting, VCS... they have too many limitations for
+	# their benefit)
+	if script.is_built_in():
+		if do_format_on_save and not _already_warned_about_builtin_format_on_save:
+			push_warning(
+				"GDScript Formatter: Format on save is not supported for built-in scripts. "
+				+ "Format this script manually instead."
+			)
+			_already_warned_about_builtin_format_on_save = true
+		return
+
 	var editorconfig_format_on_save = get_editorconfig_format_on_save(script.resource_path)
 	if editorconfig_format_on_save != null:
 		do_format_on_save = editorconfig_format_on_save as bool
 	var lint_on_save := get_editor_setting(SETTING_LINT_ON_SAVE) as bool
+
 	if (
 		do_format_on_save and get_format_mode() == FormatMode.REORDER_CODE
 		and not _already_warned_about_reorder_on_save
@@ -323,18 +428,42 @@ func _on_resource_saved(saved_resource: Resource) -> void:
 	if not do_format_on_save and not lint_on_save:
 		return
 
-	var ignored_directories = get_editor_setting(SETTING_IGNORED_DIRECTORIES)
-	var path = script.resource_path.trim_prefix("res://")
+	var ignored_directories_normalized: Array[String] = []
+	var ignored_directories_seen: Dictionary[String, String] = { }
+	for directory: String in get_editor_setting(SETTING_IGNORED_DIRECTORIES):
+		# We split paths on "/", we trim trailing slashes to avoid empty path
+		# segments that would never match when checking ignored directories.
+		var directory_normalized := directory.trim_prefix("res://").trim_suffix("/")
+		if directory_normalized.is_empty():
+			push_warning(
+				"GDScript Formatter: Format on Save Ignored Directories entry \"%s\" " % directory
+				+ "has no path after removing \"res://\" and trailing slashes, and will be skipped. "
+				+ "This may mean you're trying to ignore the entire project, which isn't supported here. "
+				+ "Please remove it from the list, enter a valid path, or turn off format on save instead."
+			)
+			continue
 
-	var script_path_parts := path.split("/")
+		if ignored_directories_seen.has(directory_normalized):
+			push_warning(
+				"GDScript Formatter: Format on Save Ignored Directories entry \"%s\" " % directory
+				+ "refers to the same directory as entry \"%s\" "
+				% ignored_directories_seen[directory_normalized]
+				+ "and will be skipped. Please remove the duplicate entry from the list."
+			)
+			continue
 
-	for directory: String in ignored_directories:
-		var normalized_dir := directory.trim_prefix("res://")
-		var directory_parts := normalized_dir.split("/")
+		ignored_directories_seen[directory_normalized] = directory
+		ignored_directories_normalized.push_back(directory_normalized)
+
+	var saved_script_path_segments := script.resource_path.trim_prefix("res://").split("/")
+	for ignored_directory_path: String in ignored_directories_normalized:
+		var ignored_directory_segments := ignored_directory_path.split("/")
+		if ignored_directory_segments.size() > saved_script_path_segments.size():
+			continue
 
 		var matches := true
-		for i in range(directory_parts.size()):
-			if directory_parts[i] != script_path_parts[i]:
+		for i in range(ignored_directory_segments.size()):
+			if ignored_directory_segments[i] != saved_script_path_segments[i]:
 				matches = false
 				break
 
@@ -502,6 +631,38 @@ func has_command(command: String) -> bool:
 	return exit_code == OK
 
 
+func _get_binary_path() -> String:
+	var binary_name := FORMATTER_BINARY_NAME
+
+	if OS.get_name().to_lower().contains("windows"):
+		binary_name = binary_name + ".exe"
+
+	return formatter_cache_dir.path_join(binary_name)
+
+
+func _update_formatter_version() -> void:
+	var binary_path = _get_binary_path()
+	if not FileAccess.file_exists(binary_path):
+		return
+
+	var version_stdout: Array = []
+	var exit_code = OS.execute(binary_path, ["--version"], version_stdout)
+	if exit_code != OK:
+		return
+
+	var formatter_version := ""
+	for index in version_stdout.size():
+		formatter_version += version_stdout[index]
+	if formatter_version.begins_with(FORMATTER_BINARY_NAME):
+		formatter_version = formatter_version.trim_prefix(FORMATTER_BINARY_NAME)
+	formatter_version = formatter_version.strip_edges()
+
+	if not formatter_version:
+		return
+
+	quick_setup_window.set_formatter_version(formatter_version)
+
+
 func is_formatter_available() -> bool:
 	if _has_formatter_command:
 		return true
@@ -510,18 +671,12 @@ func is_formatter_available() -> bool:
 
 
 func is_formatter_installed_locally() -> bool:
-	var binary_name := "gdscript-formatter"
-	if OS.get_name().to_lower().contains("windows"):
-		binary_name = "gdscript-formatter.exe"
-	var binary_path := formatter_cache_dir.path_join(binary_name)
+	var binary_path = _get_binary_path()
 	return FileAccess.file_exists(binary_path)
 
 
 func uninstall_formatter() -> void:
-	var binary_name := "gdscript-formatter"
-	if OS.get_name().to_lower().contains("windows"):
-		binary_name = "gdscript-formatter.exe"
-	var binary_path := formatter_cache_dir.path_join(binary_name)
+	var binary_path = _get_binary_path()
 
 	if FileAccess.file_exists(binary_path):
 		DirAccess.remove_absolute(binary_path)
@@ -534,6 +689,7 @@ func uninstall_formatter() -> void:
 		add_format_command()
 		remove_uninstall_command()
 		add_uninstall_command()
+		quick_setup_window.set_formatter_version("-")
 		if is_instance_valid(menu):
 			menu.update_menu(false)
 	else:
@@ -569,24 +725,26 @@ func show_help() -> void:
 	OS.shell_open("https://www.gdquest.com/library/gdscript_formatter/")
 
 
-func _on_menu_item_selected(command: String) -> void:
-	match command:
-		"format_script":
+func update_addon() -> void:
+	OS.shell_open("https://github.com/GDQuest/GDScript-formatter/releases")
+
+
+func _on_menu_item_selected(action: FormatterMenu.MenuActions) -> void:
+	match action:
+		FormatterMenu.MenuActions.FORMAT_SCRIPT:
 			format_current_script()
-		"lint_script":
+		FormatterMenu.MenuActions.LINT_SCRIPT:
 			lint_current_script()
-		"reorder_code":
+		FormatterMenu.MenuActions.REORDER_CODE:
 			reorder_code()
-		"install_update":
+		FormatterMenu.MenuActions.INSTALL_UPDATE:
 			installer.install_or_update_formatter()
-		"uninstall":
+		FormatterMenu.MenuActions.UNINSTALL:
 			uninstall_formatter()
-		"report_issue":
+		FormatterMenu.MenuActions.REPORT_ISSUE:
 			report_issue()
-		"help":
+		FormatterMenu.MenuActions.HELP:
 			show_help()
-		_:
-			push_warning("Unsupported command sent from the menu: " + command)
 
 
 ## Reloads the code editor with new text while preserving editor state.
@@ -705,7 +863,11 @@ func editorconfig_section_matches(pattern: String, relative_script_path: String)
 ## the editor and requests formatting without having saved their changes (in
 ## that case, the code they're editing only exists in the script editor's open
 ## tab).
-func format_code(script: GDScript, force_reorder := false, source_content: Variant = null) -> String:
+func format_code(
+	script: GDScript,
+	force_reorder := false,
+	source_content: Variant = null,
+) -> String:
 	var script_path := script.resource_path
 	if source_content == null and script_path.is_empty():
 		push_error("GDScript Formatter Error: Can't format an unsaved script.")

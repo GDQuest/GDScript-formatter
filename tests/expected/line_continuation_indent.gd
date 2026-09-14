@@ -43,3 +43,9 @@ func _get_message() -> String:
 var test = true \
 		if not false \
 		else false
+
+
+# Issue #336
+func _on_check_box_toggled(toggled_on: bool) -> void:
+	game_logic.human_side = Globals.ChessSides.WHITE \
+			if toggled_on else Globals.ChessSides.BLACK

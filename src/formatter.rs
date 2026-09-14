@@ -168,18 +168,19 @@ fn has_newline(source: &str, from: usize, to: usize) -> bool {
     false
 }
 
-/// Returns `true` if the node or any of its children has the given kind.
-fn contains_forced_multiline_node(node: tree_sitter::Node) -> bool {
-    if matches!(
-        GDScriptNodeKind::get_kind_from_ast_node(node),
-        GDScriptNodeKind::Lambda | GDScriptNodeKind::Condition
-    ) {
-        return true;
-    }
+fn is_class_header(kind: GDScriptNodeKind) -> bool {
+    matches!(
+        kind,
+        GDScriptNodeKind::ClassName | GDScriptNodeKind::Extends
+    )
+}
+
+/// Returns true if the node has an `Annotations` child attached to it.
+fn has_own_annotations_child(node: tree_sitter::Node) -> bool {
     let mut child_index = 0;
     while child_index < node.child_count() {
         if let Some(child) = node.child(child_index as u32)
-            && contains_forced_multiline_node(child)
+            && GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Annotations
         {
             return true;
         }
@@ -188,25 +189,22 @@ fn contains_forced_multiline_node(node: tree_sitter::Node) -> bool {
     false
 }
 
-fn is_class_header(kind: GDScriptNodeKind) -> bool {
-    matches!(
-        kind,
-        GDScriptNodeKind::ClassName | GDScriptNodeKind::Extends
-    )
-}
-
-/// Returns true if the node has an `Annotations` child attached to it (and not
-/// annotations appearing as siblings before this node).
-fn has_own_annotations_child(node: tree_sitter::Node) -> bool {
-    let count = node.child_count();
-    let mut index = 0;
-    while index < count {
-        if let Some(child) = node.child(index as u32) {
-            if GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Annotations {
-                return true;
-            }
+/// Returns true if the annotation is an export or onready annotation (this
+/// includes @export_range() etc.).
+///
+/// We want these specific annotations to stay on the same line as the variable
+/// declaration they annotate.
+fn is_export_or_onready_annotation(source: &str, annotation: tree_sitter::Node) -> bool {
+    let mut child_index = 0;
+    while child_index < annotation.child_count() {
+        if let Some(child) = annotation.child(child_index as u32)
+            && GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Identifier
+        {
+            let annotation_name = &source[child.start_byte()..child.end_byte()];
+            return (annotation_name.starts_with("export") && annotation_name != "export_group")
+                || annotation_name == "onready";
         }
-        index += 1;
+        child_index += 1;
     }
     false
 }
@@ -342,15 +340,71 @@ fn process_node(
         }
         GDScriptNodeKind::Lambda => process_lambda(input, node, render_elements),
         GDScriptNodeKind::Function => process_function(input, node, render_elements),
+        GDScriptNodeKind::Variable
+        | GDScriptNodeKind::ExportVariable
+        | GDScriptNodeKind::OnReadyVariable
+            if has_inline_annotations_child(node) =>
+        {
+            let group_index = begin_group(render_elements);
+            process_children_with_spacing(input, node, render_elements);
+            finish_group(render_elements, group_index);
+        }
         GDScriptNodeKind::SetGet => process_setget(input, node, render_elements),
-        GDScriptNodeKind::ParenthesizedExpression => {
-            process_parenthesized_expression(input, node, render_elements)
+        GDScriptNodeKind::ParenthesizedExpression
+        | GDScriptNodeKind::Attribute
+        | GDScriptNodeKind::Subscript
+        | GDScriptNodeKind::Call => {
+            // Wrapping the entire expression in a group helps with calculating
+            // the length of code segments and knowing where to break lines for
+            // vertical spacing in the renderer.
+            let group_index = begin_group(render_elements);
+            process_expression_content(input, node, render_elements);
+            finish_group(render_elements, group_index);
         }
         GDScriptNodeKind::BinaryOperator => process_binary_operator(input, node, render_elements),
         GDScriptNodeKind::Condition => process_conditional_expression(input, node, render_elements),
-        GDScriptNodeKind::Attribute => process_attribute(input, node, render_elements),
         _ => process_children_with_spacing(input, node, render_elements),
     }
+}
+
+fn has_inline_annotations_child(node: tree_sitter::Node) -> bool {
+    let mut child_index = 0;
+    while child_index < node.child_count() {
+        if let Some(child) = node.child(child_index as u32)
+            && GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Annotations
+        {
+            let Some(next_child) = node.child((child_index + 1) as u32) else {
+                return false;
+            };
+            return child.end_position().row == next_child.start_position().row;
+        }
+        child_index += 1;
+    }
+    false
+}
+
+fn is_inline_variable_annotation_arguments(node: tree_sitter::Node) -> bool {
+    let Some(annotation) = node.parent() else {
+        return false;
+    };
+    if GDScriptNodeKind::get_kind_from_ast_node(annotation) != GDScriptNodeKind::Annotation {
+        return false;
+    }
+    let Some(annotations) = annotation.parent() else {
+        return false;
+    };
+    if GDScriptNodeKind::get_kind_from_ast_node(annotations) != GDScriptNodeKind::Annotations {
+        return false;
+    }
+    let Some(variable) = annotations.parent() else {
+        return false;
+    };
+    matches!(
+        GDScriptNodeKind::get_kind_from_ast_node(variable),
+        GDScriptNodeKind::Variable
+            | GDScriptNodeKind::ExportVariable
+            | GDScriptNodeKind::OnReadyVariable
+    ) && has_inline_annotations_child(variable)
 }
 
 /// Groups a function header (the declaration line/first line) separately from
@@ -392,6 +446,7 @@ fn process_function(
                 if let Some(previous_child) = previous {
                     process_separator_between_sibling_nodes(
                         GDScriptNodeKind::Function,
+                        input.source,
                         &previous_child,
                         &child,
                         render_elements,
@@ -404,6 +459,7 @@ fn process_function(
             if let Some(previous_child) = previous {
                 process_separator_between_sibling_nodes(
                     GDScriptNodeKind::Function,
+                    input.source,
                     &previous_child,
                     &child,
                     render_elements,
@@ -710,13 +766,12 @@ fn process_body(
                 let previous_is_declaration =
                     is_declaration(last_processed_child_kind.unwrap_or(GDScriptNodeKind::Other));
                 if last_processed_child_kind == Some(GDScriptNodeKind::Annotation) {
-                    if current_child_kind != GDScriptNodeKind::Annotation
+                    if (current_child_kind != GDScriptNodeKind::Annotation
                         && current_child_kind != GDScriptNodeKind::Comment
                         && current_is_declaration
-                        && !has_own_annotations_child(child)
+                        && !has_own_annotations_child(child))
+                        || has_newline(source, previous_end, child.start_byte())
                     {
-                        render_elements.push(RenderElement::Space);
-                    } else if has_newline(source, previous_end, child.start_byte()) {
                         render_elements.push(RenderElement::HardLine);
                     } else {
                         render_elements.push(RenderElement::Space);
@@ -744,7 +799,7 @@ fn process_body(
                                 false,
                             );
                         }
-                    } else if statement_has_inline_comment && current_is_declaration {
+                    } else if statement_has_inline_comment {
                         let needs_two_blank_lines = needs_two_blank_lines(current_child_kind);
                         add_spacing_between_body_children(
                             previous_end,
@@ -960,12 +1015,12 @@ fn process_source(
     // pull code into or out of a # fmt: off disabled region. For now we
     // skip reordering for disabled regions, but in the future we may want
     // to reorder code around disabled regions as well?
-    if input.reorder_code && !input.has_parse_errors {
+    if input.reorder_code {
         if input.disabled_regions.is_empty() {
             process_source_reorder(input, node, render_elements);
             return;
         }
-        println!(
+        eprintln!(
             "The code uses disabled regions. Reordering is currently incompatible with disabled formatting as it can span any lines and reordering may break the disabled regions. Skipping reordering."
         );
     }
@@ -990,12 +1045,6 @@ fn process_source(
         };
 
         let kind = GDScriptNodeKind::get_kind_from_ast_node(child);
-        // Tree-sitter can recover from syntax errors by wrapping a declaration
-        // in an ERROR node. Formatting inside that subtree would rely on AST
-        // relationships that may no longer describe the source. Keep the
-        // malformed declaration intact while formatting its valid siblings.
-        let contains_parse_error = input.has_parse_errors && child.has_error();
-
         // This code is similar to the one in process_body(). See comments
         // there for some explanation of what this does and why it's needed.
         match classify_disabled_region_overlap(input, node, child, current_index) {
@@ -1027,16 +1076,7 @@ fn process_source(
                 continue;
             }
             DisabledRegionOverlapKind::PartiallyCovered => {
-                if contains_parse_error {
-                    render_elements.push(RenderElement::UnformattedSource {
-                        range: RangeSourceBytes {
-                            start_byte: child.start_byte(),
-                            end_byte: child.end_byte(),
-                        },
-                    });
-                } else {
-                    process_node(input, child, render_elements);
-                }
+                process_node(input, child, render_elements);
                 spacing_context.last_output_end = Some(child.end_byte());
                 spacing_context.last_declaration_end = Some(child.end_byte());
                 spacing_context.last_declaration_kind = Some(kind);
@@ -1078,16 +1118,7 @@ fn process_source(
             &spacing_context,
             child,
         );
-        if contains_parse_error {
-            render_elements.push(RenderElement::UnformattedSource {
-                range: RangeSourceBytes {
-                    start_byte: child.start_byte(),
-                    end_byte: child.end_byte(),
-                },
-            });
-        } else {
-            process_node(input, child, render_elements);
-        }
+        process_node(input, child, render_elements);
         spacing_context.last_output_end = Some(child.end_byte());
         spacing_context.last_declaration_end = Some(child.end_byte());
         spacing_context.last_declaration_kind = Some(kind);
@@ -1133,22 +1164,55 @@ fn output_pending_before_declaration(
     declaration: tree_sitter::Node,
 ) {
     let source = input.source;
-    let declaration_kind = GDScriptNodeKind::get_kind_from_ast_node(declaration);
+    let mut declaration_kind = GDScriptNodeKind::get_kind_from_ast_node(declaration);
     let declaration_start = declaration.start_byte();
-    let declaration_needs_two_blank = needs_two_blank_lines(declaration_kind);
-    let previous_kind = spacing_context
+    let mut previous_kind = spacing_context
         .last_declaration_kind
         .unwrap_or(GDScriptNodeKind::Other);
-    let previous_needs_two_blank = needs_two_blank_lines(previous_kind);
-    let declaration_is_region = declaration_kind == GDScriptNodeKind::RegionStart
-        || declaration_kind == GDScriptNodeKind::RegionEnd;
-    let previous_is_region = spacing_context.last_declaration_kind
-        == Some(GDScriptNodeKind::RegionStart)
-        || spacing_context.last_declaration_kind == Some(GDScriptNodeKind::RegionEnd);
-    let wants_two_blank_lines = if declaration_is_region || previous_is_region {
+    // If we stumble upon a region marker after comments and annotations, we look for a relevant declaration inside the region
+    // to determine the spacing around the region. We want to ignore region
+    // markers and still apply e.g. 2 blank lines around the region if before
+    // and inside the region we have functions for example.
+    let is_current_region_start_or_end = declaration_kind == GDScriptNodeKind::RegionEnd
+        || previous_kind == GDScriptNodeKind::RegionStart;
+    if declaration_kind == GDScriptNodeKind::RegionStart {
+        let mut node_following_region_start = declaration.next_named_sibling();
+        while let Some(sibling) = node_following_region_start {
+            let kind = GDScriptNodeKind::get_kind_from_ast_node(sibling);
+            if !matches!(
+                kind,
+                GDScriptNodeKind::RegionStart
+                    | GDScriptNodeKind::Comment
+                    | GDScriptNodeKind::Annotation
+            ) {
+                declaration_kind = kind;
+                break;
+            }
+            node_following_region_start = sibling.next_named_sibling();
+        }
+    }
+    if previous_kind == GDScriptNodeKind::RegionEnd {
+        let mut node_preceding_last_region_end = declaration.prev_named_sibling();
+        while let Some(sibling) = node_preceding_last_region_end {
+            let kind = GDScriptNodeKind::get_kind_from_ast_node(sibling);
+            if !matches!(
+                kind,
+                GDScriptNodeKind::RegionEnd
+                    | GDScriptNodeKind::Comment
+                    | GDScriptNodeKind::Annotation
+            ) {
+                previous_kind = kind;
+                break;
+            }
+            node_preceding_last_region_end = sibling.prev_named_sibling();
+        }
+    }
+    let current_needs_two_blank_lines = needs_two_blank_lines(declaration_kind);
+    let previous_needs_two_blank_lines = needs_two_blank_lines(previous_kind);
+    let wants_two_blank_lines = if is_current_region_start_or_end {
         false
     } else {
-        previous_needs_two_blank || declaration_needs_two_blank
+        previous_needs_two_blank_lines || current_needs_two_blank_lines
     };
     let separator_blank_count = calculate_separator_blank_count(
         input,
@@ -1175,8 +1239,7 @@ fn output_pending_before_declaration(
             }
             return;
         }
-        // Region markers should have no added blank lines.
-        if declaration_is_region || previous_is_region {
+        if is_current_region_start_or_end {
             push_separator_for_newline_count(newlines, render_elements);
             return;
         }
@@ -1184,7 +1247,7 @@ fn output_pending_before_declaration(
         // either the previous or current declaration needs them
         // (function/class/constructor). Otherwise preserve the input blank
         // lines up to 1.
-        if previous_needs_two_blank || declaration_needs_two_blank {
+        if previous_needs_two_blank_lines || current_needs_two_blank_lines {
             push_blank_lines(render_elements, separator_blank_count);
         } else {
             push_separator_for_newline_count(newlines, render_elements);
@@ -1198,28 +1261,41 @@ fn output_pending_before_declaration(
     let newline_count_from_last_pending =
         count_newlines(source, last_pending_end, declaration_start);
     let last_on_new_line = *last_pending_newlines >= 1;
-    let mut all_annotations = true;
+    // If there's an @export or an @onready annotation it should go on the same
+    // line as the variable declaration. For other annotations we want to keep
+    // them on their own lines.
+    let mut pending_annotations_can_inline = true;
     let mut pending_index = 0;
     while pending_index < pending.len() {
-        if GDScriptNodeKind::get_kind_from_ast_node(pending[pending_index].0)
-            != GDScriptNodeKind::Annotation
+        let (pending_node, _) = pending[pending_index];
+        if GDScriptNodeKind::get_kind_from_ast_node(pending_node) == GDScriptNodeKind::Annotation
+            && !is_export_or_onready_annotation(source, pending_node)
         {
-            all_annotations = false;
+            pending_annotations_can_inline = false;
             break;
         }
         pending_index += 1;
     }
-    let annotation_inline = all_annotations
-        && declaration_kind == GDScriptNodeKind::Variable
-        && !has_own_annotations_child(declaration)
-        && newline_count_from_last_pending == 1;
+    let do_write_annotation_inline = pending_annotations_can_inline
+        && matches!(
+            declaration_kind,
+            GDScriptNodeKind::Variable
+                | GDScriptNodeKind::ExportVariable
+                | GDScriptNodeKind::OnReadyVariable
+        )
+        && newline_count_from_last_pending == 1
+        && pending.last().is_some_and(|(annotation, _)| {
+            GDScriptNodeKind::get_kind_from_ast_node(*annotation) == GDScriptNodeKind::Annotation
+                && is_export_or_onready_annotation(source, *annotation)
+        });
 
     // Walk backward from the end of pending: comments on their own line that
     // have no blank lines between them and the next declaration should come
     // right before that declaration.
     let mut leading_count = 0;
     if has_previous_content
-        && declaration_needs_two_blank
+        && current_needs_two_blank_lines
+        && !is_current_region_start_or_end
         && newline_count_from_last_pending == 1
         && last_on_new_line
     {
@@ -1340,7 +1416,7 @@ fn output_pending_before_declaration(
     // Both pending and leading_block are empty, and the emit loop consumed
     // everything. Just emit the separator before the declaration.
     if !pending_emitted_as_paragraph && leading_block.is_empty() {
-        if annotation_inline {
+        if do_write_annotation_inline {
             render_elements.push(RenderElement::Space);
         } else if !has_previous_content {
             if newline_count_to_declaration == 1 {
@@ -1390,9 +1466,11 @@ fn output_pending_before_declaration(
         render_elements.push(RenderElement::BlankLine);
         process_pending_block(render_elements, input, &leading_block);
         render_elements.push(RenderElement::HardLine);
+    } else if attached_to_declaration && do_write_annotation_inline {
+        render_elements.push(RenderElement::Space);
     } else if attached_to_declaration {
         render_elements.push(RenderElement::HardLine);
-    } else if declaration_needs_two_blank {
+    } else if current_needs_two_blank_lines {
         let declaration_blank_count =
             get_blank_line_count_before_declaration(input, declaration_kind);
         push_blank_lines(render_elements, declaration_blank_count);
@@ -1545,6 +1623,7 @@ fn process_setget(
                 if let Some(ref previous_child) = previous {
                     process_separator_between_sibling_nodes(
                         GDScriptNodeKind::SetGet,
+                        input.source,
                         previous_child,
                         &inner_child,
                         render_elements,
@@ -1577,9 +1656,7 @@ fn process_container(
         if let Some(open) = node.child(0) {
             process_node(input, open, render_elements);
         }
-        if node_kind == GDScriptNodeKind::Dictionary
-            || node_kind == GDScriptNodeKind::EnumeratorList
-        {
+        if node_kind == GDScriptNodeKind::Dictionary {
             render_elements.push(RenderElement::Space);
         }
         if let Some(close) = node.child(1) {
@@ -1592,7 +1669,10 @@ fn process_container(
         && node.parent().is_some_and(|parent| {
             GDScriptNodeKind::get_kind_from_ast_node(parent) == GDScriptNodeKind::Function
         });
-    let group_index = if is_function_parameters {
+    let group_index = if is_function_parameters
+        || (node_kind == GDScriptNodeKind::Arguments
+            && is_inline_variable_annotation_arguments(node))
+    {
         None
     } else {
         Some(begin_group(render_elements))
@@ -1609,8 +1689,7 @@ fn process_container(
     render_elements.push(RenderElement::SoftLine);
 
     // When we have delimiters like in a function calls, we apply just one
-    // indent. Before, we applied double indents by default, treating them as
-    // continuation lines.
+    // indent. We don't treat them as continuation lines.
     let indent_index = begin_indent(render_elements, 1);
 
     let mut has_comment = false;
@@ -1662,12 +1741,21 @@ fn process_container(
                     } else {
                         process_separator_between_sibling_nodes(
                             node_kind,
+                            input.source,
                             previous_child,
                             &child,
                             render_elements,
                         );
                     }
                 }
+            }
+            // Preserve up to one blank line used to group elements in
+            // "containers" like enums.
+            if let Some(previous_child) = previous
+                && child_kind != GDScriptNodeKind::Comment
+                && count_newlines(input.source, previous_child.end_byte(), child.start_byte()) > 1
+            {
+                render_elements.push(RenderElement::BlankLine);
             }
             skip_next_separator = false;
             process_node(input, child, render_elements);
@@ -1809,14 +1897,37 @@ fn process_container(
     }
 }
 
-/// Formats ParenthesizedExpression nodes with a Group. Falls back to
-/// process_children_with_spacing for single-line expressions or when the inner
-/// content already handles its own indentation (lambdas, arrays, dicts).
-fn process_parenthesized_expression(
+/// Processes part of an expression and appends render elements, without
+/// creating a new group. This recursively processes child nodes as an
+/// expression can contain sub-expressions, operators, lambda functions, etc.
+///
+/// The IR for everything visited is added to `render_elements`.
+fn process_expression_content(
     input: &ParseInput,
     node: tree_sitter::Node,
     render_elements: &mut Vec<RenderElement>,
 ) {
+    match GDScriptNodeKind::get_kind_from_ast_node(node) {
+        GDScriptNodeKind::Attribute => {
+            process_attribute(input, node, render_elements);
+            return;
+        }
+        GDScriptNodeKind::Subscript | GDScriptNodeKind::Call => {
+            process_children_with_spacing(input, node, render_elements);
+            return;
+        }
+        GDScriptNodeKind::ParenthesizedExpression => {}
+        // As we dive down the AST, we can stumble upon anything. For example,
+        // an attribute call can be a method call that within the arguments has
+        // a lambda function wrapped in parentheses or anything else. When we
+        // stumble upon something like that, we need to process those nodes
+        // recursively.
+        _ => {
+            process_node(input, node, render_elements);
+            return;
+        }
+    }
+
     let child_count = node.child_count();
     if child_count < 3 {
         process_children_with_spacing(input, node, render_elements);
@@ -1861,23 +1972,6 @@ fn process_parenthesized_expression(
         return;
     }
 
-    let body_has_newlines = {
-        if let (Some(open_node), Some(close_node)) =
-            (node.child(0), node.child((child_count - 1) as u32))
-        {
-            has_newline(input.source, open_node.end_byte(), close_node.start_byte())
-        } else {
-            false
-        }
-    };
-    let contains_forced_multiline = contains_forced_multiline_node(node);
-    if !body_has_newlines && !contains_forced_multiline {
-        process_children_with_spacing(input, node, render_elements);
-        return;
-    }
-
-    let group_index = begin_group(render_elements);
-
     if let Some(open) = node.child(0) {
         process_node(input, open, render_elements);
     }
@@ -1893,6 +1987,7 @@ fn process_parenthesized_expression(
             if let Some(ref previous_child) = previous {
                 process_separator_between_sibling_nodes(
                     GDScriptNodeKind::ParenthesizedExpression,
+                    input.source,
                     previous_child,
                     &child,
                     render_elements,
@@ -1910,8 +2005,6 @@ fn process_parenthesized_expression(
     if let Some(close) = node.child((child_count - 1) as u32) {
         process_node(input, close, render_elements);
     }
-
-    finish_group(render_elements, group_index);
 }
 
 /// Finds and returns the unnamed operator token between a binary expression's
@@ -2225,6 +2318,7 @@ fn expression_is_in_single_indent_container(node: tree_sitter::Node) -> bool {
                 | GDScriptNodeKind::Arguments
                 | GDScriptNodeKind::SubscriptArguments
                 | GDScriptNodeKind::ParenthesizedExpression
+                | GDScriptNodeKind::MatchBody
         ) {
             return true;
         }
@@ -2327,11 +2421,14 @@ fn process_conditional_expression(
             if is_current_conditional_keyword
                 && previous_kind != GDScriptNodeKind::LineContinuation
                 && previous_kind != GDScriptNodeKind::Comment
+                && !(has_line_continuation
+                    && previous.end_position().row == child.start_position().row)
             {
                 render_elements.push(RenderElement::SoftLine);
             } else {
                 process_separator_between_sibling_nodes(
                     GDScriptNodeKind::Condition,
+                    input.source,
                     &previous,
                     &child,
                     render_elements,
@@ -2388,14 +2485,24 @@ fn process_attribute(
     render_elements: &mut Vec<RenderElement>,
 ) {
     let child_count = node.child_count();
-    // Only handle dot-access chains (child_count >= 5: at least 2 method calls).
-    // Single method calls like a.foo() go through process_children_with_spacing.
-    let is_dot_chain = if let Some(c) = node.child(1) {
-        GDScriptNodeKind::get_kind_from_ast_node(c) == GDScriptNodeKind::TokenDot
-    } else {
-        false
-    };
-    if child_count < 5 || !is_dot_chain {
+    // An attribute node is an expression followed by dots using the dot
+    // accessor and accessing members or calling methods.
+    //
+    // If the chain has multiple dots, we need to specifically handle
+    // continuation lines. So we count the dots in the attribute chain and
+    // format accordingly.
+    let mut dot_count = 0;
+    let mut child_index = 0;
+    while child_index < child_count {
+        if let Some(child) = node.child(child_index as u32)
+            && GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::TokenDot
+        {
+            dot_count += 1;
+        }
+        child_index += 1;
+    }
+    let has_multiple_dot_accesses = dot_count >= 2;
+    if !has_multiple_dot_accesses {
         process_children_with_spacing(input, node, render_elements);
         return;
     }
@@ -2458,8 +2565,6 @@ fn process_attribute(
         }
         child_index += 1;
     }
-
-    let group_index = begin_group(render_elements);
 
     if let Some(expr) = node.child(0) {
         process_node(input, expr, render_elements);
@@ -2581,7 +2686,6 @@ fn process_attribute(
 
         attribute_index += 2;
     }
-    finish_group(render_elements, group_index);
 }
 
 /// Builds a method call inside a dot-access chain. Its argument container is
@@ -2679,6 +2783,7 @@ fn process_method_arguments_flat(
             if let Some(ref previous_node) = previous_child {
                 process_separator_between_sibling_nodes(
                     args_kind,
+                    input.source,
                     previous_node,
                     &child_argument,
                     render_elements,
@@ -2693,6 +2798,7 @@ fn process_method_arguments_flat(
         if let Some(ref previous_node) = previous_child {
             process_separator_between_sibling_nodes(
                 args_kind,
+                input.source,
                 previous_node,
                 &close,
                 render_elements,
@@ -2879,6 +2985,11 @@ fn process_lambda_separator(
         return;
     }
 
+    if current_kind == GDScriptNodeKind::Parameters && previous_kind == GDScriptNodeKind::Identifier
+    {
+        return;
+    }
+
     render_elements.push(RenderElement::Space);
 }
 
@@ -2906,6 +3017,7 @@ fn process_children_with_spacing(
                         if let Some(ref previous_child) = previous {
                             process_separator_between_sibling_nodes(
                                 parent_kind,
+                                input.source,
                                 previous_child,
                                 &child,
                                 render_elements,
@@ -2939,6 +3051,7 @@ fn process_children_with_spacing(
                 let previous_kind = GDScriptNodeKind::get_kind_from_ast_node(*previous_child);
                 process_separator_between_sibling_nodes(
                     parent_kind,
+                    input.source,
                     previous_child,
                     &child,
                     render_elements,
@@ -2966,7 +3079,18 @@ fn process_children_with_spacing(
                 index += 1;
                 continue;
             }
-            process_node(input, child, render_elements);
+            if index == 0
+                && matches!(
+                    parent_kind,
+                    GDScriptNodeKind::Attribute
+                        | GDScriptNodeKind::Subscript
+                        | GDScriptNodeKind::Call
+                )
+            {
+                process_expression_content(input, child, render_elements);
+            } else {
+                process_node(input, child, render_elements);
+            }
             previous = Some(child);
         }
         index += 1;
@@ -2979,6 +3103,7 @@ fn process_children_with_spacing(
 /// InferredType and UnaryOperator.
 fn process_separator_between_sibling_nodes(
     parent_kind: GDScriptNodeKind,
+    source: &str,
     previous_child: &tree_sitter::Node,
     current: &tree_sitter::Node,
     render_elements: &mut Vec<RenderElement>,
@@ -3074,6 +3199,10 @@ fn process_separator_between_sibling_nodes(
         return;
     }
 
+    if previous_child.kind() == "..." {
+        return;
+    }
+
     if parent_kind == GDScriptNodeKind::UnaryOperator
         && (previous_child.kind() == "~"
             || previous_child.kind() == "!"
@@ -3093,11 +3222,33 @@ fn process_separator_between_sibling_nodes(
         return;
     }
 
-    // Variable annotations stay inline even when they have arguments. Keeping
-    // them inline also ensures that sibling and nested annotation AST shapes
-    // produce the same output.
-    if previous_kind == GDScriptNodeKind::Annotations && parent_kind == GDScriptNodeKind::Variable {
-        render_elements.push(RenderElement::Space);
+    // Variable annotations (@export, @onready) stay inline even when they have
+    // arguments. Other annotations, like @warning_ignore, go on their own line
+    // above the variable.
+    if previous_kind == GDScriptNodeKind::Annotations
+        && matches!(
+            parent_kind,
+            GDScriptNodeKind::Variable
+                | GDScriptNodeKind::ExportVariable
+                | GDScriptNodeKind::OnReadyVariable
+        )
+    {
+        let mut annotations_can_inline = true;
+        let mut annotation_index = 0;
+        while annotation_index < previous_child.child_count() {
+            if let Some(annotation) = previous_child.child(annotation_index as u32)
+                && !is_export_or_onready_annotation(source, annotation)
+            {
+                annotations_can_inline = false;
+                break;
+            }
+            annotation_index += 1;
+        }
+        if annotations_can_inline {
+            render_elements.push(RenderElement::Space);
+        } else {
+            render_elements.push(RenderElement::HardLine);
+        }
         return;
     }
 
@@ -3269,6 +3420,7 @@ fn process_source_reorder(
                     if let Some(ref previous_node) = previous_node {
                         process_separator_between_sibling_nodes(
                             parent_kind,
+                            input.source,
                             previous_node,
                             &sub,
                             render_elements,
