@@ -47,7 +47,7 @@ checksum = "3489a9e7463353467db3cfe3eb12de31c9b6200e4f928bde4959bf5db5b31d2f"
 
 [[package]]
 name = "gdscript-formatter"
-version = "0.26.0"
+version = "0.26.1"
 dependencies = [
  "ec4rs",
  "regex",
