@@ -2484,7 +2484,7 @@ fn process_conditional_expression(
 ///
 /// ```gdscript
 /// foo(value.first()
-/// 	.second())
+///     .second())
 /// ```
 ///
 /// But in this case GDScript cannot parse the expression without the trailing
@@ -2492,7 +2492,7 @@ fn process_conditional_expression(
 ///
 /// ```gdscript
 /// value.first() \
-/// 	.second()
+///     .second()
 /// ```
 fn does_attribute_chain_allow_implicit_line_continuation(node: tree_sitter::Node) -> bool {
     let mut ancestor = node.parent();

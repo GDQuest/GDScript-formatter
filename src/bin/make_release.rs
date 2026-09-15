@@ -138,6 +138,20 @@ fn main() {
     }
     println!("CHANGELOG.md entry verified");
 
+    println!("\nRunning cargo clippy...");
+    run(
+        "cargo",
+        &[
+            "clippy",
+            "--workspace",
+            "--all-targets",
+            "--",
+            "-D",
+            "warnings",
+        ],
+    );
+    println!("cargo clippy finished");
+
     let updated_cargo_toml = cargo_toml.replace(
         &format!("version = \"{}\"", current_version),
         &format!("version = \"{}\"", new_version),
