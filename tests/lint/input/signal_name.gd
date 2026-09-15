@@ -1,7 +1,8 @@
 #region Good
 
-signal good_signal(var1: int, var2: String)
-signal _good_signal(var1: int, var2: String)
+signal public_signal(var1: int, var2: String)
+signal _pseudo_private(var1: int, var2: String)
+signal __also_valid_pseudo_private(var1: int, var2: String)
 
 #endregion
 
