@@ -2476,9 +2476,55 @@ fn process_conditional_expression(
     }
 }
 
+/// Returns `true` if an attribute chain can continue across lines without needing an
+/// explicit backslash because it is inside a delimited expression (inside
+/// parentheses for example).
+///
+/// This is valid without GDScript:
+///
+/// ```gdscript
+/// foo(value.first()
+/// 	.second())
+/// ```
+///
+/// But in this case GDScript cannot parse the expression without the trailing
+/// backslash:
+///
+/// ```gdscript
+/// value.first() \
+/// 	.second()
+/// ```
+fn does_attribute_chain_allow_implicit_line_continuation(node: tree_sitter::Node) -> bool {
+    let mut ancestor = node.parent();
+    while let Some(current_ancestor) = ancestor {
+        let ancestor_kind = GDScriptNodeKind::get_kind_from_ast_node(current_ancestor);
+        if matches!(
+            ancestor_kind,
+            GDScriptNodeKind::Array
+                | GDScriptNodeKind::Dictionary
+                | GDScriptNodeKind::Arguments
+                | GDScriptNodeKind::SubscriptArguments
+                | GDScriptNodeKind::ParenthesizedExpression
+        ) {
+            return true;
+        }
+        if matches!(
+            ancestor_kind,
+            GDScriptNodeKind::Assignment
+                | GDScriptNodeKind::AugmentedAssignment
+                | GDScriptNodeKind::ExpressionStatement
+                | GDScriptNodeKind::ReturnStatement
+                | GDScriptNodeKind::Body
+        ) {
+            return false;
+        }
+        ancestor = current_ancestor.parent();
+    }
+    false
+}
+
 /// Formats Attribute nodes (dot-access chains like a.b.c()). Handles line
-/// continuations and wraps long chains onto separate lines. Uses
-/// process_method_call_flat for attribute call nodes in the chain.
+/// continuations and wraps long chains onto separate lines.
 fn process_attribute(
     input: &ParseInput,
     node: tree_sitter::Node,
@@ -2506,6 +2552,8 @@ fn process_attribute(
         process_children_with_spacing(input, node, render_elements);
         return;
     }
+    let can_use_implicit_line_continuation =
+        does_attribute_chain_allow_implicit_line_continuation(node);
 
     // GDScript does not support function call chains as a standalone statement
     // without explicit line continuations, but actually it supports chains in
@@ -2526,34 +2574,6 @@ fn process_attribute(
     //
     // "test" \
     //       .begins_with("t")
-    let mut allows_implicit_continuation = false;
-    let mut visited_ancestor = node.parent();
-    while let Some(current_ancestor) = visited_ancestor {
-        let current_ancestor_kind = GDScriptNodeKind::get_kind_from_ast_node(current_ancestor);
-        if matches!(
-            current_ancestor_kind,
-            GDScriptNodeKind::Array
-                | GDScriptNodeKind::Dictionary
-                | GDScriptNodeKind::Arguments
-                | GDScriptNodeKind::SubscriptArguments
-                | GDScriptNodeKind::ParenthesizedExpression
-        ) {
-            allows_implicit_continuation = true;
-            break;
-        }
-        if matches!(
-            current_ancestor_kind,
-            GDScriptNodeKind::Assignment
-                | GDScriptNodeKind::AugmentedAssignment
-                | GDScriptNodeKind::ExpressionStatement
-                | GDScriptNodeKind::ReturnStatement
-                | GDScriptNodeKind::Body
-        ) {
-            break;
-        }
-        visited_ancestor = current_ancestor.parent();
-    }
-
     let mut has_explicit_line_continuation = false;
     let mut child_index = 1;
     while child_index < child_count {
@@ -2570,7 +2590,8 @@ fn process_attribute(
         process_node(input, expr, render_elements);
     }
 
-    let chain_indent_level = if allows_implicit_continuation || has_explicit_line_continuation {
+    let chain_indent_level = if can_use_implicit_line_continuation || has_explicit_line_continuation
+    {
         0
     } else {
         input.continuation_indent_level
@@ -2624,7 +2645,7 @@ fn process_attribute(
             continue;
         }
 
-        if !allows_implicit_continuation && !has_explicit_line_continuation {
+        if !can_use_implicit_line_continuation && !has_explicit_line_continuation {
             let continuation_indent_index = begin_indent(render_elements, chain_indent_level);
             let continuation_index = render_elements.len() + 1;
             render_elements.push(RenderElement::Branch {
@@ -2673,7 +2694,8 @@ fn process_attribute(
             if GDScriptNodeKind::get_kind_from_ast_node(call_node)
                 == GDScriptNodeKind::AttributeCall
             {
-                process_method_call_flat(
+                process_method_call_name(input, call_node, render_elements);
+                process_method_call_arguments(
                     input,
                     call_node,
                     attribute_index + 2 >= child_count as u32,
@@ -2688,18 +2710,6 @@ fn process_attribute(
     }
 }
 
-/// Builds a method call inside a dot-access chain. Its argument container is
-/// isolated so that long arguments do not force the whole chain to break.
-fn process_method_call_flat(
-    input: &ParseInput,
-    attribute_call: tree_sitter::Node,
-    is_last_chain_call: bool,
-    render_elements: &mut Vec<RenderElement>,
-) {
-    process_method_call_name(input, attribute_call, render_elements);
-    process_method_call_arguments(input, attribute_call, is_last_chain_call, render_elements);
-}
-
 fn process_method_call_name(
     input: &ParseInput,
     attribute_call: tree_sitter::Node,
@@ -2710,13 +2720,45 @@ fn process_method_call_name(
     }
 }
 
+/// Formats the arguments of a method call in an "attribute chain" (e.g. the
+/// `arg1, arg2` in `a.b(arg1, arg2)`)
+///
+/// Call with `is_last_chain_call` set to `true` to tell the formatter this is
+/// the final method call in the chain. The final call owns the chain's
+/// outermost argument layout, while an earlier call must keep its multiline
+/// arguments from forcing explicit line continuations for the rest of the
+/// chain.
 fn process_method_call_arguments(
     input: &ParseInput,
     attribute_call: tree_sitter::Node,
-    is_last_chain_call: bool,
+    is_last_call_in_chain: bool,
     render_elements: &mut Vec<RenderElement>,
 ) {
-    if let Some(args) = attribute_call.child(1) {
+    let Some(args) = attribute_call.child(1) else {
+        return;
+    };
+
+    if is_last_call_in_chain {
+        let group_index = if does_attribute_chain_allow_implicit_line_continuation(attribute_call) {
+            begin_group(render_elements)
+        } else {
+            // This chain doesn't have surrounding delimiters, so GScript will
+            // need explicit backslashes to parse it if wrapped on multiple
+            // lines:
+            //
+            // value.first() \
+            //     .second()
+            //
+            // Here, we create groups that will stop at the first potential line
+            // break so that it stops contributing to the parent group's flat
+            // layout measurement. That way, if we need to wrap the code, the
+            // parent group stops counting line length where the chain would
+            // break into a vertical layout.
+            begin_group_until_first_line_break(render_elements)
+        };
+        process_node(input, args, render_elements);
+        finish_group(render_elements, group_index);
+    } else {
         let mut has_lambda_argument = false;
         let mut argument_index = 1;
         while argument_index < args.child_count() - 1 {
@@ -2729,11 +2771,7 @@ fn process_method_call_arguments(
             argument_index += 1;
         }
 
-        if is_last_chain_call {
-            let group_index = begin_group_until_first_line_break(render_elements);
-            process_node(input, args, render_elements);
-            finish_group(render_elements, group_index);
-        } else if has_lambda_argument {
+        if has_lambda_argument {
             process_node(input, args, render_elements);
         } else {
             // Prevent a multiline argument list from forcing the surrounding
