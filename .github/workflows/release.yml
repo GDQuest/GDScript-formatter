@@ -94,8 +94,8 @@ jobs:
 
       - name: Create godot-addon.zip
         run: |
-          zip -r godscript-formatter.zip addons/GDQuest_GDScript_formatter/
-          zip -r godscript-formatter-standalone.zip addons/GDQuest_GDScript_formatter_standalone/
+          zip -r godot-addon.zip addons/GDQuest_GDScript_formatter/
+          zip -r godot-addon-gdextension.zip addons/GDQuest_GDScript_formatter_standalone/
         shell: bash
 
       - name: Upload artifact
