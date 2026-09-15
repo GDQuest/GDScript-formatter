@@ -1,5 +1,5 @@
 use crate::linter::lib::{get_line_column, get_node_text};
-use crate::linter::regex_patterns::SNAKE_CASE;
+use crate::linter::regex_patterns::{PRIVATE_SNAKE_CASE, SNAKE_CASE};
 use crate::linter::rules::Rule;
 use crate::linter::{LintIssue, LintSeverity};
 use crate::node_kind::GDScriptNodeKind;
@@ -8,7 +8,7 @@ pub struct SignalNameRule;
 
 impl SignalNameRule {
     fn is_valid_signal_name(name: &str) -> bool {
-        SNAKE_CASE.is_match(name)
+        SNAKE_CASE.is_match(name) || PRIVATE_SNAKE_CASE.is_match(name)
     }
 }
 
