@@ -2,6 +2,12 @@
 
 This file documents the changes made to the formatter with each release.
 
+## Unreleased
+
+### Fixed
+
+- Linter: Allow signal names that start with _ to be considered as snake_case (#356)
+
 ## Release 0.26.0 (2026-09-13)
 
 ### Added
