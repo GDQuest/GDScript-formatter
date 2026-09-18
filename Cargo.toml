@@ -51,7 +51,7 @@ manual_flatten = "allow"
 manual_try_fold = "allow"
 
 [dependencies]
-tree-sitter-gdscript  = { git = "https://github.com/GDQuest/tree-sitter-gdscript.git", rev = "7739bfa6674dbad32a7869677fdcbf4a7c42db32" }
+tree-sitter-gdscript  = { git = "https://github.com/GDQuest/tree-sitter-gdscript.git", rev = "eb2e9cb1eafcfd59e629ad9c644d10ae72423bbd" }
 tree-sitter = "=0.26.8"
 regex = "=1.12.3"
 # Official editorconfig parser
