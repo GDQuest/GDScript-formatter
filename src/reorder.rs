@@ -9,8 +9,6 @@
 use crate::node_kind::GDScriptNodeKind;
 use tree_sitter::Node;
 
-// Public types
-
 #[derive(Debug, Clone)]
 pub struct ReorderPlan<'a> {
     pub items: Vec<ReorderItem<'a>>,
@@ -40,7 +38,7 @@ pub struct ReorderItem<'a> {
     /// Declaration name for tie-breaking within same category, borrowed from
     /// the source string.
     pub name: &'a str,
-    pub is_private: bool,
+    pub is_pseudo_private: bool,
     pub method_type: Option<MethodType>,
     /// When true, the class_name_statement node contains an inline extends
     /// child that should be skipped when building (emitted as separate item).
@@ -74,6 +72,36 @@ pub enum MethodType {
     StaticFunction,     // static func
     BuiltinVirtual(u8), // _ready, _process, etc. (priority from Godot lifecycle)
     Custom,             // all other user methods
+}
+
+/// Result of classifying a single child node during reorder planning.
+struct ChildClassification<'a> {
+    classification: DeclarationKind,
+    name: &'a str,
+    method_type: Option<MethodType>,
+    /// If true, the extends child of a class_name_statement should be split out during reorder.
+    split_extends: bool,
+}
+
+impl<'a> ChildClassification<'a> {
+    /// Builds a classification with no method type and no split extends. This
+    /// covers the common case for non-function declarations.
+    fn new(classification: DeclarationKind, name: &'a str) -> Self {
+        Self {
+            classification,
+            name,
+            method_type: None,
+            split_extends: false,
+        }
+    }
+}
+
+/// Used to track if we found an annotation written on its own line before a
+/// declaration.
+#[derive(Default)]
+struct VisitedAnnotation {
+    has_export_annotation: bool,
+    has_onready_annotation: bool,
 }
 
 /// Slice the source string at a node's byte range.
@@ -115,6 +143,21 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
     let mut is_child_attached_to_declaration = vec![false; child_count];
     let mut is_region_end = vec![false; child_count];
 
+    // We use this to track if we visited a line with an annotation before
+    // encountering a declaration.
+    //
+    // We need something like this with the current code structure because in
+    // the AST, annotations can take this form:
+    //
+    // ```
+    // (annotation)
+    // (variable_statement)
+    // ```
+    //
+    // And we want to group onready and export variables separately in the class
+    // header.
+    let mut visited_annotations = VisitedAnnotation::default();
+
     let mut child_index = 0;
     while child_index < child_count {
         let Some(child) = parent.child(child_index as u32) else {
@@ -137,12 +180,19 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
                     has_blank_line_before: false,
                     classification: DeclarationKind::ClassAnnotation,
                     name: annotation_name,
-                    is_private: false,
+                    is_pseudo_private: false,
                     method_type: None,
                     split_extends: false,
                 });
             } else {
                 is_child_attached_to_declaration[child_index] = true;
+                if let Some(annotation_identifier) = get_annotation_identifier(child, content) {
+                    if is_inline_export_annotation(annotation_identifier) {
+                        visited_annotations.has_export_annotation = true;
+                    } else if annotation_identifier == "onready" {
+                        visited_annotations.has_onready_annotation = true;
+                    }
+                }
             }
         } else if kind == GDScriptNodeKind::RegionEnd {
             is_child_attached_to_declaration[child_index] = true;
@@ -150,7 +200,7 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
         } else if kind == GDScriptNodeKind::SemiColon {
             // skip; handled by builder spacing
         } else {
-            let child_classification = classify_child(child, content);
+            let child_classification = classify_child(child, content, &visited_annotations);
             let is_private = child_classification.name.starts_with('_');
             items.push(ReorderItem {
                 child_index,
@@ -160,7 +210,7 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
                 has_blank_line_before: false,
                 classification: child_classification.classification,
                 name: child_classification.name,
-                is_private,
+                is_pseudo_private: is_private,
                 method_type: child_classification.method_type,
                 split_extends: child_classification.split_extends,
             });
@@ -175,23 +225,21 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
                         has_blank_line_before: false,
                         classification: DeclarationKind::Extends,
                         name: "",
-                        is_private: false,
+                        is_pseudo_private: false,
                         method_type: None,
                         split_extends: false,
                     });
                 }
             }
+
+            visited_annotations = VisitedAnnotation::default();
         }
         child_index += 1;
     }
 
-    // Every item pushed so far corresponds to a real declaration (possibly a
-    // split-off extends). The docstring item, pushed below, is appended after
-    // this point, so this count also bounds pass 2's iteration.
     let declaration_count = items.len();
 
-    // Pass 1b: find class docstring: `##` comments in the header zone
-    // (after class_name/extends/annotations, before first signal/enum/etc).
+    // Pass 1b: find class docstring after class_name/extends/annotations, before first signal/enum/etc.
     let mut docstring_indices = Vec::new();
     let mut last_header_child_index: Option<usize> = None;
     let mut last_header_end_byte: Option<usize> = None;
@@ -263,13 +311,13 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
             has_blank_line_before: false,
             classification: DeclarationKind::Docstring,
             name: "",
-            is_private: false,
+            is_pseudo_private: false,
             method_type: None,
             split_extends: false,
         });
     }
 
-    // Pass 2: assign source children before and after each declaration.
+    // Pass 2: assign AST nodes before and after each declaration.
     let mut previous_declaration_child_index: Option<usize> = None;
     let mut declaration_index = 0;
     while declaration_index < declaration_count {
@@ -281,9 +329,10 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
                 None
             };
 
-        // Attach every eligible source child between the previous declaration
-        // and this one before the current declaration.
-        let first_possible_attachment_child_index: usize = match previous_declaration_child_index {
+        // Attach every relevant AST node between the previous declaration and
+        // this one before the current declaration.
+        let first_possible_attachment_child_index: usize = match
+        previous_declaration_child_index {
             Some(previous_declaration_child_index) => previous_declaration_child_index + 1,
             None => 0,
         };
@@ -370,41 +419,17 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
         declaration_index += 1;
     }
 
-    // Pass 3: sort.
     items.sort_by(compare_reorder_items);
-
     ReorderPlan { items }
 }
 
-/// Result of classifying a single child node during reorder planning.
-struct ChildClassification<'a> {
-    classification: DeclarationKind,
-    name: &'a str,
-    method_type: Option<MethodType>,
-    /// If true, the extends child of a class_name_statement should be split out during reorder.
-    split_extends: bool,
-}
-
-impl<'a> ChildClassification<'a> {
-    /// Builds a classification with no method type and no split extends. This
-    /// covers the common case for non-function declarations.
-    fn new(classification: DeclarationKind, name: &'a str) -> Self {
-        Self {
-            classification,
-            name,
-            method_type: None,
-            split_extends: false,
-        }
-    }
-}
-
-fn classify_child<'a>(node: Node<'a>, content: &'a str) -> ChildClassification<'a> {
+fn classify_child<'a>(
+    node: Node<'a>,
+    content: &'a str,
+    visited_annotations: &VisitedAnnotation,
+) -> ChildClassification<'a> {
     let kind = GDScriptNodeKind::get_kind_from_ast_node(node);
     match kind {
-        GDScriptNodeKind::Annotation => {
-            let name = get_node_text(node, content);
-            ChildClassification::new(DeclarationKind::ClassAnnotation, name)
-        }
         GDScriptNodeKind::ClassName => {
             let extends_index = find_extends_child_index(node);
             let name = extract_name(node, content).unwrap_or("unknown_class");
@@ -431,7 +456,7 @@ fn classify_child<'a>(node: Node<'a>, content: &'a str) -> ChildClassification<'
             let name = extract_name(node, content).unwrap_or("unknown_const");
             ChildClassification::new(DeclarationKind::Constant, name)
         }
-        GDScriptNodeKind::Variable => classify_variable(node, content),
+        GDScriptNodeKind::Variable => classify_variable(node, content, visited_annotations),
         GDScriptNodeKind::ExportVariable => {
             let name = extract_name(node, content).unwrap_or("unknown_var");
             ChildClassification::new(DeclarationKind::ExportVariable, name)
@@ -475,25 +500,15 @@ fn classify_child<'a>(node: Node<'a>, content: &'a str) -> ChildClassification<'
     }
 }
 
-fn classify_variable<'a>(node: Node<'a>, content: &'a str) -> ChildClassification<'a> {
-    fn get_annotation_identifier<'a>(annotation: Node<'a>, content: &'a str) -> Option<&'a str> {
-        let child_count = annotation.child_count();
-        let mut child_index = 0;
-        while child_index < child_count {
-            if let Some(child) = annotation.child(child_index as u32) {
-                if GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Identifier {
-                    return Some(get_node_text(child, content));
-                }
-            }
-            child_index += 1;
-        }
-        None
-    }
-
+fn classify_variable<'a>(
+    node: Node<'a>,
+    content: &'a str,
+    visited_annotations: &VisitedAnnotation,
+) -> ChildClassification<'a> {
     let name = extract_name(node, content).unwrap_or("unknown_var");
 
-    let mut has_export_annotation = false;
-    let mut has_onready_annotation = false;
+    let mut has_export_annotation = visited_annotations.has_export_annotation;
+    let mut has_onready_annotation = visited_annotations.has_onready_annotation;
     for child_index in 0..node.child_count() {
         let Some(child) = node.child(child_index as u32) else {
             continue;
@@ -514,7 +529,7 @@ fn classify_variable<'a>(node: Node<'a>, content: &'a str) -> ChildClassificatio
             let Some(annotation_name) = get_annotation_identifier(annotation, content) else {
                 continue;
             };
-            if annotation_name.starts_with("export") {
+            if is_inline_export_annotation(annotation_name) {
                 has_export_annotation = true;
             } else if annotation_name == "onready" {
                 has_onready_annotation = true;
@@ -531,6 +546,32 @@ fn classify_variable<'a>(node: Node<'a>, content: &'a str) -> ChildClassificatio
     } else {
         ChildClassification::new(DeclarationKind::RegularVariable, name)
     }
+}
+
+/// Returns the identifier name of an annotation node, e.g. `export_range` for
+/// `@export_range(0, 100)`.
+fn get_annotation_identifier<'a>(annotation: Node<'a>, content: &'a str) -> Option<&'a str> {
+    let child_count = annotation.child_count();
+    let mut child_index = 0;
+    while child_index < child_count {
+        if let Some(child) = annotation.child(child_index as u32)
+            && GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Identifier
+        {
+            return Some(get_node_text(child, content));
+        }
+        child_index += 1;
+    }
+    None
+}
+
+/// Returns true when an annotation exports the variable it annotates. The
+/// `@export_group` and `@export_subgroup` annotations only mark groups of
+/// following properties and must not make an unannotated variable look
+/// exported.
+fn is_inline_export_annotation(annotation_name: &str) -> bool {
+    annotation_name.starts_with("export")
+        && annotation_name != "export_group"
+        && annotation_name != "export_subgroup"
 }
 
 /// Extract the "name" field child from a declaration node.
@@ -615,49 +656,44 @@ fn get_builtin_virtual_priority(method_name: &str) -> u8 {
 }
 
 fn compare_reorder_items(left: &ReorderItem, right: &ReorderItem) -> std::cmp::Ordering {
-    // 1. DeclarationKind (numeric discriminant)
-    let kind_cmp = (left.classification as u8).cmp(&(right.classification as u8));
-    if kind_cmp != std::cmp::Ordering::Equal {
-        return kind_cmp;
+    let ordering_declaration_kind = (left.classification as u8).cmp(&(right.classification as u8));
+    if ordering_declaration_kind != std::cmp::Ordering::Equal {
+        return ordering_declaration_kind;
     }
 
-    // 2. MethodType sub-sorting for Method items
     if let (Some(method_type_left), Some(method_type_right)) = (left.method_type, right.method_type)
     {
-        let type_cmp = method_type_left.cmp(&method_type_right);
-        if type_cmp != std::cmp::Ordering::Equal {
-            return type_cmp;
+        let ordering_method_type = method_type_left.cmp(&method_type_right);
+        if ordering_method_type != std::cmp::Ordering::Equal {
+            return ordering_method_type;
         }
     }
 
-    // 3. Privacy: public before pseudo-private
-    let privacy_cmp = left.is_private.cmp(&right.is_private);
-    if privacy_cmp != std::cmp::Ordering::Equal {
-        return privacy_cmp;
+    let ordering_pseudo_private = left.is_pseudo_private.cmp(&right.is_pseudo_private);
+    if ordering_pseudo_private != std::cmp::Ordering::Equal {
+        return ordering_pseudo_private;
     }
 
-    // 4. ClassAnnotation special ordering: @tool < @icon < other
+    // Class annotations have a specific order: @tool < @icon < other potential
+    // annotations
     if left.classification == DeclarationKind::ClassAnnotation
         && right.classification == DeclarationKind::ClassAnnotation
     {
-        let priority_left = annotation_priority(left.name);
-        let priority_right = annotation_priority(right.name);
-        let annotation_cmp = priority_left.cmp(&priority_right);
-        if annotation_cmp != std::cmp::Ordering::Equal {
-            return annotation_cmp;
+        fn get_annotation_priority(text: &str) -> u8 {
+            match text {
+                "@tool" => 0,
+                "@icon" => 1,
+                _ => 2,
+            }
+        }
+
+        let priority_left = get_annotation_priority(left.name);
+        let priority_right = get_annotation_priority(right.name);
+        let ordering_class_annotations = priority_left.cmp(&priority_right);
+        if ordering_class_annotations != std::cmp::Ordering::Equal {
+            return ordering_class_annotations;
         }
     }
 
-    // 5. Stable: original source order (child_index)
     left.child_index.cmp(&right.child_index)
-}
-
-fn annotation_priority(text: &str) -> u8 {
-    if text.starts_with("@tool") {
-        0
-    } else if text.starts_with("@icon") {
-        1
-    } else {
-        2
-    }
 }
