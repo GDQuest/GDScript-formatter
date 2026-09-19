@@ -194,14 +194,15 @@ fn has_own_annotations_child(node: tree_sitter::Node) -> bool {
 ///
 /// We want these specific annotations to stay on the same line as the variable
 /// declaration they annotate.
-fn is_export_or_onready_annotation(source: &str, annotation: tree_sitter::Node) -> bool {
+fn is_annotation_that_should_stay_inline(source: &str, annotation: tree_sitter::Node) -> bool {
     let mut child_index = 0;
     while child_index < annotation.child_count() {
         if let Some(child) = annotation.child(child_index as u32)
             && GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Identifier
         {
             let annotation_name = &source[child.start_byte()..child.end_byte()];
-            return (annotation_name.starts_with("export") && annotation_name != "export_group")
+            return (annotation_name.starts_with("export")
+                && !["export_group", "export_subgroup"].contains(&annotation_name))
                 || annotation_name == "onready";
         }
         child_index += 1;
@@ -1269,7 +1270,7 @@ fn output_pending_before_declaration(
     while pending_index < pending.len() {
         let (pending_node, _) = pending[pending_index];
         if GDScriptNodeKind::get_kind_from_ast_node(pending_node) == GDScriptNodeKind::Annotation
-            && !is_export_or_onready_annotation(source, pending_node)
+            && !is_annotation_that_should_stay_inline(source, pending_node)
         {
             pending_annotations_can_inline = false;
             break;
@@ -1286,7 +1287,7 @@ fn output_pending_before_declaration(
         && newline_count_from_last_pending == 1
         && pending.last().is_some_and(|(annotation, _)| {
             GDScriptNodeKind::get_kind_from_ast_node(*annotation) == GDScriptNodeKind::Annotation
-                && is_export_or_onready_annotation(source, *annotation)
+                && is_annotation_that_should_stay_inline(source, *annotation)
         });
 
     // Walk backward from the end of pending: comments on their own line that
@@ -3275,7 +3276,7 @@ fn process_separator_between_sibling_nodes(
         let mut annotation_index = 0;
         while annotation_index < previous_child.child_count() {
             if let Some(annotation) = previous_child.child(annotation_index as u32)
-                && !is_export_or_onready_annotation(source, annotation)
+                && !is_annotation_that_should_stay_inline(source, annotation)
             {
                 annotations_can_inline = false;
                 break;

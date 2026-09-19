@@ -7,6 +7,7 @@ This file documents the changes made to the formatter with each release.
 ### Fixed
 
 - Fix parse error when annotation and a const variable are on the same line (#329)
+- Fix export subgroup annotation wrapping the next property on the same line (#358)
 
 ## Release 0.26.1 (2026-09-15)
 
