@@ -2,7 +2,7 @@
 
 This file documents the changes made to the formatter with each release.
 
-## Unreleased
+## Release 0.26.2 (2026-09-20)
 
 ### Fixed
 
