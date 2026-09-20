@@ -1,6 +1,5 @@
 import re
 
-
 def main() -> None:
     """Generate release notes for the latest GitHub release."""
 
@@ -11,14 +10,12 @@ def main() -> None:
     if first_section is None:
         raise RuntimeError("Could not find the first changelog section.")
 
-    next_release = re.search(r"^## ", changelog[first_section.start() :], re.MULTILINE)
+    next_release = re.search(r"^## ", changelog[first_section.start():], re.MULTILINE)
 
     if next_release is None:
         raise RuntimeError("Could not find the next release heading.")
 
-    latest_changes = changelog[
-        first_section.start() : first_section.start() + next_release.start()
-    ].strip()
+    latest_changes = changelog[first_section.start() : first_section.start() + next_release.start()].strip()
 
     release_notes = f"""A fast code formatter for GDScript in Godot 4.
 
@@ -30,7 +27,6 @@ Learn more about the formatter in the [GDScript Formatter documentation](https:/
 """
 
     print(release_notes)
-
 
 if __name__ == "__main__":
     main()
