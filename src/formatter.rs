@@ -3062,7 +3062,6 @@ fn process_lambda_separator(
 /// by other builders as a passthrough when they decide not to apply special
 /// formatting. Iterates over all children and uses emit_inter_child_separator
 /// to decide spacing between them. Handles line continuation tokens specially.
-
 fn process_children_with_spacing(context: &mut FormatterContext, node: tree_sitter::Node) {
     let parent_kind = GDScriptNodeKind::get_kind_from_ast_node(node);
     let child_count = node.child_count();
