@@ -9,6 +9,7 @@ This file documents the changes made to the formatter with each release.
 - Fix parse error when annotation and a const variable are on the same line (#329)
 - Fix export subgroup annotation wrapping the next property on the same line (#358)
 - Fix reordering moving exported variables below regular variables when their annotation is on a separate line (#347)
+- Fix disabled formatting regions preventing surrounding function definitions (and more generally, some surrounding block start lines) from formatting normally (#350)
 
 ## Release 0.26.1 (2026-09-15)
 

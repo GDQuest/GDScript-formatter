@@ -14,7 +14,8 @@ use crate::QuoteStyle;
 use crate::node_kind::GDScriptNodeKind;
 use crate::parser::{ParseInput, RegionWithDisabledFormatting};
 use crate::renderer::{GroupParentFit, RangeRenderElement, RangeSourceBytes, RenderElement};
-use crate::reorder::{self, DeclarationKind};
+use crate::reorder;
+use crate::reorder::DeclarationKind;
 
 fn begin_indent(render_elements: &mut Vec<RenderElement>, level: u16) -> usize {
     let index = render_elements.len();
@@ -139,6 +140,13 @@ struct TopLevelSpacingContext {
     last_declaration_kind: Option<GDScriptNodeKind>,
 }
 
+struct FormatterContext<'input, 'source, 'output> {
+    input: &'input ParseInput<'source>,
+    render_elements: &'output mut Vec<RenderElement>,
+    disabled_region_index: usize,
+    disabled_region_was_emitted: bool,
+}
+
 /// Scans the source string for newline (`\n`) characters between `from` and
 /// `to` (inclusive) and returns the number of newline characters found.
 fn count_newlines(source: &str, from: usize, to: usize) -> usize {
@@ -213,11 +221,7 @@ fn is_annotation_that_should_stay_inline(source: &str, annotation: tree_sitter::
 /// Checks the type of an AST node and passes it to the formatter builder
 /// function that handles this node kind. This function is called recursively
 /// to process all children of the AST node.
-fn process_node(
-    input: &ParseInput,
-    node: tree_sitter::Node,
-    render_elements: &mut Vec<RenderElement>,
-) {
+fn process_node(context: &mut FormatterContext, node: tree_sitter::Node) {
     let kind = GDScriptNodeKind::get_kind_from_ast_node(node);
 
     // We reached a leaf AST node after processing all children recursively. We
@@ -226,7 +230,7 @@ fn process_node(
         let start_byte = node.start_byte();
         let end_byte = node.end_byte();
         if end_byte > start_byte {
-            render_elements.push(RenderElement::Text {
+            context.render_elements.push(RenderElement::Text {
                 range: RangeSourceBytes {
                     start_byte,
                     end_byte,
@@ -248,7 +252,7 @@ fn process_node(
             | GDScriptNodeKind::RegionEnd
             | GDScriptNodeKind::Error
     ) {
-        if input.quote_style != QuoteStyle::Preserve
+        if context.input.quote_style != QuoteStyle::Preserve
             && matches!(
                 kind,
                 GDScriptNodeKind::String
@@ -256,19 +260,24 @@ fn process_node(
                     | GDScriptNodeKind::NodePath
             )
         {
-            let string_source = &input.source[node.start_byte()..node.end_byte()];
-            if let Some(formatted_string) = format_string_literal(string_source, input.quote_style)
+            let string_source = &context.input.source[node.start_byte()..node.end_byte()];
+            if let Some(formatted_string) =
+                format_string_literal(string_source, context.input.quote_style)
             {
-                render_elements.push(RenderElement::TextProducedByFormatter(formatted_string));
+                context
+                    .render_elements
+                    .push(RenderElement::TextProducedByFormatter(formatted_string));
                 return;
             }
         }
-        render_elements.push(RenderElement::UnformattedSource {
-            range: RangeSourceBytes {
-                start_byte: node.start_byte(),
-                end_byte: node.end_byte(),
-            },
-        });
+        context
+            .render_elements
+            .push(RenderElement::UnformattedSource {
+                range: RangeSourceBytes {
+                    start_byte: node.start_byte(),
+                    end_byte: node.end_byte(),
+                },
+            });
         return;
     }
 
@@ -277,7 +286,7 @@ fn process_node(
         | GDScriptNodeKind::Dictionary
         | GDScriptNodeKind::EnumeratorList
         | GDScriptNodeKind::Parameters
-        | GDScriptNodeKind::Arguments => process_container(input, node, render_elements),
+        | GDScriptNodeKind::Arguments => process_container(context, node),
         GDScriptNodeKind::SubscriptArguments => {
             // Anything like a[b] is parsed as a `subscript` node, but this may
             // be a dictionary access which can wrap across lines or a type hint
@@ -331,26 +340,26 @@ fn process_node(
                 ancestor = current.parent();
             }
             if is_type_subscript {
-                process_children_with_spacing(input, node, render_elements);
+                process_children_with_spacing(context, node);
             } else {
-                process_container(input, node, render_elements);
+                process_container(context, node);
             }
         }
         GDScriptNodeKind::Body | GDScriptNodeKind::ClassBody | GDScriptNodeKind::MatchBody => {
-            process_body(input, node, render_elements, false)
+            process_body(context, node, false)
         }
-        GDScriptNodeKind::Lambda => process_lambda(input, node, render_elements),
-        GDScriptNodeKind::Function => process_function(input, node, render_elements),
+        GDScriptNodeKind::Lambda => process_lambda(context, node),
+        GDScriptNodeKind::Function => process_function(context, node),
         GDScriptNodeKind::Variable
         | GDScriptNodeKind::ExportVariable
         | GDScriptNodeKind::OnReadyVariable
             if has_inline_annotations_child(node) =>
         {
-            let group_index = begin_group(render_elements);
-            process_children_with_spacing(input, node, render_elements);
-            finish_group(render_elements, group_index);
+            let group_index = begin_group(context.render_elements);
+            process_children_with_spacing(context, node);
+            finish_group(context.render_elements, group_index);
         }
-        GDScriptNodeKind::SetGet => process_setget(input, node, render_elements),
+        GDScriptNodeKind::SetGet => process_setget(context, node),
         GDScriptNodeKind::ParenthesizedExpression
         | GDScriptNodeKind::Attribute
         | GDScriptNodeKind::Subscript
@@ -358,13 +367,13 @@ fn process_node(
             // Wrapping the entire expression in a group helps with calculating
             // the length of code segments and knowing where to break lines for
             // vertical spacing in the renderer.
-            let group_index = begin_group(render_elements);
-            process_expression_content(input, node, render_elements);
-            finish_group(render_elements, group_index);
+            let group_index = begin_group(context.render_elements);
+            process_expression_content(context, node);
+            finish_group(context.render_elements, group_index);
         }
-        GDScriptNodeKind::BinaryOperator => process_binary_operator(input, node, render_elements),
-        GDScriptNodeKind::Condition => process_conditional_expression(input, node, render_elements),
-        _ => process_children_with_spacing(input, node, render_elements),
+        GDScriptNodeKind::BinaryOperator => process_binary_operator(context, node),
+        GDScriptNodeKind::Condition => process_conditional_expression(context, node),
+        _ => process_children_with_spacing(context, node),
     }
 }
 
@@ -412,66 +421,72 @@ fn is_inline_variable_annotation_arguments(node: tree_sitter::Node) -> bool {
 /// its body so the complete header, including the return type, is treated as
 /// one unit when deciding whether parameters need to be wrapped onto multiple
 /// lines.
-fn process_function(
-    input: &ParseInput,
-    node: tree_sitter::Node,
-    render_elements: &mut Vec<RenderElement>,
-) {
-    let mut has_disabled_region = false;
-    let mut region_index = 0;
-    while region_index < input.disabled_regions.len() {
-        let region = input.disabled_regions[region_index];
-        if region.start < node.end_byte() && region.end > node.start_byte() {
-            has_disabled_region = true;
-            break;
-        }
-        region_index += 1;
-    }
-    // Disabled regions (fmt: off / fmt: on comment pairs) can overlap a
-    // function anywhere, so they can be anywhere in the middle of the function
-    // AST. If we encounter one we fall back to the generic formatter, which
-    // handles disabled regions correctly.
-    if has_disabled_region {
-        process_children_with_spacing(input, node, render_elements);
-        return;
-    }
-
-    let group_index = begin_group(render_elements);
+fn process_function(context: &mut FormatterContext, node: tree_sitter::Node) {
+    let group_index = begin_group(context.render_elements);
     let mut previous: Option<tree_sitter::Node> = None;
     let mut child_index = 0;
     while child_index < node.child_count() {
         if let Some(child) = node.child(child_index as u32) {
+            match classify_disabled_region_overlap(context, node, child, child_index) {
+                DisabledRegionOverlapKind::CoveredFully(disabled_run) => {
+                    if child.start_byte() == disabled_run.region.start {
+                        if let Some(previous_child) = previous {
+                            process_separator_between_sibling_nodes(
+                                GDScriptNodeKind::Function,
+                                context.input.source,
+                                &previous_child,
+                                &child,
+                                context.render_elements,
+                            );
+                        }
+                        append_current_disabled_region_to_render_elements(context);
+                    }
+                    let last_covered_child = node
+                        .child(disabled_run.last_covered_index as u32)
+                        .expect("last_covered_index came from this same node's children");
+                    previous = Some(last_covered_child);
+                    child_index = disabled_run.last_covered_index + 1;
+                    continue;
+                }
+                DisabledRegionOverlapKind::PartiallyCovered => {
+                    process_node(context, child);
+                    previous = Some(child);
+                    child_index += 1;
+                    continue;
+                }
+                DisabledRegionOverlapKind::None => {}
+            }
             let child_kind = GDScriptNodeKind::get_kind_from_ast_node(child);
             if child_kind == GDScriptNodeKind::Body {
-                finish_group(render_elements, group_index);
+                finish_group(context.render_elements, group_index);
                 if let Some(previous_child) = previous {
                     process_separator_between_sibling_nodes(
                         GDScriptNodeKind::Function,
-                        input.source,
+                        context.input.source,
                         &previous_child,
                         &child,
-                        render_elements,
+                        context.render_elements,
                     );
                 }
-                process_node(input, child, render_elements);
+                process_node(context, child);
                 return;
             }
 
             if let Some(previous_child) = previous {
                 process_separator_between_sibling_nodes(
                     GDScriptNodeKind::Function,
-                    input.source,
+                    context.input.source,
                     &previous_child,
                     &child,
-                    render_elements,
+                    context.render_elements,
                 );
             }
-            process_node(input, child, render_elements);
+            process_node(context, child);
             previous = Some(child);
         }
         child_index += 1;
     }
-    finish_group(render_elements, group_index);
+    finish_group(context.render_elements, group_index);
 }
 
 /// Returns the string with the preferred string delimiters if the user used the
@@ -670,13 +685,12 @@ fn previous_comment_block_follows_definition(
 /// nearest declaration, and inline comments force their enclosing group to
 /// break.
 fn process_body(
-    input: &ParseInput,
+    context: &mut FormatterContext,
     node: tree_sitter::Node,
-    render_elements: &mut Vec<RenderElement>,
     do_add_comma_before_trailing_comment: bool,
 ) {
-    let source = input.source;
-    let indent_index = begin_indent(render_elements, 1);
+    let source = context.input.source;
+    let indent_index = begin_indent(context.render_elements, 1);
     let child_count = node.child_count();
     let mut current_index = 0;
     let mut last_processed_child_end_byte: Option<usize> = None;
@@ -694,7 +708,7 @@ fn process_body(
         // in the AST (e.g. the # fmt: off comment can be located at the start
         // of this declaration body, the # fmt: on comment can be located at the
         // end of a sibling node's own if block or for loop body).
-        match classify_disabled_region_overlap(input, node, child, current_index) {
+        match classify_disabled_region_overlap(context, node, child, current_index) {
             DisabledRegionOverlapKind::CoveredFully(disabled_run) => {
                 let region = disabled_run.region;
                 if child.start_byte() == region.start {
@@ -704,14 +718,9 @@ fn process_body(
                         // previous child and the off marker using the region
                         // start.
                         let newline_count = count_newlines(source, previous_end, region.start);
-                        push_separator_for_newline_count(newline_count, render_elements);
+                        push_separator_for_newline_count(newline_count, context.render_elements);
                     }
-                    render_elements.push(RenderElement::UnformattedSource {
-                        range: RangeSourceBytes {
-                            start_byte: region.start,
-                            end_byte: region.end,
-                        },
-                    });
+                    append_current_disabled_region_to_render_elements(context);
                 }
                 let last_covered_child = node
                     .child(disabled_run.last_covered_index as u32)
@@ -729,7 +738,7 @@ fn process_body(
                 // and process the child directly. process_node() will process
                 // children and when it returns we will resume from this child's
                 // end byte.
-                process_node(input, child, render_elements);
+                process_node(context, child);
                 last_processed_child_end_byte = Some(child.end_byte());
                 last_processed_child_kind = Some(current_child_kind);
                 statement_has_inline_comment = false;
@@ -740,7 +749,7 @@ fn process_body(
         }
 
         if current_child_kind == GDScriptNodeKind::SemiColon {
-            render_elements.push(RenderElement::HardLine);
+            context.render_elements.push(RenderElement::HardLine);
             last_processed_child_end_byte = Some(child.end_byte());
             last_processed_child_kind = Some(GDScriptNodeKind::SemiColon);
             current_index += 1;
@@ -753,14 +762,14 @@ fn process_body(
             && current_child_kind == GDScriptNodeKind::Comment
             && current_index + 1 == child_count
         {
-            render_elements.push(RenderElement::TextStatic(","));
+            context.render_elements.push(RenderElement::TextStatic(","));
         }
         if let Some(previous_end) = last_processed_child_end_byte {
             if last_processed_child_kind == Some(GDScriptNodeKind::SemiColon) {
                 let newline_count = count_newlines(source, previous_end, child.start_byte());
                 if newline_count >= 2 {
-                    render_elements.push(RenderElement::BlankLine);
-                    render_elements.push(RenderElement::BlankLine);
+                    context.render_elements.push(RenderElement::BlankLine);
+                    context.render_elements.push(RenderElement::BlankLine);
                 }
             } else {
                 let current_is_declaration = is_declaration(current_child_kind);
@@ -773,9 +782,9 @@ fn process_body(
                         && !has_own_annotations_child(child))
                         || has_newline(source, previous_end, child.start_byte())
                     {
-                        render_elements.push(RenderElement::HardLine);
+                        context.render_elements.push(RenderElement::HardLine);
                     } else {
-                        render_elements.push(RenderElement::Space);
+                        context.render_elements.push(RenderElement::Space);
                     }
                 } else if last_processed_child_kind == Some(GDScriptNodeKind::Comment) {
                     if current_child_kind == GDScriptNodeKind::Comment {
@@ -788,13 +797,16 @@ fn process_body(
                                 current_index,
                             )
                         {
-                            push_blank_lines(render_elements, input.blank_lines_around_definitions);
+                            push_blank_lines(
+                                context.render_elements,
+                                context.input.blank_lines_around_definitions,
+                            );
                         } else {
                             add_spacing_between_body_children(
                                 previous_end,
                                 child.start_byte(),
-                                input,
-                                render_elements,
+                                context.input,
+                                context.render_elements,
                                 last_processed_child_kind,
                                 current_child_kind,
                                 false,
@@ -805,14 +817,14 @@ fn process_body(
                         add_spacing_between_body_children(
                             previous_end,
                             child.start_byte(),
-                            input,
-                            render_elements,
+                            context.input,
+                            context.render_elements,
                             last_processed_child_kind,
                             current_child_kind,
                             needs_two_blank_lines,
                         );
                     } else {
-                        render_elements.push(RenderElement::HardLine);
+                        context.render_elements.push(RenderElement::HardLine);
                     }
                 } else if previous_is_declaration && current_is_declaration {
                     let current_is_annotation = current_child_kind == GDScriptNodeKind::Annotation;
@@ -845,20 +857,20 @@ fn process_body(
                     add_spacing_between_body_children(
                         previous_end,
                         child.start_byte(),
-                        input,
-                        render_elements,
+                        context.input,
+                        context.render_elements,
                         last_processed_child_kind,
                         current_child_kind,
                         needs_two_blank_lines,
                     );
                 } else {
                     let newline_count = count_newlines(source, previous_end, child.start_byte());
-                    push_separator_for_newline_count(newline_count, render_elements);
+                    push_separator_for_newline_count(newline_count, context.render_elements);
                 }
             }
         }
 
-        process_node(input, child, render_elements);
+        process_node(context, child);
         if current_child_kind == GDScriptNodeKind::Comment {
             // Check if this comment sits on the same line as the previous child.
             // To do so, we check if there's a newline between the end of the previous
@@ -874,7 +886,7 @@ fn process_body(
         last_processed_child_kind = Some(current_child_kind);
         current_index += 1;
     }
-    finish_indent(render_elements, indent_index);
+    finish_indent(context.render_elements, indent_index);
 }
 /// output N blank lines. N=0 outputs nothing, N=1 outputs a single BlankLine, N>=2
 /// outputs N BlankLines.
@@ -914,23 +926,6 @@ struct DisabledRegionNodeSpan {
     last_covered_index: usize,
 }
 
-/// If byte_offset falls inside one of the input's disabled regions, returns
-/// that region.
-fn find_disabled_region_containing(
-    input: &ParseInput,
-    byte_offset: usize,
-) -> Option<RegionWithDisabledFormatting> {
-    for region in &input.disabled_regions {
-        if region.start > byte_offset {
-            break;
-        }
-        if byte_offset < region.end {
-            return Some(*region);
-        }
-    }
-    None
-}
-
 /// Describes the three ways a child can relate to a disabled region, as seen by whichever
 /// loop (process_source(), process_body(), process_children_with_spacing()) is
 /// currently iterating its parent's children.
@@ -963,21 +958,55 @@ enum DisabledRegionOverlapKind {
     None,
 }
 
-/// Classifies how first_child relates to the input's disabled regions.
+fn append_current_disabled_region_to_render_elements(context: &mut FormatterContext) {
+    let disabled_region_current = context.input.disabled_regions[context.disabled_region_index];
+    context
+        .render_elements
+        .push(RenderElement::UnformattedSource {
+            range: RangeSourceBytes {
+                start_byte: disabled_region_current.start,
+                end_byte: disabled_region_current.end,
+            },
+        });
+    context.disabled_region_was_emitted = true;
+}
+
+/// Classifies how `first_child` relates to the current disabled region.
 fn classify_disabled_region_overlap(
-    input: &ParseInput,
+    context: &mut FormatterContext,
     node: tree_sitter::Node,
     first_child: tree_sitter::Node,
     first_child_index: usize,
 ) -> DisabledRegionOverlapKind {
-    let Some(region) = find_disabled_region_containing(input, first_child.start_byte()) else {
+    loop {
+        let Some(region) = context
+            .input
+            .disabled_regions
+            .get(context.disabled_region_index)
+            .copied()
+        else {
+            return DisabledRegionOverlapKind::None;
+        };
+        if first_child.start_byte() < region.end {
+            break;
+        }
+        assert!(
+            context.disabled_region_was_emitted,
+            "formatter traversal skipped a disabled formatting region"
+        );
+        context.disabled_region_index += 1;
+        context.disabled_region_was_emitted = false;
+    }
+
+    let region = context.input.disabled_regions[context.disabled_region_index];
+    if first_child.start_byte() < region.start {
         return DisabledRegionOverlapKind::None;
-    };
+    }
 
     // A region can end deeper than this level, e.g. an # fmt: off comment that
     // starts before a function and a matching # fmt: on sitting inside that
     // function's body. When first_child only partially overlaps the region this
-    // way, there's a partial overlap and we'll have to process its children
+    // way, there's a partial overlap and we'll have to process its children.
     if first_child.start_byte() != region.start && first_child.end_byte() > region.end {
         return DisabledRegionOverlapKind::PartiallyCovered;
     }
@@ -990,10 +1019,7 @@ fn classify_disabled_region_overlap(
             scan_index += 1;
             continue;
         };
-        if next_child.start_byte() >= region.end {
-            break;
-        }
-        if next_child.end_byte() > region.end {
+        if next_child.start_byte() >= region.end || next_child.end_byte() > region.end {
             break;
         }
         last_covered_index = scan_index;
@@ -1007,25 +1033,21 @@ fn classify_disabled_region_overlap(
 
 /// Starts formatting code from the source node (which is the topmost
 /// tree-sitter AST node).
-fn process_source(
-    input: &ParseInput,
-    node: tree_sitter::Node,
-    render_elements: &mut Vec<RenderElement>,
-) {
+fn process_source(context: &mut FormatterContext, node: tree_sitter::Node) {
     // Reordering moves declarations around based on their kind, which would
     // pull code into or out of a # fmt: off disabled region. For now we
     // skip reordering for disabled regions, but in the future we may want
     // to reorder code around disabled regions as well?
-    if input.reorder_code {
-        if input.disabled_regions.is_empty() {
-            process_source_reorder(input, node, render_elements);
+    if context.input.reorder_code {
+        if context.input.disabled_regions.is_empty() {
+            process_source_reorder(context, node);
             return;
         }
         eprintln!(
             "The code uses disabled regions. Reordering is currently incompatible with disabled formatting as it can span any lines and reordering may break the disabled regions. Skipping reordering."
         );
     }
-    let source = input.source;
+    let source = context.input.source;
     let child_count = node.child_count();
     let mut current_index = 0;
     let mut spacing_context = TopLevelSpacingContext {
@@ -1048,23 +1070,17 @@ fn process_source(
         let kind = GDScriptNodeKind::get_kind_from_ast_node(child);
         // This code is similar to the one in process_body(). See comments
         // there for some explanation of what this does and why it's needed.
-        match classify_disabled_region_overlap(input, node, child, current_index) {
+        match classify_disabled_region_overlap(context, node, child, current_index) {
             DisabledRegionOverlapKind::CoveredFully(disabled_run) => {
                 let region = disabled_run.region;
                 if child.start_byte() == region.start {
                     output_pending_before_declaration(
-                        render_elements,
-                        input,
+                        context,
                         &mut pending,
                         &spacing_context,
                         child,
                     );
-                    render_elements.push(RenderElement::UnformattedSource {
-                        range: RangeSourceBytes {
-                            start_byte: region.start,
-                            end_byte: region.end,
-                        },
-                    });
+                    append_current_disabled_region_to_render_elements(context);
                 }
                 let last_covered_child = node
                     .child(disabled_run.last_covered_index as u32)
@@ -1077,7 +1093,7 @@ fn process_source(
                 continue;
             }
             DisabledRegionOverlapKind::PartiallyCovered => {
-                process_node(input, child, render_elements);
+                process_node(context, child);
                 spacing_context.last_output_end = Some(child.end_byte());
                 spacing_context.last_declaration_end = Some(child.end_byte());
                 spacing_context.last_declaration_kind = Some(kind);
@@ -1091,7 +1107,7 @@ fn process_source(
             // We want to remove semicolons in the formatter. When we encounter
             // one that separates declarations, we put next declarations on a new
             // line.
-            render_elements.push(RenderElement::HardLine);
+            context.render_elements.push(RenderElement::HardLine);
             spacing_context.last_output_end = Some(child.end_byte());
             spacing_context.last_declaration_end = Some(child.end_byte());
             spacing_context.last_declaration_kind = Some(GDScriptNodeKind::SemiColon);
@@ -1112,26 +1128,15 @@ fn process_source(
             continue;
         }
 
-        output_pending_before_declaration(
-            render_elements,
-            input,
-            &mut pending,
-            &spacing_context,
-            child,
-        );
-        process_node(input, child, render_elements);
+        output_pending_before_declaration(context, &mut pending, &spacing_context, child);
+        process_node(context, child);
         spacing_context.last_output_end = Some(child.end_byte());
         spacing_context.last_declaration_end = Some(child.end_byte());
         spacing_context.last_declaration_kind = Some(kind);
         current_index += 1;
     }
 
-    flush_trailing_pending(
-        render_elements,
-        input,
-        &pending,
-        spacing_context.last_output_end,
-    );
+    flush_trailing_pending(context, &pending, spacing_context.last_output_end);
 }
 
 /// Outputs pending comments and annotations collected since the previous
@@ -1158,13 +1163,12 @@ fn process_source(
 /// between the previous and next declarations, with blank line separation as
 /// appropriate for the surrounding declarations.
 fn output_pending_before_declaration(
-    render_elements: &mut Vec<RenderElement>,
-    input: &ParseInput,
+    context: &mut FormatterContext,
     pending: &mut Vec<(tree_sitter::Node, usize)>,
     spacing_context: &TopLevelSpacingContext,
     declaration: tree_sitter::Node,
 ) {
-    let source = input.source;
+    let source = context.input.source;
     let mut declaration_kind = GDScriptNodeKind::get_kind_from_ast_node(declaration);
     let declaration_start = declaration.start_byte();
     let mut previous_kind = spacing_context
@@ -1216,7 +1220,7 @@ fn output_pending_before_declaration(
         previous_needs_two_blank_lines || current_needs_two_blank_lines
     };
     let separator_blank_count = calculate_separator_blank_count(
-        input,
+        context.input,
         previous_kind,
         declaration_kind,
         wants_two_blank_lines,
@@ -1236,22 +1240,22 @@ fn output_pending_before_declaration(
         // source had blank lines after it.
         if spacing_context.last_declaration_kind == Some(GDScriptNodeKind::SemiColon) {
             if newlines >= 2 {
-                push_blank_lines(render_elements, separator_blank_count);
+                push_blank_lines(context.render_elements, separator_blank_count);
             }
             return;
         }
         if is_current_region_start_or_end {
-            push_separator_for_newline_count(newlines, render_elements);
+            push_separator_for_newline_count(newlines, context.render_elements);
             return;
         }
         // Uses the number of blank lines requested from the configuration when
         // either the previous or current declaration needs them
-        // (function/class/constructor). Otherwise preserve the input blank
+        // (function/class/constructor). Otherwise preserve the context.input blank
         // lines up to 1.
         if previous_needs_two_blank_lines || current_needs_two_blank_lines {
-            push_blank_lines(render_elements, separator_blank_count);
+            push_blank_lines(context.render_elements, separator_blank_count);
         } else {
-            push_separator_for_newline_count(newlines, render_elements);
+            push_separator_for_newline_count(newlines, context.render_elements);
         }
         return;
     }
@@ -1368,15 +1372,15 @@ fn output_pending_before_declaration(
         // from).
         if has_previous_content || read_position != 0 {
             if newline_count_to_item == 0 {
-                render_elements.push(RenderElement::Space);
+                context.render_elements.push(RenderElement::Space);
             } else if newline_count_to_item == 1 {
-                render_elements.push(RenderElement::HardLine);
+                context.render_elements.push(RenderElement::HardLine);
             } else {
                 break;
             }
         }
         let (item, _) = pending[read_position];
-        process_node(input, item, render_elements);
+        process_node(context, item);
         did_output_anything = true;
         read_position += 1;
     }
@@ -1392,23 +1396,23 @@ fn output_pending_before_declaration(
         if has_previous_content || did_output_anything {
             if attached_to_declaration {
                 if wants_two_blank_lines {
-                    render_elements.push(RenderElement::BlankLine);
+                    context.render_elements.push(RenderElement::BlankLine);
                 } else if previous_is_class_header {
-                    render_elements.push(RenderElement::HardLine);
+                    context.render_elements.push(RenderElement::HardLine);
                 } else {
                     let blank_count = pending[0].1.saturating_sub(1).clamp(1, 2);
                     if blank_count >= 2 {
-                        render_elements.push(RenderElement::BlankLine);
+                        context.render_elements.push(RenderElement::BlankLine);
                     } else {
-                        render_elements.push(RenderElement::HardLine);
+                        context.render_elements.push(RenderElement::HardLine);
                     }
                 }
             } else {
-                render_elements.push(RenderElement::HardLine);
+                context.render_elements.push(RenderElement::HardLine);
             }
-            render_elements.push(RenderElement::BlankLine);
+            context.render_elements.push(RenderElement::BlankLine);
         }
-        process_pending_block(render_elements, input, pending);
+        process_pending_block(context, pending);
         // pending is reused across declarations, so we need to clear it here
         // now that its contents have been emitted.
         pending.clear();
@@ -1418,23 +1422,23 @@ fn output_pending_before_declaration(
     // everything. Just emit the separator before the declaration.
     if !pending_emitted_as_paragraph && leading_block.is_empty() {
         if do_write_annotation_inline {
-            render_elements.push(RenderElement::Space);
+            context.render_elements.push(RenderElement::Space);
         } else if !has_previous_content {
             if newline_count_to_declaration == 1 {
-                render_elements.push(RenderElement::HardLine);
+                context.render_elements.push(RenderElement::HardLine);
             } else if wants_two_blank_lines {
-                push_blank_lines(render_elements, separator_blank_count);
+                push_blank_lines(context.render_elements, separator_blank_count);
             } else {
-                render_elements.push(RenderElement::HardLine);
-                render_elements.push(RenderElement::BlankLine);
+                context.render_elements.push(RenderElement::HardLine);
+                context.render_elements.push(RenderElement::BlankLine);
             }
         } else if wants_two_blank_lines {
-            push_blank_lines(render_elements, separator_blank_count);
+            push_blank_lines(context.render_elements, separator_blank_count);
         } else if newline_count_to_declaration == 1 {
-            render_elements.push(RenderElement::HardLine);
+            context.render_elements.push(RenderElement::HardLine);
         } else {
-            render_elements.push(RenderElement::HardLine);
-            render_elements.push(RenderElement::BlankLine);
+            context.render_elements.push(RenderElement::HardLine);
+            context.render_elements.push(RenderElement::BlankLine);
         }
         return;
     }
@@ -1442,15 +1446,15 @@ fn output_pending_before_declaration(
     // pending was fully consumed but there is a leading_block split off.
     if !pending_emitted_as_paragraph && !leading_block.is_empty() {
         if wants_two_blank_lines {
-            push_blank_lines(render_elements, separator_blank_count);
+            push_blank_lines(context.render_elements, separator_blank_count);
         } else if newline_count_to_declaration <= 1 {
-            render_elements.push(RenderElement::HardLine);
+            context.render_elements.push(RenderElement::HardLine);
         } else {
-            render_elements.push(RenderElement::HardLine);
-            render_elements.push(RenderElement::BlankLine);
+            context.render_elements.push(RenderElement::HardLine);
+            context.render_elements.push(RenderElement::BlankLine);
         }
-        process_pending_block(render_elements, input, &leading_block);
-        render_elements.push(RenderElement::HardLine);
+        process_pending_block(context, &leading_block);
+        context.render_elements.push(RenderElement::HardLine);
         return;
     }
 
@@ -1460,43 +1464,39 @@ fn output_pending_before_declaration(
     let attached_to_declaration = newline_count_to_declaration == 1;
     if !leading_block.is_empty() {
         if wants_two_blank_lines {
-            push_blank_lines(render_elements, separator_blank_count);
+            push_blank_lines(context.render_elements, separator_blank_count);
         } else {
-            render_elements.push(RenderElement::HardLine);
+            context.render_elements.push(RenderElement::HardLine);
         }
-        render_elements.push(RenderElement::BlankLine);
-        process_pending_block(render_elements, input, &leading_block);
-        render_elements.push(RenderElement::HardLine);
+        context.render_elements.push(RenderElement::BlankLine);
+        process_pending_block(context, &leading_block);
+        context.render_elements.push(RenderElement::HardLine);
     } else if attached_to_declaration && do_write_annotation_inline {
-        render_elements.push(RenderElement::Space);
+        context.render_elements.push(RenderElement::Space);
     } else if attached_to_declaration {
-        render_elements.push(RenderElement::HardLine);
+        context.render_elements.push(RenderElement::HardLine);
     } else if current_needs_two_blank_lines {
         let declaration_blank_count =
-            get_blank_line_count_before_declaration(input, declaration_kind);
-        push_blank_lines(render_elements, declaration_blank_count);
+            get_blank_line_count_before_declaration(context.input, declaration_kind);
+        push_blank_lines(context.render_elements, declaration_blank_count);
     } else {
-        render_elements.push(RenderElement::HardLine);
-        render_elements.push(RenderElement::BlankLine);
+        context.render_elements.push(RenderElement::HardLine);
+        context.render_elements.push(RenderElement::BlankLine);
     }
 }
 
 /// Outputs a batch of buffered comments or annotations. Iterates through the
 /// pending list and inserts spaces, hard lines, or blank lines between items
 /// based on the newline counts recorded when they were buffered.
-fn process_pending_block(
-    render_elements: &mut Vec<RenderElement>,
-    input: &ParseInput,
-    pending: &[(tree_sitter::Node, usize)],
-) {
+fn process_pending_block(context: &mut FormatterContext, pending: &[(tree_sitter::Node, usize)]) {
     let len = pending.len();
     let mut pending_index = 0;
     while pending_index < len {
         let (child, newlines) = pending[pending_index];
         if pending_index > 0 {
-            push_separator_for_newline_count(newlines, render_elements);
+            push_separator_for_newline_count(newlines, context.render_elements);
         }
-        process_node(input, child, render_elements);
+        process_node(context, child);
         pending_index += 1;
     }
 }
@@ -1505,8 +1505,7 @@ fn process_pending_block(
 /// statement, with spacing based on the source newline count between them. Runs
 /// at the end of the file, after all statements are processed.
 fn flush_trailing_pending(
-    render_elements: &mut Vec<RenderElement>,
-    input: &ParseInput,
+    context: &mut FormatterContext,
     pending_ast_nodes: &[(tree_sitter::Node, usize)],
     last_output_end: Option<usize>,
 ) {
@@ -1518,10 +1517,10 @@ fn flush_trailing_pending(
         // no separator of its own (there is nothing before it to separate
         // from).
         if has_output_any || last_output_end.is_some() {
-            push_separator_for_newline_count(newline_count_to_item, render_elements);
+            push_separator_for_newline_count(newline_count_to_item, context.render_elements);
         }
         let (item, _) = pending_ast_nodes[current_node_index];
-        process_node(input, item, render_elements);
+        process_node(context, item);
         has_output_any = true;
         current_node_index += 1;
     }
@@ -1602,21 +1601,17 @@ fn add_spacing_between_body_children(
 /// Formats a setget node (setter/getter definitions). Outputs the first child
 /// (the value), then indents and formats the setter/getter bodies on separate
 /// lines.
-fn process_setget(
-    input: &ParseInput,
-    node: tree_sitter::Node,
-    render_elements: &mut Vec<RenderElement>,
-) {
+fn process_setget(context: &mut FormatterContext, node: tree_sitter::Node) {
     let child_count = node.child_count();
     if child_count == 0 {
         return;
     }
     if let Some(first) = node.child(0) {
-        process_node(input, first, render_elements);
+        process_node(context, first);
     }
     if child_count > 1 {
-        render_elements.push(RenderElement::HardLine);
-        let indent_index = begin_indent(render_elements, 1);
+        context.render_elements.push(RenderElement::HardLine);
+        let indent_index = begin_indent(context.render_elements, 1);
         let mut inner = 1;
         let mut previous: Option<tree_sitter::Node> = None;
         while inner < child_count {
@@ -1624,18 +1619,18 @@ fn process_setget(
                 if let Some(ref previous_child) = previous {
                     process_separator_between_sibling_nodes(
                         GDScriptNodeKind::SetGet,
-                        input.source,
+                        context.input.source,
                         previous_child,
                         &inner_child,
-                        render_elements,
+                        context.render_elements,
                     );
                 }
-                process_node(input, inner_child, render_elements);
+                process_node(context, inner_child);
                 previous = Some(inner_child);
             }
             inner += 1;
         }
-        finish_indent(render_elements, indent_index);
+        finish_indent(context.render_elements, indent_index);
     }
 }
 
@@ -1644,24 +1639,20 @@ fn process_setget(
 /// the renderer can choose between single-line or multi-line output. Optionally
 /// adds trailing commas, handles placing inline comments after commas, and
 /// handles empty or single-element containers too which render inline
-fn process_container(
-    input: &ParseInput,
-    node: tree_sitter::Node,
-    render_elements: &mut Vec<RenderElement>,
-) {
+fn process_container(context: &mut FormatterContext, node: tree_sitter::Node) {
     let node_kind = GDScriptNodeKind::get_kind_from_ast_node(node);
     let child_count = node.child_count();
     // The style guide requires enum members to be written vertically, even
     // when the list would fit on one line. Empty enums are the only exception.
     if child_count < 3 && node_kind != GDScriptNodeKind::EnumeratorList {
         if let Some(open) = node.child(0) {
-            process_node(input, open, render_elements);
+            process_node(context, open);
         }
         if node_kind == GDScriptNodeKind::Dictionary {
-            render_elements.push(RenderElement::Space);
+            context.render_elements.push(RenderElement::Space);
         }
         if let Some(close) = node.child(1) {
-            process_node(input, close, render_elements);
+            process_node(context, close);
         }
         return;
     }
@@ -1676,22 +1667,24 @@ fn process_container(
     {
         None
     } else {
-        Some(begin_group(render_elements))
+        Some(begin_group(context.render_elements))
     };
 
     if let Some(open) = node.child(0) {
-        process_node(input, open, render_elements);
+        process_node(context, open);
     }
     let needs_inner_space =
         node_kind == GDScriptNodeKind::EnumeratorList || node_kind == GDScriptNodeKind::Dictionary;
     if needs_inner_space {
-        render_elements.push(RenderElement::SpaceSingleLineOnly);
+        context
+            .render_elements
+            .push(RenderElement::SpaceSingleLineOnly);
     }
-    render_elements.push(RenderElement::SoftLine);
+    context.render_elements.push(RenderElement::SoftLine);
 
     // When we have delimiters like in a function calls, we apply just one
     // indent. We don't treat them as continuation lines.
-    let indent_index = begin_indent(render_elements, 1);
+    let indent_index = begin_indent(context.render_elements, 1);
 
     let mut has_comment = false;
     let mut last_was_comment = false;
@@ -1701,6 +1694,46 @@ fn process_container(
     let mut skip_next_separator = false;
     while index < child_count - 1 {
         if let Some(child) = node.child(index as u32) {
+            match classify_disabled_region_overlap(context, node, child, index) {
+                DisabledRegionOverlapKind::CoveredFully(disabled_run) => {
+                    if child.start_byte() == disabled_run.region.start {
+                        if !skip_next_separator {
+                            if let Some(previous_child) = previous {
+                                process_separator_between_sibling_nodes(
+                                    node_kind,
+                                    context.input.source,
+                                    &previous_child,
+                                    &child,
+                                    context.render_elements,
+                                );
+                            }
+                        }
+                        append_current_disabled_region_to_render_elements(context);
+                    }
+                    let last_covered_child = node
+                        .child(disabled_run.last_covered_index as u32)
+                        .expect("last_covered_index came from this same node's children");
+                    let last_covered_kind =
+                        GDScriptNodeKind::get_kind_from_ast_node(last_covered_child);
+                    has_comment = true;
+                    last_was_comment = last_covered_kind == GDScriptNodeKind::Comment;
+                    trailing_comma_handled = last_covered_kind == GDScriptNodeKind::TokenComma;
+                    skip_next_separator = false;
+                    previous = Some(last_covered_child);
+                    index = disabled_run.last_covered_index + 1;
+                    continue;
+                }
+                DisabledRegionOverlapKind::PartiallyCovered => {
+                    process_node(context, child);
+                    has_comment = true;
+                    last_was_comment = false;
+                    skip_next_separator = false;
+                    previous = Some(child);
+                    index += 1;
+                    continue;
+                }
+                DisabledRegionOverlapKind::None => {}
+            }
             let child_kind = GDScriptNodeKind::get_kind_from_ast_node(child);
             if index == child_count - 2 && child_kind == GDScriptNodeKind::TokenComma {
                 index += 1;
@@ -1717,16 +1750,16 @@ fn process_container(
                 if previous_kind != GDScriptNodeKind::TokenComma
                     && previous_kind != GDScriptNodeKind::Comment
                 {
-                    let text_index = render_elements.len() + 1;
-                    render_elements.push(RenderElement::Branch {
+                    let text_index = context.render_elements.len() + 1;
+                    context.render_elements.push(RenderElement::Branch {
                         if_single_line: None,
                         if_multiline: Some(RangeRenderElement {
                             start: text_index,
                             end: text_index + 1,
                         }),
                     });
-                    render_elements.push(RenderElement::TextStatic(","));
-                    render_elements.push(RenderElement::Space);
+                    context.render_elements.push(RenderElement::TextStatic(","));
+                    context.render_elements.push(RenderElement::Space);
                     skip_next_separator = true;
                     trailing_comma_handled = true;
                 }
@@ -1738,14 +1771,14 @@ fn process_container(
                 if let Some(ref previous_child) = previous {
                     let previous_kind = GDScriptNodeKind::get_kind_from_ast_node(*previous_child);
                     if previous_kind == GDScriptNodeKind::Comment {
-                        render_elements.push(RenderElement::HardLine);
+                        context.render_elements.push(RenderElement::HardLine);
                     } else {
                         process_separator_between_sibling_nodes(
                             node_kind,
-                            input.source,
+                            context.input.source,
                             previous_child,
                             &child,
-                            render_elements,
+                            context.render_elements,
                         );
                     }
                 }
@@ -1754,12 +1787,16 @@ fn process_container(
             // "containers" like enums.
             if let Some(previous_child) = previous
                 && child_kind != GDScriptNodeKind::Comment
-                && count_newlines(input.source, previous_child.end_byte(), child.start_byte()) > 1
+                && count_newlines(
+                    context.input.source,
+                    previous_child.end_byte(),
+                    child.start_byte(),
+                ) > 1
             {
-                render_elements.push(RenderElement::BlankLine);
+                context.render_elements.push(RenderElement::BlankLine);
             }
             skip_next_separator = false;
-            process_node(input, child, render_elements);
+            process_node(context, child);
             if child_kind == GDScriptNodeKind::TokenComma {
                 let mut next_is_comment = false;
                 let mut next_same_line = false;
@@ -1768,20 +1805,25 @@ fn process_container(
                         next_is_comment = GDScriptNodeKind::get_kind_from_ast_node(next)
                             == GDScriptNodeKind::Comment;
                         if next_is_comment {
-                            next_same_line =
-                                !has_newline(input.source, child.end_byte(), next.start_byte());
+                            next_same_line = !has_newline(
+                                context.input.source,
+                                child.end_byte(),
+                                next.start_byte(),
+                            );
                         }
                     }
                 }
                 if next_is_comment {
                     if next_same_line {
-                        render_elements.push(RenderElement::Space);
+                        context.render_elements.push(RenderElement::Space);
                     } else {
-                        render_elements.push(RenderElement::HardLine);
+                        context.render_elements.push(RenderElement::HardLine);
                     }
                 } else {
-                    render_elements.push(RenderElement::SoftLine);
-                    render_elements.push(RenderElement::SpaceSingleLineOnly);
+                    context.render_elements.push(RenderElement::SoftLine);
+                    context
+                        .render_elements
+                        .push(RenderElement::SpaceSingleLineOnly);
                 }
                 skip_next_separator = true;
             }
@@ -1857,44 +1899,48 @@ fn process_container(
         && !last_was_comment
         && !lambda_has_trailing_comment
     {
-        let text_index = render_elements.len() + 1;
-        render_elements.push(RenderElement::Branch {
+        let text_index = context.render_elements.len() + 1;
+        context.render_elements.push(RenderElement::Branch {
             if_single_line: None,
             if_multiline: Some(RangeRenderElement {
                 start: text_index,
                 end: text_index + 1,
             }),
         });
-        render_elements.push(RenderElement::TextStatic(","));
+        context.render_elements.push(RenderElement::TextStatic(","));
     }
 
     // A single enum member also needs a trailing comma as it's always multiline
     // (even if it fits on one line).
     if is_non_empty_enum && !contains_more_than_one_element && !trailing_comma_handled {
-        render_elements.push(RenderElement::TextStatic(","));
+        context.render_elements.push(RenderElement::TextStatic(","));
     }
 
     if is_non_empty_enum || contains_lambda {
-        render_elements.push(RenderElement::ForceBreakingParent);
+        context
+            .render_elements
+            .push(RenderElement::ForceBreakingParent);
     }
 
-    finish_indent(render_elements, indent_index);
+    finish_indent(context.render_elements, indent_index);
 
     if has_comment {
-        render_elements.push(RenderElement::HardLine);
+        context.render_elements.push(RenderElement::HardLine);
     } else {
-        render_elements.push(RenderElement::SoftLine);
+        context.render_elements.push(RenderElement::SoftLine);
     }
     if needs_inner_space {
-        render_elements.push(RenderElement::SpaceSingleLineOnly);
+        context
+            .render_elements
+            .push(RenderElement::SpaceSingleLineOnly);
     }
 
     if let Some(close) = node.child((child_count - 1) as u32) {
-        process_node(input, close, render_elements);
+        process_node(context, close);
     }
 
     if let Some(group_index) = group_index {
-        finish_group(render_elements, group_index);
+        finish_group(context.render_elements, group_index);
     }
 }
 
@@ -1903,18 +1949,14 @@ fn process_container(
 /// expression can contain sub-expressions, operators, lambda functions, etc.
 ///
 /// The IR for everything visited is added to `render_elements`.
-fn process_expression_content(
-    input: &ParseInput,
-    node: tree_sitter::Node,
-    render_elements: &mut Vec<RenderElement>,
-) {
+fn process_expression_content(context: &mut FormatterContext, node: tree_sitter::Node) {
     match GDScriptNodeKind::get_kind_from_ast_node(node) {
         GDScriptNodeKind::Attribute => {
-            process_attribute(input, node, render_elements);
+            process_attribute(context, node);
             return;
         }
         GDScriptNodeKind::Subscript | GDScriptNodeKind::Call => {
-            process_children_with_spacing(input, node, render_elements);
+            process_children_with_spacing(context, node);
             return;
         }
         GDScriptNodeKind::ParenthesizedExpression => {}
@@ -1924,14 +1966,14 @@ fn process_expression_content(
         // stumble upon something like that, we need to process those nodes
         // recursively.
         _ => {
-            process_node(input, node, render_elements);
+            process_node(context, node);
             return;
         }
     }
 
     let child_count = node.child_count();
     if child_count < 3 {
-        process_children_with_spacing(input, node, render_elements);
+        process_children_with_spacing(context, node);
         return;
     }
 
@@ -1957,28 +1999,28 @@ fn process_expression_content(
             // should be indented like the lambda body, otherwise users will get
             // a parse error.
             if let Some(open) = node.child(0) {
-                process_node(input, open, render_elements);
+                process_node(context, open);
             }
             if let Some(lambda) = node.child(1) {
-                process_node(input, lambda, render_elements);
+                process_node(context, lambda);
             }
             if let Some(close) = node.child(2) {
-                let indent_index = begin_indent(render_elements, 1);
-                process_node(input, close, render_elements);
-                finish_indent(render_elements, indent_index);
+                let indent_index = begin_indent(context.render_elements, 1);
+                process_node(context, close);
+                finish_indent(context.render_elements, indent_index);
             }
             return;
         }
-        process_children_with_spacing(input, node, render_elements);
+        process_children_with_spacing(context, node);
         return;
     }
 
     if let Some(open) = node.child(0) {
-        process_node(input, open, render_elements);
+        process_node(context, open);
     }
 
-    render_elements.push(RenderElement::SoftLine);
-    let indent_index = begin_indent(render_elements, 1);
+    context.render_elements.push(RenderElement::SoftLine);
+    let indent_index = begin_indent(context.render_elements, 1);
 
     let end = (child_count - 1) as u32;
     let mut index: u32 = 1;
@@ -1988,23 +2030,23 @@ fn process_expression_content(
             if let Some(ref previous_child) = previous {
                 process_separator_between_sibling_nodes(
                     GDScriptNodeKind::ParenthesizedExpression,
-                    input.source,
+                    context.input.source,
                     previous_child,
                     &child,
-                    render_elements,
+                    context.render_elements,
                 );
             }
-            process_node(input, child, render_elements);
+            process_node(context, child);
             previous = Some(child);
         }
         index += 1;
     }
 
-    finish_indent(render_elements, indent_index);
-    render_elements.push(RenderElement::SoftLine);
+    finish_indent(context.render_elements, indent_index);
+    context.render_elements.push(RenderElement::SoftLine);
 
     if let Some(close) = node.child((child_count - 1) as u32) {
-        process_node(input, close, render_elements);
+        process_node(context, close);
     }
 }
 
@@ -2059,11 +2101,7 @@ fn binary_operator_token(node: tree_sitter::Node) -> Option<tree_sitter::Node> {
 /// groups to distribute operands and wrap before operators. Standalone boolean
 /// expressions gain parentheses when they wrap, as GDScript otherwise has no
 /// implicit line continuation.
-fn process_binary_operator(
-    input: &ParseInput,
-    node: tree_sitter::Node,
-    render_elements: &mut Vec<RenderElement>,
-) {
+fn process_binary_operator(context: &mut FormatterContext, node: tree_sitter::Node) {
     struct BinaryChainSegment<'a> {
         operator: Option<tree_sitter::Node<'a>>,
         binary_node: Option<tree_sitter::Node<'a>>,
@@ -2072,12 +2110,12 @@ fn process_binary_operator(
 
     let child_count = node.child_count();
     if child_count < 3 {
-        process_children_with_spacing(input, node, render_elements);
+        process_children_with_spacing(context, node);
         return;
     }
 
     let operator_text = if let Some(operator) = binary_operator_token(node) {
-        &input.source[operator.start_byte()..operator.end_byte()]
+        &context.input.source[operator.start_byte()..operator.end_byte()]
     } else {
         ""
     };
@@ -2096,7 +2134,7 @@ fn process_binary_operator(
     }
     let is_in_single_indent_container = expression_is_in_single_indent_container(node);
     if has_line_continuation || (!is_and_or && !is_in_single_indent_container) {
-        process_children_with_spacing(input, node, render_elements);
+        process_children_with_spacing(context, node);
         return;
     }
 
@@ -2136,7 +2174,7 @@ fn process_binary_operator(
     while let Some(left) = current_node.child_by_field_name("left") {
         if GDScriptNodeKind::get_kind_from_ast_node(left) == GDScriptNodeKind::BinaryOperator {
             let left_operator_text = if let Some(operator) = binary_operator_token(left) {
-                &input.source[operator.start_byte()..operator.end_byte()]
+                &context.input.source[operator.start_byte()..operator.end_byte()]
             } else {
                 ""
             };
@@ -2206,29 +2244,29 @@ fn process_binary_operator(
 
     let needs_parentheses_when_broken = is_and_or && !is_in_single_indent_container;
     let outer_group_index = if needs_parentheses_when_broken {
-        let group_index = begin_group(render_elements);
-        let branch_start = render_elements.len() + 1;
-        render_elements.push(RenderElement::Branch {
+        let group_index = begin_group(context.render_elements);
+        let branch_start = context.render_elements.len() + 1;
+        context.render_elements.push(RenderElement::Branch {
             if_single_line: None,
             if_multiline: Some(RangeRenderElement {
                 start: branch_start,
                 end: branch_start + 2,
             }),
         });
-        render_elements.push(RenderElement::TextStatic("("));
-        render_elements.push(RenderElement::HardLine);
+        context.render_elements.push(RenderElement::TextStatic("("));
+        context.render_elements.push(RenderElement::HardLine);
         Some(group_index)
     } else {
         None
     };
     let indent_index = if needs_parentheses_when_broken {
-        Some(begin_indent(render_elements, 1))
+        Some(begin_indent(context.render_elements, 1))
     } else {
         None
     };
 
-    let balanced_group_index = render_elements.len();
-    render_elements.push(RenderElement::BalancedGroup {
+    let balanced_group_index = context.render_elements.len();
+    context.render_elements.push(RenderElement::BalancedGroup {
         children: RangeRenderElement { start: 0, end: 0 },
     });
     let mut segment_index = 0;
@@ -2237,13 +2275,13 @@ fn process_binary_operator(
         let is_comment = GDScriptNodeKind::get_kind_from_ast_node(segment.expression)
             == GDScriptNodeKind::Comment;
         if is_comment && segment_index > 0 {
-            render_elements.push(RenderElement::HardLine);
+            context.render_elements.push(RenderElement::HardLine);
         }
         if let Some(operator) = segment.operator {
             if has_comment {
-                render_elements.push(RenderElement::HardLine);
+                context.render_elements.push(RenderElement::HardLine);
             } else {
-                render_elements.push(RenderElement::BalancedLine);
+                context.render_elements.push(RenderElement::BalancedLine);
             }
             if let Some(binary_node) = segment.binary_node {
                 let left = binary_node
@@ -2262,23 +2300,25 @@ fn process_binary_operator(
                             != GDScriptNodeKind::Comment
                     {
                         if has_emitted_operator {
-                            render_elements.push(RenderElement::Space);
+                            context.render_elements.push(RenderElement::Space);
                         }
-                        process_node(input, child, render_elements);
+                        process_node(context, child);
                         has_emitted_operator = true;
                     }
                     child_index += 1;
                 }
             } else {
-                process_node(input, operator, render_elements);
+                process_node(context, operator);
             }
-            render_elements.push(RenderElement::Space);
+            context.render_elements.push(RenderElement::Space);
         }
-        process_node(input, segment.expression, render_elements);
+        process_node(context, segment.expression);
         segment_index += 1;
     }
-    let balanced_group_end = render_elements.len();
-    if let RenderElement::BalancedGroup { children } = &mut render_elements[balanced_group_index] {
+    let balanced_group_end = context.render_elements.len();
+    if let RenderElement::BalancedGroup { children } =
+        &mut context.render_elements[balanced_group_index]
+    {
         *children = RangeRenderElement {
             start: balanced_group_index + 1,
             end: balanced_group_end,
@@ -2286,20 +2326,20 @@ fn process_binary_operator(
     }
 
     if let Some(indent_index) = indent_index {
-        finish_indent(render_elements, indent_index);
+        finish_indent(context.render_elements, indent_index);
     }
     if let Some(group_index) = outer_group_index {
-        let branch_start = render_elements.len() + 1;
-        render_elements.push(RenderElement::Branch {
+        let branch_start = context.render_elements.len() + 1;
+        context.render_elements.push(RenderElement::Branch {
             if_single_line: None,
             if_multiline: Some(RangeRenderElement {
                 start: branch_start,
                 end: branch_start + 2,
             }),
         });
-        render_elements.push(RenderElement::HardLine);
-        render_elements.push(RenderElement::TextStatic(")"));
-        finish_group(render_elements, group_index);
+        context.render_elements.push(RenderElement::HardLine);
+        context.render_elements.push(RenderElement::TextStatic(")"));
+        finish_group(context.render_elements, group_index);
     }
 }
 
@@ -2342,18 +2382,14 @@ fn expression_is_in_single_indent_container(node: tree_sitter::Node) -> bool {
 /// Formats Condition nodes (ternary if/else expressions) with a Group. Each
 /// part (value, condition, alternate) goes on its own line when the expression
 /// spans multiple lines.
-fn process_conditional_expression(
-    input: &ParseInput,
-    node: tree_sitter::Node,
-    render_elements: &mut Vec<RenderElement>,
-) {
+fn process_conditional_expression(context: &mut FormatterContext, node: tree_sitter::Node) {
     let child_count = node.child_count();
     if child_count < 5 {
-        process_children_with_spacing(input, node, render_elements);
+        process_children_with_spacing(context, node);
         return;
     }
-    if !has_newline(input.source, node.start_byte(), node.end_byte()) {
-        process_children_with_spacing(input, node, render_elements);
+    if !has_newline(context.input.source, node.start_byte(), node.end_byte()) {
+        process_children_with_spacing(context, node);
         return;
     }
 
@@ -2387,22 +2423,26 @@ fn process_conditional_expression(
 
     let needs_parentheses = !has_line_continuation && !is_inside_parenthesized_expression;
     let outer_group_index = if needs_parentheses {
-        let group_index = begin_group(render_elements);
-        render_elements.push(RenderElement::TextStatic("("));
-        render_elements.push(RenderElement::ForceBreakingParent);
-        render_elements.push(RenderElement::SoftLine);
+        let group_index = begin_group(context.render_elements);
+        context.render_elements.push(RenderElement::TextStatic("("));
+        context
+            .render_elements
+            .push(RenderElement::ForceBreakingParent);
+        context.render_elements.push(RenderElement::SoftLine);
         Some(group_index)
     } else {
         None
     };
     let outer_indent_index = if needs_parentheses {
-        Some(begin_indent(render_elements, 1))
+        Some(begin_indent(context.render_elements, 1))
     } else {
         None
     };
 
-    let group_index = begin_group(render_elements);
-    render_elements.push(RenderElement::ForceBreakingParent);
+    let group_index = begin_group(context.render_elements);
+    context
+        .render_elements
+        .push(RenderElement::ForceBreakingParent);
 
     // The conditional keywords or things like not are anonymous children in the
     // syntax tree, so we have to walk every child in source order to find
@@ -2425,21 +2465,24 @@ fn process_conditional_expression(
                 && !(has_line_continuation
                     && previous.end_position().row == child.start_position().row)
             {
-                render_elements.push(RenderElement::SoftLine);
+                context.render_elements.push(RenderElement::SoftLine);
             } else {
                 process_separator_between_sibling_nodes(
                     GDScriptNodeKind::Condition,
-                    input.source,
+                    context.input.source,
                     &previous,
                     &child,
-                    render_elements,
+                    context.render_elements,
                 );
             }
 
             if previous_kind == GDScriptNodeKind::LineContinuation {
-                let indent_index = begin_indent(render_elements, input.continuation_indent_level);
-                process_node(input, child, render_elements);
-                finish_indent(render_elements, indent_index);
+                let indent_index = begin_indent(
+                    context.render_elements,
+                    context.input.continuation_indent_level,
+                );
+                process_node(context, child);
+                finish_indent(context.render_elements, indent_index);
                 previous_child = Some(child);
                 child_index += 1;
                 continue;
@@ -2448,30 +2491,30 @@ fn process_conditional_expression(
 
         if child_kind == GDScriptNodeKind::LineContinuation {
             let start_byte = child.start_byte();
-            render_elements.push(RenderElement::Text {
+            context.render_elements.push(RenderElement::Text {
                 range: RangeSourceBytes {
                     start_byte,
                     end_byte: start_byte + 1,
                 },
             });
-            render_elements.push(RenderElement::HardLine);
+            context.render_elements.push(RenderElement::HardLine);
         } else {
-            process_node(input, child, render_elements);
+            process_node(context, child);
         }
         previous_child = Some(child);
         child_index += 1;
     }
 
-    finish_group(render_elements, group_index);
+    finish_group(context.render_elements, group_index);
 
     // If the ternary was wrapped in parentheses, it's indented, we end the
     // indent and close the parentheses.
     if let Some(indent_index) = outer_indent_index {
-        finish_indent(render_elements, indent_index);
-        render_elements.push(RenderElement::SoftLine);
-        render_elements.push(RenderElement::TextStatic(")"));
+        finish_indent(context.render_elements, indent_index);
+        context.render_elements.push(RenderElement::SoftLine);
+        context.render_elements.push(RenderElement::TextStatic(")"));
         finish_group(
-            render_elements,
+            context.render_elements,
             outer_group_index.expect("parenthesis group exists"),
         );
     }
@@ -2526,11 +2569,7 @@ fn does_attribute_chain_allow_implicit_line_continuation(node: tree_sitter::Node
 
 /// Formats Attribute nodes (dot-access chains like a.b.c()). Handles line
 /// continuations and wraps long chains onto separate lines.
-fn process_attribute(
-    input: &ParseInput,
-    node: tree_sitter::Node,
-    render_elements: &mut Vec<RenderElement>,
-) {
+fn process_attribute(context: &mut FormatterContext, node: tree_sitter::Node) {
     let child_count = node.child_count();
     // An attribute node is an expression followed by dots using the dot
     // accessor and accessing members or calling methods.
@@ -2550,7 +2589,7 @@ fn process_attribute(
     }
     let has_multiple_dot_accesses = dot_count >= 2;
     if !has_multiple_dot_accesses {
-        process_children_with_spacing(input, node, render_elements);
+        process_children_with_spacing(context, node);
         return;
     }
     let can_use_implicit_line_continuation =
@@ -2588,14 +2627,14 @@ fn process_attribute(
     }
 
     if let Some(expr) = node.child(0) {
-        process_node(input, expr, render_elements);
+        process_node(context, expr);
     }
 
     let chain_indent_level = if can_use_implicit_line_continuation || has_explicit_line_continuation
     {
         0
     } else {
-        input.continuation_indent_level
+        context.input.continuation_indent_level
     };
     let mut attribute_index: u32 = 1;
     while attribute_index < child_count as u32 {
@@ -2609,37 +2648,34 @@ fn process_attribute(
             false
         };
         if is_line_continuation {
-            render_elements.push(RenderElement::Space);
-            process_node(
-                input,
-                child.expect("line_continuation child exists"),
-                render_elements,
-            );
+            context.render_elements.push(RenderElement::Space);
+            process_node(context, child.expect("line_continuation child exists"));
             attribute_index += 1;
             let dot_after_lc = node.child(attribute_index);
             let call_after_lc = node.child(attribute_index + 1);
             if let Some(dot_node) = dot_after_lc {
-                let continuation_indent_index =
-                    begin_indent(render_elements, input.continuation_indent_level);
-                process_node(input, dot_node, render_elements);
+                let continuation_indent_index = begin_indent(
+                    context.render_elements,
+                    context.input.continuation_indent_level,
+                );
+                process_node(context, dot_node);
                 if let Some(call_node) = call_after_lc {
                     if GDScriptNodeKind::get_kind_from_ast_node(call_node)
                         == GDScriptNodeKind::AttributeCall
                     {
-                        process_method_call_name(input, call_node, render_elements);
-                        finish_indent(render_elements, continuation_indent_index);
+                        process_method_call_name(context, call_node);
+                        finish_indent(context.render_elements, continuation_indent_index);
                         process_method_call_arguments(
-                            input,
+                            context,
                             call_node,
                             attribute_index + 2 >= child_count as u32,
-                            render_elements,
                         );
                     } else {
-                        process_node(input, call_node, render_elements);
-                        finish_indent(render_elements, continuation_indent_index);
+                        process_node(context, call_node);
+                        finish_indent(context.render_elements, continuation_indent_index);
                     }
                 } else {
-                    finish_indent(render_elements, continuation_indent_index);
+                    finish_indent(context.render_elements, continuation_indent_index);
                 }
             }
             attribute_index += 2;
@@ -2647,63 +2683,64 @@ fn process_attribute(
         }
 
         if !can_use_implicit_line_continuation && !has_explicit_line_continuation {
-            let continuation_indent_index = begin_indent(render_elements, chain_indent_level);
-            let continuation_index = render_elements.len() + 1;
-            render_elements.push(RenderElement::Branch {
+            let continuation_indent_index =
+                begin_indent(context.render_elements, chain_indent_level);
+            let continuation_index = context.render_elements.len() + 1;
+            context.render_elements.push(RenderElement::Branch {
                 if_single_line: None,
                 if_multiline: Some(RangeRenderElement {
                     start: continuation_index,
                     end: continuation_index + 2,
                 }),
             });
-            render_elements.push(RenderElement::Space);
-            render_elements.push(RenderElement::TextStatic("\\"));
-            render_elements.push(RenderElement::SoftLine);
+            context.render_elements.push(RenderElement::Space);
+            context
+                .render_elements
+                .push(RenderElement::TextStatic("\\"));
+            context.render_elements.push(RenderElement::SoftLine);
             if let Some(dot_node) = child {
-                process_node(input, dot_node, render_elements);
+                process_node(context, dot_node);
             }
             if let Some(call_node) = next {
                 if GDScriptNodeKind::get_kind_from_ast_node(call_node)
                     == GDScriptNodeKind::AttributeCall
                 {
-                    process_method_call_name(input, call_node, render_elements);
-                    finish_indent(render_elements, continuation_indent_index);
+                    process_method_call_name(context, call_node);
+                    finish_indent(context.render_elements, continuation_indent_index);
                     process_method_call_arguments(
-                        input,
+                        context,
                         call_node,
                         attribute_index + 2 >= child_count as u32,
-                        render_elements,
                     );
                 } else {
-                    process_node(input, call_node, render_elements);
-                    finish_indent(render_elements, continuation_indent_index);
+                    process_node(context, call_node);
+                    finish_indent(context.render_elements, continuation_indent_index);
                 }
             } else {
-                finish_indent(render_elements, continuation_indent_index);
+                finish_indent(context.render_elements, continuation_indent_index);
             }
             attribute_index += 2;
             continue;
         }
         if !has_explicit_line_continuation {
-            render_elements.push(RenderElement::SoftLine);
+            context.render_elements.push(RenderElement::SoftLine);
         }
 
         if let Some(dot_node) = child {
-            process_node(input, dot_node, render_elements);
+            process_node(context, dot_node);
         }
         if let Some(call_node) = next {
             if GDScriptNodeKind::get_kind_from_ast_node(call_node)
                 == GDScriptNodeKind::AttributeCall
             {
-                process_method_call_name(input, call_node, render_elements);
+                process_method_call_name(context, call_node);
                 process_method_call_arguments(
-                    input,
+                    context,
                     call_node,
                     attribute_index + 2 >= child_count as u32,
-                    render_elements,
                 );
             } else {
-                process_node(input, call_node, render_elements);
+                process_node(context, call_node);
             }
         }
 
@@ -2711,13 +2748,9 @@ fn process_attribute(
     }
 }
 
-fn process_method_call_name(
-    input: &ParseInput,
-    attribute_call: tree_sitter::Node,
-    render_elements: &mut Vec<RenderElement>,
-) {
+fn process_method_call_name(context: &mut FormatterContext, attribute_call: tree_sitter::Node) {
     if let Some(method_name) = attribute_call.child(0) {
-        process_node(input, method_name, render_elements);
+        process_node(context, method_name);
     }
 }
 
@@ -2730,10 +2763,9 @@ fn process_method_call_name(
 /// arguments from forcing explicit line continuations for the rest of the
 /// chain.
 fn process_method_call_arguments(
-    input: &ParseInput,
+    context: &mut FormatterContext,
     attribute_call: tree_sitter::Node,
     is_last_call_in_chain: bool,
-    render_elements: &mut Vec<RenderElement>,
 ) {
     let Some(args) = attribute_call.child(1) else {
         return;
@@ -2741,7 +2773,7 @@ fn process_method_call_arguments(
 
     if is_last_call_in_chain {
         let group_index = if does_attribute_chain_allow_implicit_line_continuation(attribute_call) {
-            begin_group(render_elements)
+            begin_group(context.render_elements)
         } else {
             // This chain doesn't have surrounding delimiters, so GScript will
             // need explicit backslashes to parse it if wrapped on multiple
@@ -2755,10 +2787,10 @@ fn process_method_call_arguments(
             // layout measurement. That way, if we need to wrap the code, the
             // parent group stops counting line length where the chain would
             // break into a vertical layout.
-            begin_group_until_first_line_break(render_elements)
+            begin_group_until_first_line_break(context.render_elements)
         };
-        process_node(input, args, render_elements);
-        finish_group(render_elements, group_index);
+        process_node(context, args);
+        finish_group(context.render_elements, group_index);
     } else {
         let mut has_lambda_argument = false;
         let mut argument_index = 1;
@@ -2773,29 +2805,25 @@ fn process_method_call_arguments(
         }
 
         if has_lambda_argument {
-            process_node(input, args, render_elements);
+            process_node(context, args);
         } else {
             // Prevent a multiline argument list from forcing the surrounding
             // method call chain to use explicit line continuations (trailing
             // "\").
-            let group_index = begin_group_until_first_line_break(render_elements);
-            process_method_arguments_flat(input, args, render_elements);
-            finish_group(render_elements, group_index);
+            let group_index = begin_group_until_first_line_break(context.render_elements);
+            process_method_arguments_flat(context, args);
+            finish_group(context.render_elements, group_index);
         }
     }
 }
 
-fn process_method_arguments_flat(
-    input: &ParseInput,
-    args: tree_sitter::Node,
-    render_elements: &mut Vec<RenderElement>,
-) {
+fn process_method_arguments_flat(context: &mut FormatterContext, args: tree_sitter::Node) {
     let argument_child_count = args.child_count();
     if argument_child_count < 2 {
         return;
     }
     if let Some(open) = args.child(0) {
-        process_node(input, open, render_elements);
+        process_node(context, open);
     }
     let close_parenthesis_index = (argument_child_count - 1) as u32;
     let args_kind = GDScriptNodeKind::get_kind_from_ast_node(args);
@@ -2822,13 +2850,13 @@ fn process_method_arguments_flat(
             if let Some(ref previous_node) = previous_child {
                 process_separator_between_sibling_nodes(
                     args_kind,
-                    input.source,
+                    context.input.source,
                     previous_node,
                     &child_argument,
-                    render_elements,
+                    context.render_elements,
                 );
             }
-            process_node(input, child_argument, render_elements);
+            process_node(context, child_argument);
             previous_child = Some(child_argument);
         }
         argument_index += 1;
@@ -2837,30 +2865,26 @@ fn process_method_arguments_flat(
         if let Some(ref previous_node) = previous_child {
             process_separator_between_sibling_nodes(
                 args_kind,
-                input.source,
+                context.input.source,
                 previous_node,
                 &close,
-                render_elements,
+                context.render_elements,
             );
         }
-        process_node(input, close, render_elements);
+        process_node(context, close);
     }
 }
 
 /// Formats Lambda nodes with a Group for flat/break layout. Uses
 /// emit_lambda_separator between lambda children. Lambda bodies always use a
 /// multiline layout.
-fn process_lambda(
-    input: &ParseInput,
-    node: tree_sitter::Node,
-    render_elements: &mut Vec<RenderElement>,
-) {
+fn process_lambda(context: &mut FormatterContext, node: tree_sitter::Node) {
     let child_count = node.child_count();
     if child_count == 0 {
         return;
     }
 
-    let group_index = begin_group(render_elements);
+    let group_index = begin_group(context.render_elements);
 
     let do_add_comma_before_trailing_comment = node.parent().is_some_and(|parent| {
         let parent_kind = GDScriptNodeKind::get_kind_from_ast_node(parent);
@@ -2883,31 +2907,31 @@ fn process_lambda(
                 if child_kind == GDScriptNodeKind::Body
                     && previous_kind == GDScriptNodeKind::TokenColon
                 {
-                    render_elements.push(RenderElement::SoftLine);
-                    let space_index = render_elements.len() + 1;
-                    render_elements.push(RenderElement::Branch {
+                    context.render_elements.push(RenderElement::SoftLine);
+                    let space_index = context.render_elements.len() + 1;
+                    context.render_elements.push(RenderElement::Branch {
                         if_single_line: Some(RangeRenderElement {
                             start: space_index,
                             end: space_index + 1,
                         }),
                         if_multiline: None,
                     });
-                    render_elements.push(RenderElement::Space);
+                    context.render_elements.push(RenderElement::Space);
                 } else {
-                    process_lambda_separator(previous_kind, child_kind, render_elements);
+                    process_lambda_separator(previous_kind, child_kind, context.render_elements);
                 }
             }
             if child_kind == GDScriptNodeKind::Body && do_add_comma_before_trailing_comment {
-                process_body(input, child, render_elements, true);
+                process_body(context, child, true);
             } else {
-                process_node(input, child, render_elements);
+                process_node(context, child);
             }
             previous = Some(child);
         }
         index += 1;
     }
 
-    // Always break lambda bodies, even when the input wrote the body inline.
+    // Always break lambda bodies, even when the context.input wrote the body inline.
     // This also forces the surrounding collection or argument group to break.
     let mut has_body = false;
     let mut current_index: u32 = 0;
@@ -2915,7 +2939,9 @@ fn process_lambda(
         if let Some(child) = node.child(current_index) {
             if GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Body {
                 has_body = true;
-                render_elements.push(RenderElement::ForceBreakingParent);
+                context
+                    .render_elements
+                    .push(RenderElement::ForceBreakingParent);
                 break;
             }
         }
@@ -2929,10 +2955,10 @@ fn process_lambda(
         false
     };
     if has_body && parent_is_paren {
-        render_elements.push(RenderElement::HardLine);
+        context.render_elements.push(RenderElement::HardLine);
     }
 
-    finish_group(render_elements, group_index);
+    finish_group(context.render_elements, group_index);
 }
 
 fn is_lambda_body_ending_with_comment(lambda: tree_sitter::Node) -> bool {
@@ -3036,11 +3062,8 @@ fn process_lambda_separator(
 /// by other builders as a passthrough when they decide not to apply special
 /// formatting. Iterates over all children and uses emit_inter_child_separator
 /// to decide spacing between them. Handles line continuation tokens specially.
-fn process_children_with_spacing(
-    input: &ParseInput,
-    node: tree_sitter::Node,
-    render_elements: &mut Vec<RenderElement>,
-) {
+
+fn process_children_with_spacing(context: &mut FormatterContext, node: tree_sitter::Node) {
     let parent_kind = GDScriptNodeKind::get_kind_from_ast_node(node);
     let child_count = node.child_count();
     let mut index = 0;
@@ -3049,25 +3072,20 @@ fn process_children_with_spacing(
         if let Some(child) = node.child(index as u32) {
             // This code is similar to the one in process_body(). See comments
             // there for some explanation of what this does and why it's needed.
-            match classify_disabled_region_overlap(input, node, child, index) {
+            match classify_disabled_region_overlap(context, node, child, index) {
                 DisabledRegionOverlapKind::CoveredFully(disabled_run) => {
                     let region = disabled_run.region;
                     if child.start_byte() == region.start {
                         if let Some(ref previous_child) = previous {
                             process_separator_between_sibling_nodes(
                                 parent_kind,
-                                input.source,
+                                context.input.source,
                                 previous_child,
                                 &child,
-                                render_elements,
+                                context.render_elements,
                             );
                         }
-                        render_elements.push(RenderElement::UnformattedSource {
-                            range: RangeSourceBytes {
-                                start_byte: region.start,
-                                end_byte: region.end,
-                            },
-                        });
+                        append_current_disabled_region_to_render_elements(context);
                     }
                     let last_covered_child = node
                         .child(disabled_run.last_covered_index as u32)
@@ -3077,7 +3095,7 @@ fn process_children_with_spacing(
                     continue;
                 }
                 DisabledRegionOverlapKind::PartiallyCovered => {
-                    process_node(input, child, render_elements);
+                    process_node(context, child);
                     previous = Some(child);
                     index += 1;
                     continue;
@@ -3090,16 +3108,18 @@ fn process_children_with_spacing(
                 let previous_kind = GDScriptNodeKind::get_kind_from_ast_node(*previous_child);
                 process_separator_between_sibling_nodes(
                     parent_kind,
-                    input.source,
+                    context.input.source,
                     previous_child,
                     &child,
-                    render_elements,
+                    context.render_elements,
                 );
                 if previous_kind == GDScriptNodeKind::LineContinuation {
-                    let indent_index =
-                        begin_indent(render_elements, input.continuation_indent_level);
-                    process_node(input, child, render_elements);
-                    finish_indent(render_elements, indent_index);
+                    let indent_index = begin_indent(
+                        context.render_elements,
+                        context.input.continuation_indent_level,
+                    );
+                    process_node(context, child);
+                    finish_indent(context.render_elements, indent_index);
                     previous = Some(child);
                     index += 1;
                     continue;
@@ -3107,13 +3127,13 @@ fn process_children_with_spacing(
             }
             if child_kind == GDScriptNodeKind::LineContinuation {
                 let start = child.start_byte();
-                render_elements.push(RenderElement::Text {
+                context.render_elements.push(RenderElement::Text {
                     range: RangeSourceBytes {
                         start_byte: start,
                         end_byte: start + 1,
                     },
                 });
-                render_elements.push(RenderElement::HardLine);
+                context.render_elements.push(RenderElement::HardLine);
                 previous = Some(child);
                 index += 1;
                 continue;
@@ -3126,9 +3146,9 @@ fn process_children_with_spacing(
                         | GDScriptNodeKind::Call
                 )
             {
-                process_expression_content(input, child, render_elements);
+                process_expression_content(context, child);
             } else {
-                process_node(input, child, render_elements);
+                process_node(context, child);
             }
             previous = Some(child);
         }
@@ -3314,17 +3334,13 @@ fn process_separator_between_sibling_nodes(
 /// option is enabled. Calls the code sorting module to sort top-level
 /// declarations into groups (signals, enums, constants, variables, methods,
 /// classes).
-fn process_source_reorder(
-    input: &ParseInput,
-    node: tree_sitter::Node,
-    render_elements: &mut Vec<RenderElement>,
-) {
-    let source = input.source;
+fn process_source_reorder(context: &mut FormatterContext, node: tree_sitter::Node) {
+    let source = context.input.source;
     let plan = reorder::build_reorder_plan(node, source);
     if plan.items.is_empty() {
         // Without a declaration, standalone annotations have nothing to attach
         // to.
-        process_children_with_spacing(input, node, render_elements);
+        process_children_with_spacing(context, node);
         return;
     }
     let mut previous_classification: Option<DeclarationKind> = None;
@@ -3349,17 +3365,17 @@ fn process_source_reorder(
                     && !previous_is_double_spaced
                     && !current_needs_two_blank
                 {
-                    render_elements.push(RenderElement::HardLine);
+                    context.render_elements.push(RenderElement::HardLine);
                     if item.has_blank_line_before && is_in_source_order {
-                        render_elements.push(RenderElement::BlankLine);
+                        context.render_elements.push(RenderElement::BlankLine);
                     }
                 } else if previous_is_double_spaced || current_needs_two_blank {
                     let count = if current_needs_two_blank {
-                        input.blank_lines_around_definitions
+                        context.input.blank_lines_around_definitions
                     } else {
                         2
                     };
-                    push_blank_lines(render_elements, count);
+                    push_blank_lines(context.render_elements, count);
                 } else if matches!(
                     previous_child,
                     DeclarationKind::ClassAnnotation
@@ -3373,10 +3389,10 @@ fn process_source_reorder(
                         | DeclarationKind::Extends
                         | DeclarationKind::Docstring
                 ) {
-                    render_elements.push(RenderElement::HardLine);
+                    context.render_elements.push(RenderElement::HardLine);
                 } else {
-                    render_elements.push(RenderElement::HardLine);
-                    render_elements.push(RenderElement::BlankLine);
+                    context.render_elements.push(RenderElement::HardLine);
+                    context.render_elements.push(RenderElement::BlankLine);
                 }
             }
         }
@@ -3398,7 +3414,7 @@ fn process_source_reorder(
                 let child_index_attached_before_declaration = item
                     .child_indices_attached_before_declaration[attached_before_declaration_index];
                 if let Some(child) = node.child(child_index_attached_before_declaration as u32) {
-                    process_node(input, child, render_elements);
+                    process_node(context, child);
                     let next_child_start_byte = if attached_before_declaration_index + 1
                         < item.child_indices_attached_before_declaration.len()
                     {
@@ -3413,9 +3429,9 @@ fn process_source_reorder(
                         declaration_start_byte
                     };
                     if has_newline(source, child.end_byte(), next_child_start_byte) {
-                        render_elements.push(RenderElement::HardLine);
+                        context.render_elements.push(RenderElement::HardLine);
                     } else {
-                        render_elements.push(RenderElement::Space);
+                        context.render_elements.push(RenderElement::Space);
                     }
                 }
                 attached_before_declaration_index += 1;
@@ -3428,15 +3444,15 @@ fn process_source_reorder(
                 let docstring_child_index =
                     item.child_indices_attached_before_declaration[docstring_index];
                 if let Some(child) = node.child(docstring_child_index as u32) {
-                    process_node(input, child, render_elements);
-                    render_elements.push(RenderElement::HardLine);
+                    process_node(context, child);
+                    context.render_elements.push(RenderElement::HardLine);
                 }
                 docstring_index += 1;
             }
         } else if let Some(child) = node.child(item.child_index as u32) {
             if let Some(sub_child_index) = item.sub_child {
                 if let Some(sub) = child.child(sub_child_index as u32) {
-                    process_node(input, sub, render_elements);
+                    process_node(context, sub);
                 }
             } else if item.split_extends {
                 // When splitting extends, we build the class_name_statement children
@@ -3459,18 +3475,18 @@ fn process_source_reorder(
                     if let Some(ref previous_node) = previous_node {
                         process_separator_between_sibling_nodes(
                             parent_kind,
-                            input.source,
+                            context.input.source,
                             previous_node,
                             &sub,
-                            render_elements,
+                            context.render_elements,
                         );
                     }
-                    process_node(input, sub, render_elements);
+                    process_node(context, sub);
                     previous_node = Some(sub);
                     child_index += 1;
                 }
             } else {
-                process_node(input, child, render_elements);
+                process_node(context, child);
             }
         }
 
@@ -3485,11 +3501,11 @@ fn process_source_reorder(
                 item.child_indices_attached_after_declaration[attached_after_declaration_index];
             if let Some(child) = node.child(child_index_attached_after_declaration as u32) {
                 if has_newline(source, declaration_end_byte, child.start_byte()) {
-                    render_elements.push(RenderElement::HardLine);
+                    context.render_elements.push(RenderElement::HardLine);
                 } else {
-                    render_elements.push(RenderElement::Space);
+                    context.render_elements.push(RenderElement::Space);
                 }
-                process_node(input, child, render_elements);
+                process_node(context, child);
             }
             attached_after_declaration_index += 1;
         }
@@ -3514,5 +3530,11 @@ pub fn build_formatter_intermediate_representation(
     render_elements.clear();
     let root = input.tree.root_node();
     render_elements.reserve(root.named_child_count() * 8);
-    process_source(input, root, render_elements);
+    let mut context = FormatterContext {
+        input,
+        render_elements,
+        disabled_region_index: 0,
+        disabled_region_was_emitted: false,
+    };
+    process_source(&mut context, root);
 }

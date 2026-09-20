@@ -331,8 +331,7 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
 
         // Attach every relevant AST node between the previous declaration and
         // this one before the current declaration.
-        let first_possible_attachment_child_index: usize = match
-        previous_declaration_child_index {
+        let first_possible_attachment_child_index: usize = match previous_declaration_child_index {
             Some(previous_declaration_child_index) => previous_declaration_child_index + 1,
             None => 0,
         };
