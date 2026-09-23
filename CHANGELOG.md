@@ -2,6 +2,12 @@
 
 This file documents the changes made to the formatter with each release.
 
+## Unreleased
+
+### Fixed
+
+- Fix `@export_category` annotations sometimes wrapping with variables on a single line (#358)
+
 ## Release 0.26.2 (2026-09-20)
 
 ### Fixed

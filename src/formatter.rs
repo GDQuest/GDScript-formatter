@@ -16,6 +16,7 @@ use crate::parser::{ParseInput, RegionWithDisabledFormatting};
 use crate::renderer::{GroupParentFit, RangeRenderElement, RangeSourceBytes, RenderElement};
 use crate::reorder;
 use crate::reorder::DeclarationKind;
+use crate::shared_utils::should_annotation_be_inline;
 
 fn begin_indent(render_elements: &mut Vec<RenderElement>, level: u16) -> usize {
     let index = render_elements.len();
@@ -209,9 +210,7 @@ fn is_annotation_that_should_stay_inline(source: &str, annotation: tree_sitter::
             && GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Identifier
         {
             let annotation_name = &source[child.start_byte()..child.end_byte()];
-            return (annotation_name.starts_with("export")
-                && !["export_group", "export_subgroup"].contains(&annotation_name))
-                || annotation_name == "onready";
+            return should_annotation_be_inline(annotation_name);
         }
         child_index += 1;
     }

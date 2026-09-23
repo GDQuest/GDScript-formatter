@@ -7,6 +7,7 @@
 //! bundled with it so they move together when reordered.
 
 use crate::node_kind::GDScriptNodeKind;
+use crate::shared_utils::should_annotation_be_inline;
 use tree_sitter::Node;
 
 #[derive(Debug, Clone)]
@@ -187,10 +188,10 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
             } else {
                 is_child_attached_to_declaration[child_index] = true;
                 if let Some(annotation_identifier) = get_annotation_identifier(child, content) {
-                    if is_inline_export_annotation(annotation_identifier) {
-                        visited_annotations.has_export_annotation = true;
-                    } else if annotation_identifier == "onready" {
+                    if annotation_identifier == "onready" {
                         visited_annotations.has_onready_annotation = true;
+                    } else if should_annotation_be_inline(annotation_identifier) {
+                        visited_annotations.has_export_annotation = true;
                     }
                 }
             }
@@ -528,10 +529,10 @@ fn classify_variable<'a>(
             let Some(annotation_name) = get_annotation_identifier(annotation, content) else {
                 continue;
             };
-            if is_inline_export_annotation(annotation_name) {
-                has_export_annotation = true;
-            } else if annotation_name == "onready" {
+            if annotation_name == "onready" {
                 has_onready_annotation = true;
+            } else if should_annotation_be_inline(annotation_name) {
+                has_export_annotation = true;
             }
         }
     }
@@ -561,16 +562,6 @@ fn get_annotation_identifier<'a>(annotation: Node<'a>, content: &'a str) -> Opti
         child_index += 1;
     }
     None
-}
-
-/// Returns true when an annotation exports the variable it annotates. The
-/// `@export_group` and `@export_subgroup` annotations only mark groups of
-/// following properties and must not make an unannotated variable look
-/// exported.
-fn is_inline_export_annotation(annotation_name: &str) -> bool {
-    annotation_name.starts_with("export")
-        && annotation_name != "export_group"
-        && annotation_name != "export_subgroup"
 }
 
 /// Extract the "name" field child from a declaration node.

@@ -21,6 +21,7 @@ pub mod node_kind;
 pub mod parser;
 pub mod renderer;
 pub mod reorder;
+pub mod shared_utils;
 pub mod verify_structure;
 
 pub use renderer::{PrinterConfiguration, RenderElement};
