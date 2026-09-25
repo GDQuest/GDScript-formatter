@@ -4,6 +4,10 @@ This file documents the changes made to the formatter with each release.
 
 ## Unreleased
 
+### Added
+
+- Add `--debug`/`-d` to print the formatter configuration applied to a given file (#362)
+
 ### Fixed
 
 - Fix `@export_category` annotations sometimes wrapping with variables on a single line (#358)

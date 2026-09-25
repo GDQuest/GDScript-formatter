@@ -23,7 +23,8 @@ const HELP_FORMATTER: &str = "\
 	  -x, --exclude <PATH>                       Exclude one file or directory (you can repeat this option multiple times)
 	      --verify-structure                     Verify formatted output has the same structure as the input
 	      --stdout                               Write to stdout instead of overwriting files
-	  -v, --verbose                              Print one status line for each processed file
+	-v, --verbose                              Print one status line for each processed file
+	-d, --debug                                Print effective settings for each processed file
 	      --use-spaces                           Use spaces instead of tabs for indentation
 	      --indent-size <NUM>                    Spaces per indent level (default: 4)
 	      --reorder-code                         Reorder code to match the style guide
@@ -78,6 +79,8 @@ pub enum Command {
         do_print_to_stdout: bool,
         /// If true, prints one status line for each processed file.
         use_verbose_output: bool,
+        /// If true, prints the effective formatter settings for each processed file.
+        use_debug_output: bool,
         /// If true, only checks if the files are formatted, without modifying
         /// them. Returns error code ERROR_CODE_NOT_FORMATTED if any of the input
         /// files are not formatted.
@@ -134,6 +137,7 @@ pub fn parse_args() -> CliArguments {
     let mut excluded_paths: Vec<PathBuf> = Vec::new();
     let mut format_do_print_to_stdout = false;
     let mut format_use_verbose_output = false;
+    let mut format_use_debug_output = false;
     let mut format_do_check_formatted_only = false;
     let mut format_use_spaces: Option<bool> = None;
     let mut format_indent_size: Option<usize> = None;
@@ -204,6 +208,10 @@ pub fn parse_args() -> CliArguments {
                     "verbose" => {
                         require_no_value(assigned_value, "--verbose");
                         format_use_verbose_output = true;
+                    }
+                    "debug" => {
+                        require_no_value(assigned_value, "--debug");
+                        format_use_debug_output = true;
                     }
                     "check" => {
                         require_no_value(assigned_value, "--check");
@@ -390,6 +398,12 @@ pub fn parse_args() -> CliArguments {
                         }
                         format_use_verbose_output = true;
                     }
+                    'd' => {
+                        if matches!(active_command, ActiveCommand::Lint) {
+                            print_error_invalid_argument("unexpected argument '-d'");
+                        }
+                        format_use_debug_output = true;
+                    }
                     _ => print_error_invalid_argument(&format!(
                         "unexpected argument '-{}'",
                         flag_char
@@ -409,6 +423,7 @@ pub fn parse_args() -> CliArguments {
             command: Command::Format {
                 do_print_to_stdout: format_do_print_to_stdout,
                 use_verbose_output: format_use_verbose_output,
+                use_debug_output: format_use_debug_output,
                 do_check_formatted_only: format_do_check_formatted_only,
                 use_spaces: format_use_spaces,
                 indent_size: format_indent_size,

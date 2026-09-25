@@ -118,6 +118,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let Command::Format {
         do_print_to_stdout,
         use_verbose_output,
+        use_debug_output,
         do_check_formatted_only,
         use_spaces,
         indent_size,
@@ -157,17 +158,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .read_to_string(&mut input_content)
             .map_err(|error| format!("Failed to read from stdin: {}", error))?;
 
-        let mut stdin_config = config.clone();
         let current_directory = env::current_dir().expect("Failed to get current directory");
         // When running from stdin users would still like to apply editorconfig
         // settings. For the most part, you'd use a section like `[*.gd]`
         // matching GDScript files. we fake running the formatter on a `.gd`
         // file in the current directory to get user settings to apply.
-        config_apply_editorconfig_then_cli_overrides(
-            &mut stdin_config,
-            &current_directory.join("stdin.gd"),
-            config_overrides,
-        );
+        let stdin_path = current_directory.join("stdin.gd");
+        let stdin_config =
+            get_final_config_applied_to_script(&config, &stdin_path, config_overrides);
+        if use_debug_output {
+            eprintln!(
+                "{}",
+                get_formatted_configuration_as_string(&stdin_path, &stdin_config)
+            );
+        }
         let formatted_content = match format_gdscript(&input_content, &stdin_config) {
             Ok(formatted_content) => formatted_content,
             Err(FormatErrors::ParseErrors) => {
@@ -212,6 +216,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if total_files == 1 { "" } else { "s" }
         );
         let _ = io::stdout().flush();
+    }
+
+    if use_debug_output {
+        for file_path in &input_gdscript_files {
+            let file_config =
+                get_final_config_applied_to_script(&config, file_path, config_overrides);
+            eprintln!(
+                "{}",
+                get_formatted_configuration_as_string(file_path, &file_config)
+            );
+        }
     }
 
     let mut sorted_outputs: Vec<Result<FormatterFileProcessingResult, String>> =
@@ -393,8 +408,7 @@ fn format_one_file(
 
     // We need to clone that config because files in nested directories can
     // match different EditorConfig files and rules.
-    let mut file_config = config.clone();
-    config_apply_editorconfig_then_cli_overrides(&mut file_config, file_path, config_overrides);
+    let file_config = get_final_config_applied_to_script(config, file_path, config_overrides);
     match format_gdscript_with_buffers(&input_content, &file_config, render_elements, output) {
         Ok(()) => {}
         Err(FormatErrors::ParseErrors) => {
@@ -422,36 +436,73 @@ fn format_one_file(
     }))
 }
 
-/// Applies project editorconfig settings first and CLI settings second.
+/// Builds the final configuration applied to one file by applying the
+/// editorconfig settings first and CLI settings second.
 ///
 /// The override fields are `Option`s because `None` means that the user did
 /// not pass that flag. Without this distinction, a CLI default such as an
 /// indentation size of four would look like an explicit request and would
 /// incorrectly override `.editorconfig`.
-fn config_apply_editorconfig_then_cli_overrides(
-    config: &mut FormatterConfiguration,
-    config_path: &Path,
+fn get_final_config_applied_to_script(
+    config: &FormatterConfiguration,
+    file_path: &Path,
     config_overrides: FormatterConfigOverrides,
-) {
-    gdscript_formatter::editorconfig::apply_editorconfig_to_formatter_config(config, config_path);
+) -> FormatterConfiguration {
+    let mut file_config = config.clone();
+    gdscript_formatter::editorconfig::apply_editorconfig_to_formatter_config(
+        &mut file_config,
+        file_path,
+    );
     if let Some(use_spaces) = config_overrides.use_spaces {
-        config.printer.use_spaces = use_spaces;
+        file_config.printer.use_spaces = use_spaces;
     }
     if let Some(indent_size) = config_overrides.indent_size {
-        config.printer.indent_size = indent_size;
+        file_config.printer.indent_size = indent_size;
     }
     if let Some(max_line_length) = config_overrides.max_line_length {
-        config.printer.max_line_length = max_line_length;
+        file_config.printer.max_line_length = max_line_length;
     }
     if let Some(blank_lines_around_definitions) = config_overrides.blank_lines_around_definitions {
-        config.blank_lines_around_definitions = blank_lines_around_definitions;
+        file_config.blank_lines_around_definitions = blank_lines_around_definitions;
     }
     if let Some(continuation_indent_level) = config_overrides.continuation_indent_level {
-        config.printer.continuation_indent_level = continuation_indent_level;
+        file_config.printer.continuation_indent_level = continuation_indent_level;
     }
     if let Some(quote_style) = config_overrides.quote_style {
-        config.quote_style = quote_style;
+        file_config.quote_style = quote_style;
     }
+    file_config
+}
+
+fn get_formatted_configuration_as_string(
+    file_path: &Path,
+    config: &FormatterConfiguration,
+) -> String {
+    let indentation_style = if config.printer.use_spaces {
+        format!("spaces (size {})", config.printer.indent_size)
+    } else {
+        "tabs".to_string()
+    };
+    let quote_style = match config.quote_style {
+        QuoteStyle::Preserve => "preserve",
+        QuoteStyle::Single => "single",
+        QuoteStyle::Double => "double",
+    };
+
+    format!(
+        "Debug: {}\n  max_line_length: {}\n  indentation: {}\n  blank_lines_around_definitions: {}\n  continuation_indent_level: {}\n  quote_style: {}\n  insert_final_newline: {}\n  trim_trailing_whitespace: {}\n  indent_blank_lines: {}\n  reorder_code: {}\n  verify_structure: {}",
+        file_path.display(),
+        config.printer.max_line_length,
+        indentation_style,
+        config.blank_lines_around_definitions,
+        config.printer.continuation_indent_level,
+        quote_style,
+        config.printer.insert_final_newline,
+        config.printer.trim_trailing_whitespace,
+        config.printer.indent_blank_lines,
+        config.reorder_code,
+        config.safe,
+    )
 }
 
 /// Formats files concurrently but preserves their original order when
