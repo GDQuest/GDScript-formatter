@@ -34,6 +34,13 @@ fn get_max_line_length_from_properties(properties: &Properties) -> Option<usize>
     }
 }
 
+fn get_indent_size_from_properties(properties: &Properties) -> Option<usize> {
+    match properties.get::<IndentSize>() {
+        Ok(IndentSize::Value(size)) if size > 0 => Some(size),
+        _ => None,
+    }
+}
+
 pub fn apply_editorconfig_to_formatter_config(
     config: &mut FormatterConfiguration,
     editorconfig_file_path: &Path,
@@ -47,10 +54,8 @@ pub fn apply_editorconfig_to_formatter_config(
     } else if let Ok(IndentStyle::Tabs) = properties.get::<IndentStyle>() {
         config.printer.use_spaces = false;
     }
-    if let Ok(IndentSize::Value(size)) = properties.get::<IndentSize>() {
-        if size > 0 {
-            config.printer.indent_size = size;
-        }
+    if let Some(indent_size) = get_indent_size_from_properties(&properties) {
+        config.printer.indent_size = indent_size;
     }
 
     if let Some(max_line_length) = get_max_line_length_from_properties(&properties) {
@@ -110,5 +115,8 @@ pub fn apply_editorconfig_to_linter_config(
     };
     if let Some(max_line_length) = get_max_line_length_from_properties(&properties) {
         config.max_line_length = max_line_length;
+    }
+    if let Some(indent_size) = get_indent_size_from_properties(&properties) {
+        config.indent_size = indent_size;
     }
 }

@@ -1,6 +1,7 @@
 use crate::linter::rules::Rule;
 use crate::linter::{LintIssue, LintSeverity, LinterConfig};
 use crate::node_kind::GDScriptNodeKind;
+use crate::shared_utils::measure_line_length_until_line_return;
 
 pub struct MaxLineLengthRule {
     config: LinterConfig,
@@ -19,9 +20,8 @@ impl Rule for MaxLineLengthRule {
         let mut issues = Vec::new();
 
         for (line_number, line) in source_code.lines().enumerate() {
-            let display_width = line
-                .chars()
-                .fold(0, |acc, ch| if ch == '\t' { acc + 4 } else { acc + 1 });
+            let display_width =
+                measure_line_length_until_line_return(line, self.config.indent_size);
 
             if display_width > self.config.max_line_length {
                 issues.push(LintIssue::new(

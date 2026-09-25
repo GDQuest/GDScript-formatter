@@ -101,18 +101,49 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let linter_config = LinterConfig {
             disabled_rules,
             max_line_length: max_line_length.unwrap_or(100),
+            ..LinterConfig::default()
         };
 
-        let input_gdscript_files = find_gdscript_files(
-            &parsed_cli_args.input_file_paths,
-            &parsed_cli_args.excluded_paths,
-        )?;
-        return run_linter(
-            &input_gdscript_files,
-            linter_config,
-            max_line_length,
-            do_pretty_print,
-        );
+        let is_stdin_requested = parsed_cli_args.input_file_paths.is_empty()
+            || (parsed_cli_args.input_file_paths.len() == 1
+                && parsed_cli_args.input_file_paths[0] == Path::new("-"));
+        if is_stdin_requested && !io::stdin().is_terminal() {
+            let mut input_content = String::new();
+            io::stdin()
+                .read_to_string(&mut input_content)
+                .map_err(|error| format!("Failed to read from stdin: {}", error))?;
+            let stdin_path = env::current_dir()?.join("stdin.gd");
+            let mut stdin_config = linter_config;
+            gdscript_formatter::editorconfig::apply_editorconfig_to_linter_config(
+                &mut stdin_config,
+                &stdin_path,
+            );
+            if let Some(max_line_length) = max_line_length {
+                stdin_config.max_line_length = max_line_length;
+            }
+
+            let mut linter = gdscript_formatter::linter::GDScriptLinter::new(stdin_config)?;
+            let issues = linter.lint(&input_content, "stdin")?;
+            let has_issues = !issues.is_empty();
+            for issue in issues {
+                println!("{}", issue.format("stdin"));
+            }
+            if has_issues {
+                std::process::exit(1);
+            }
+            return Ok(());
+        } else {
+            let input_gdscript_files = find_gdscript_files(
+                &parsed_cli_args.input_file_paths,
+                &parsed_cli_args.excluded_paths,
+            )?;
+            return run_linter(
+                &input_gdscript_files,
+                linter_config,
+                max_line_length,
+                do_pretty_print,
+            );
+        }
     }
 
     let Command::Format {

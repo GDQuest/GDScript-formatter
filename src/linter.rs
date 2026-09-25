@@ -64,6 +64,7 @@ impl LintIssue {
 pub struct LinterConfig {
     pub disabled_rules: HashSet<String>,
     pub max_line_length: usize,
+    pub indent_size: usize,
 }
 
 impl Default for LinterConfig {
@@ -71,6 +72,7 @@ impl Default for LinterConfig {
         Self {
             disabled_rules: HashSet::new(),
             max_line_length: 100,
+            indent_size: 4,
         }
     }
 }

@@ -13,6 +13,8 @@
 //! Wadler's paper for reference:
 //! https://homepages.inf.ed.ac.uk/wadler/papers/prettier/prettier.pdf
 
+use crate::shared_utils::measure_line_length_until_line_return;
+
 /// A byte range in the original source text. Both fields are byte offsets and
 /// end_byte is exclusive.
 pub struct RangeSourceBytes {
@@ -414,19 +416,19 @@ impl<'a> Printer<'a> {
         while index < end {
             match &self.render_elements[index] {
                 RenderElement::Text { range } | RenderElement::UnformattedSource { range } => {
-                    if !self.measure_text(slice(self.source, range), column) {
+                    if !self.try_add_text_width(slice(self.source, range), column) {
                         return false;
                     }
                     index += 1;
                 }
                 RenderElement::TextStatic(text) => {
-                    if !self.measure_text(text, column) {
+                    if !self.try_add_text_width(text, column) {
                         return false;
                     }
                     index += 1;
                 }
                 RenderElement::TextProducedByFormatter(text) => {
-                    if !self.measure_text(text, column) {
+                    if !self.try_add_text_width(text, column) {
                         return false;
                     }
                     index += 1;
@@ -514,19 +516,19 @@ impl<'a> Printer<'a> {
         while index < end {
             match &self.render_elements[index] {
                 RenderElement::Text { range } | RenderElement::UnformattedSource { range } => {
-                    if !self.measure_text(slice(self.source, range), column) {
+                    if !self.try_add_text_width(slice(self.source, range), column) {
                         return false;
                     }
                     index += 1;
                 }
                 RenderElement::TextStatic(text) => {
-                    if !self.measure_text(text, column) {
+                    if !self.try_add_text_width(text, column) {
                         return false;
                     }
                     index += 1;
                 }
                 RenderElement::TextProducedByFormatter(text) => {
-                    if !self.measure_text(text, column) {
+                    if !self.try_add_text_width(text, column) {
                         return false;
                     }
                     index += 1;
@@ -570,17 +572,12 @@ impl<'a> Printer<'a> {
         true
     }
 
-    fn measure_text(&self, text: &str, column: &mut usize) -> bool {
-        for c in text.chars() {
-            if c == '\n' {
-                return false;
-            }
-            if c == '\t' {
-                *column = column.saturating_add(self.config.indent_size);
-            } else {
-                *column = column.saturating_add(1);
-            }
+    fn try_add_text_width(&self, text: &str, column: &mut usize) -> bool {
+        if text.contains('\n') {
+            return false;
         }
+        let width = measure_line_length_until_line_return(text, self.config.indent_size);
+        *column = column.saturating_add(width);
         true
     }
 
