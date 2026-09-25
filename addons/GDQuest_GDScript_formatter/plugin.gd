@@ -22,8 +22,10 @@ const SETTING_REORDER_CODE = "reorder_code"
 const SETTING_SAFE_MODE = "safe_mode"
 const SETTING_FORMATTER_PATH = "formatter_path"
 const SETTING_LINT_ON_SAVE = "lint_on_save"
+const SETTING_MAX_LINE_LENGTH = "max_line_length"
 const SETTING_LINT_LINE_LENGTH = "lint_line_length"
 const SETTING_LINT_IGNORED_RULES = "lint_ignored_rules"
+const DEFAULT_MAX_LINE_LENGTH = 100
 # Directories to ignore when Format on Save is enabled
 const SETTING_IGNORED_DIRECTORIES = "format_on_save_ignored_directories"
 
@@ -65,7 +67,7 @@ var DEFAULT_SETTINGS = {
 	SETTING_FORMAT_MODE: FormatMode.NORMAL,
 	SETTING_FORMATTER_PATH: "",
 	SETTING_LINT_ON_SAVE: false,
-	SETTING_LINT_LINE_LENGTH: 100,
+	SETTING_MAX_LINE_LENGTH: DEFAULT_MAX_LINE_LENGTH,
 	SETTING_LINT_IGNORED_RULES: "",
 	SETTING_IGNORED_DIRECTORIES: PackedStringArray(["addons/"]),
 }
@@ -99,10 +101,74 @@ const FORMATTER_BINARY_NAME = "gdscript-formatter"
 
 
 func _init() -> void:
-	migrate_format_mode_setting()
+	settings_migrate_old()
+	settings_register_default_and_new()
+
+
+## Migrates settings from older versions of the add-on.
+func settings_migrate_old() -> void:
+	var editor_settings := EditorInterface.get_editor_settings()
+
+	# Convert the old independent settings to the mutually exclusive format mode.
+	# The legacy safe mode takes priority because it is the least destructive option.
+	if not has_editor_setting(SETTING_FORMAT_MODE):
+		# Inferring a version number from the old settings; editor settings does not
+		# give us a neat way to version our settings so we do it manually. It's just
+		# to keep track of migrations.
+		var version := -1
+		if has_editor_setting(SETTING_REORDER_CODE) or has_editor_setting(SETTING_SAFE_MODE):
+			version = 1
+
+		# Upgrade to version 2; that's when we merged safe mode and reorder code
+		# into a single format mode (because they're mutually exclusive).
+		if version == 1:
+			var format_mode := FormatMode.NORMAL
+			if (
+				has_editor_setting(SETTING_SAFE_MODE)
+				and get_editor_setting(SETTING_SAFE_MODE) as bool
+			):
+				format_mode = FormatMode.VERIFY_STRUCTURE
+			elif (
+				has_editor_setting(SETTING_REORDER_CODE)
+				and get_editor_setting(SETTING_REORDER_CODE) as bool
+			):
+				format_mode = FormatMode.REORDER_CODE
+
+			set_editor_setting(SETTING_FORMAT_MODE, format_mode)
+
+			# Remove the old settings so users do not see two conflicting configurations.
+			for setting_name: String in [SETTING_REORDER_CODE, SETTING_SAFE_MODE]:
+				if has_editor_setting(setting_name):
+					editor_settings.erase(EDITOR_SETTINGS_CATEGORY + setting_name)
+
+	# Rename the setting that was originally used only for linting. We now use
+	# this max line length setting for both linting and formatting.
+	if has_editor_setting(SETTING_LINT_LINE_LENGTH):
+		if not has_editor_setting(SETTING_MAX_LINE_LENGTH):
+			set_editor_setting(
+				SETTING_MAX_LINE_LENGTH,
+				get_editor_setting(SETTING_LINT_LINE_LENGTH),
+			)
+
+		editor_settings.erase(EDITOR_SETTINGS_CATEGORY + SETTING_LINT_LINE_LENGTH)
+
+
+## Registers and initializes the add-on's new and missing editor settings.
+func settings_register_default_and_new() -> void:
 	if not has_editor_setting(SETTING_FORMAT_MODE):
 		set_editor_setting(SETTING_FORMAT_MODE, DEFAULT_SETTINGS[SETTING_FORMAT_MODE])
-	register_format_mode_setting()
+
+	var editor_settings := EditorInterface.get_editor_settings()
+	var setting_name := EDITOR_SETTINGS_CATEGORY + SETTING_FORMAT_MODE
+	editor_settings.add_property_info(
+		{
+			"name": setting_name,
+			"type": TYPE_INT,
+			"hint": PROPERTY_HINT_ENUM,
+			"hint_string": "Normal,Reorder code,Verify structure",
+		}
+	)
+	editor_settings.set_initial_value(setting_name, DEFAULT_SETTINGS[SETTING_FORMAT_MODE], false)
 
 	for setting: String in DEFAULT_SETTINGS.keys():
 		if setting == SETTING_FORMAT_MODE:
@@ -123,56 +189,6 @@ func _init() -> void:
 		shortcut.events.push_back(default_shortcut)
 
 		set_editor_setting(SETTING_SHORTCUT, shortcut)
-
-
-func register_format_mode_setting() -> void:
-	var editor_settings := EditorInterface.get_editor_settings()
-	var setting_name := EDITOR_SETTINGS_CATEGORY + SETTING_FORMAT_MODE
-	editor_settings.add_property_info(
-		{
-			"name": setting_name,
-			"type": TYPE_INT,
-			"hint": PROPERTY_HINT_ENUM,
-			"hint_string": "Normal,Reorder code,Verify structure",
-		}
-	)
-	editor_settings.set_initial_value(setting_name, DEFAULT_SETTINGS[SETTING_FORMAT_MODE], false)
-
-
-## Converts the old independent settings to the mutually exclusive format mode.
-## The legacy safe mode takes priority because it is the least destructive option.
-func migrate_format_mode_setting() -> void:
-	if has_editor_setting(SETTING_FORMAT_MODE):
-		return
-
-	# Inferring a version number from the old settings; editor settings does not
-	# give us a neat way to version our settings so we do it manually. It's just
-	# to keep track of migrations.
-	var version := -1
-	if has_editor_setting(SETTING_REORDER_CODE) or has_editor_setting(SETTING_SAFE_MODE):
-		version = 1
-
-	# Upgrade to version 2; that's when we merged safe mode and reorder code
-	# into a single format mode (because they're mutually exclusive).
-	if version == 1:
-		var format_mode := FormatMode.NORMAL
-		if has_editor_setting(SETTING_SAFE_MODE) and get_editor_setting(SETTING_SAFE_MODE) as bool:
-			format_mode = FormatMode.VERIFY_STRUCTURE
-		elif (
-			has_editor_setting(SETTING_REORDER_CODE)
-			and get_editor_setting(SETTING_REORDER_CODE) as bool
-		):
-			format_mode = FormatMode.REORDER_CODE
-
-		set_editor_setting(SETTING_FORMAT_MODE, format_mode)
-
-		# Remove the old settings so users do not see two conflicting configurations.
-		var editor_settings := EditorInterface.get_editor_settings()
-		for setting_name: String in [SETTING_REORDER_CODE, SETTING_SAFE_MODE]:
-			if has_editor_setting(setting_name):
-				editor_settings.erase(EDITOR_SETTINGS_CATEGORY + setting_name)
-
-		version = 2
 
 
 func _enable_plugin() -> void:
@@ -263,7 +279,10 @@ func _enter_tree() -> void:
 
 
 func _update_quick_setup_settings_display() -> void:
-	for setting: QuickSetupWindow.Settings in [QuickSetupWindow.Settings.FORMAT_ON_SAVE, QuickSetupWindow.Settings.LINT_ON_SAVE]:
+	for setting: QuickSetupWindow.Settings in [
+		QuickSetupWindow.Settings.FORMAT_ON_SAVE,
+		QuickSetupWindow.Settings.LINT_ON_SAVE,
+	]:
 		var state = get_editor_setting(_get_quick_setup_setting_name(setting))
 		quick_setup_window.set_setting_state(setting, state)
 
@@ -767,6 +786,12 @@ func get_editor_setting(setting_name: String) -> Variant:
 	return DEFAULT_SETTINGS[setting_name]
 
 
+## Returns whether the user configured a non-default line length in Godot.
+## When it is still the default, the formatter can apply .editorconfig instead.
+func has_custom_max_line_length_setting() -> bool:
+	return get_editor_setting(SETTING_MAX_LINE_LENGTH) as int != DEFAULT_MAX_LINE_LENGTH
+
+
 func set_editor_setting(setting_name: String, value: Variant) -> void:
 	var editor_settings := EditorInterface.get_editor_settings()
 	var full_setting_key := EDITOR_SETTINGS_CATEGORY + setting_name
@@ -901,7 +926,14 @@ func format_code(
 		source_content = source_file.get_as_text()
 		source_file.close()
 
-	var path_temporary_file := OS.get_temp_dir().path_join(
+	# Keep the temporary file close to the source so the formatter can discover
+	# the same .editorconfig files it would find when run from the command line.
+	# Unsaved scripts have no source directory, so use the project root instead.
+	var temporary_file_directory := ProjectSettings.globalize_path("res://")
+	if not script_path.is_empty():
+		temporary_file_directory = ProjectSettings.globalize_path(script_path).get_base_dir()
+
+	var path_temporary_file := temporary_file_directory.path_join(
 		"gdscript_formatter_%d.gd" % Time.get_ticks_msec()
 	)
 	var temporary_file := FileAccess.open(path_temporary_file, FileAccess.WRITE)
@@ -912,6 +944,13 @@ func format_code(
 	temporary_file.close()
 
 	var formatter_arguments := PackedStringArray()
+	# A non-default Godot setting overrides .editorconfig. Leave the argument out
+	# for the default so the formatter can use .editorconfig's max_line_length.
+	if has_custom_max_line_length_setting():
+		var max_line_length := get_editor_setting(SETTING_MAX_LINE_LENGTH) as int
+		formatter_arguments.push_back("--max-line-length")
+		formatter_arguments.push_back(str(max_line_length))
+
 	if get_editor_setting(SETTING_USE_SPACES):
 		formatter_arguments.push_back("--use-spaces")
 		formatter_arguments.push_back("--indent-size=%d" % get_editor_setting(SETTING_INDENT_SIZE))
@@ -976,9 +1015,12 @@ func lint_code(script: GDScript) -> Array:
 	var output: Array = []
 	var formatter_arguments: Array = ["lint", ProjectSettings.globalize_path(script_path)]
 
-	var max_line_length := get_editor_setting(SETTING_LINT_LINE_LENGTH) as int
-	formatter_arguments.append("--max-line-length")
-	formatter_arguments.append(str(max_line_length))
+	# Match formatting: a non-default Godot setting overrides .editorconfig;
+	# otherwise let the formatter read max_line_length from .editorconfig.
+	if has_custom_max_line_length_setting():
+		var max_line_length := get_editor_setting(SETTING_MAX_LINE_LENGTH) as int
+		formatter_arguments.append("--max-line-length")
+		formatter_arguments.append(str(max_line_length))
 
 	var ignored_rules := get_editor_setting(SETTING_LINT_IGNORED_RULES) as String
 	if not ignored_rules.is_empty():

@@ -7,11 +7,13 @@ This file documents the changes made to the formatter with each release.
 ### Added
 
 - Add `--debug`/`-d` to print the formatter configuration applied to a given file (#362)
+- Godot addon: Add max line length setting for formatting (merged the old linter max line length setting with this) (#316)
 
 ### Fixed
 
 - Fix `@export_category` annotations sometimes wrapping with variables on a single line (#358)
 - Fix export annotations not being indempotent when followed by variable with inline setter or getter (#361)
+- Godot addon: Fix editor config not getting applied (#315, #316)
 
 ## Release 0.26.2 (2026-09-20)
 
