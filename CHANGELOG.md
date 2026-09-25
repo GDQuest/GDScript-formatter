@@ -7,6 +7,7 @@ This file documents the changes made to the formatter with each release.
 ### Fixed
 
 - Fix `@export_category` annotations sometimes wrapping with variables on a single line (#358)
+- Fix export annotations not being indempotent when followed by variable with inline setter or getter (#361)
 
 ## Release 0.26.2 (2026-09-20)
 

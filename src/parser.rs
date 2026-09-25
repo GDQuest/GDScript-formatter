@@ -16,6 +16,7 @@ pub struct ParseInput<'src> {
     pub blank_lines_around_definitions: u16,
     /// Extra indent level for continuation lines (default 2).
     pub continuation_indent_level: u16,
+    pub max_line_length: usize,
     pub quote_style: QuoteStyle,
     /// Byte ranges where formatting is disabled by `# fmt: off` / `# fmt: on`
     /// marker comments. Sorted, non-overlapping.
@@ -246,6 +247,7 @@ impl<'src> ParseInput<'src> {
             reorder_code: config.reorder_code,
             blank_lines_around_definitions: config.blank_lines_around_definitions,
             continuation_indent_level: config.printer.continuation_indent_level,
+            max_line_length: config.printer.max_line_length,
             quote_style: config.quote_style,
             disabled_regions,
         })

@@ -354,9 +354,7 @@ fn process_node(context: &mut FormatterContext, node: tree_sitter::Node) {
         | GDScriptNodeKind::OnReadyVariable
             if has_inline_annotations_child(node) =>
         {
-            let group_index = begin_group(context.render_elements);
-            process_children_with_spacing(context, node);
-            finish_group(context.render_elements, group_index);
+            process_variable(context, node);
         }
         GDScriptNodeKind::SetGet => process_setget(context, node),
         GDScriptNodeKind::ParenthesizedExpression
@@ -373,6 +371,41 @@ fn process_node(context: &mut FormatterContext, node: tree_sitter::Node) {
         GDScriptNodeKind::BinaryOperator => process_binary_operator(context, node),
         GDScriptNodeKind::Condition => process_conditional_expression(context, node),
         _ => process_children_with_spacing(context, node),
+    }
+}
+
+fn process_variable(context: &mut FormatterContext<'_, '_, '_>, node: tree_sitter::Node<'_>) {
+    let header_group_index = begin_group(context.render_elements);
+    // Process the variable header up to, but not including any SetGet child.
+    let mut previously_visited_child: Option<tree_sitter::Node> = None;
+    let mut current_child_index = 0;
+    let mut found_setget_node: Option<tree_sitter::Node> = None;
+    while current_child_index < node.child_count() {
+        let Some(child) = node.child(current_child_index as u32) else {
+            current_child_index += 1;
+            continue;
+        };
+        let child_kind = GDScriptNodeKind::get_kind_from_ast_node(child);
+        if child_kind == GDScriptNodeKind::SetGet {
+            found_setget_node = Some(child);
+            break;
+        }
+        if let Some(previous_child) = previously_visited_child {
+            process_separator_between_sibling_nodes(
+                GDScriptNodeKind::Variable,
+                context.input.source,
+                &previous_child,
+                &child,
+                context.render_elements,
+            );
+        }
+        process_node(context, child);
+        previously_visited_child = Some(child);
+        current_child_index += 1;
+    }
+    finish_group(context.render_elements, header_group_index);
+    if let Some(setget) = found_setget_node {
+        process_node(context, setget);
     }
 }
 
@@ -1280,7 +1313,7 @@ fn output_pending_before_declaration(
         }
         pending_index += 1;
     }
-    let do_write_annotation_inline = pending_annotations_can_inline
+    let mut do_write_annotation_inline = pending_annotations_can_inline
         && matches!(
             declaration_kind,
             GDScriptNodeKind::Variable
@@ -1292,6 +1325,17 @@ fn output_pending_before_declaration(
             GDScriptNodeKind::get_kind_from_ast_node(*annotation) == GDScriptNodeKind::Annotation
                 && is_annotation_that_should_stay_inline(source, *annotation)
         });
+    if do_write_annotation_inline
+        && pending.last().is_some_and(|(annotation, _)| {
+            let annotation_width = source[annotation.start_byte()..annotation.end_byte()]
+                .chars()
+                .filter(|character| *character != '\n' && *character != '\r' && *character != '\t')
+                .count();
+            annotation_width > context.input.max_line_length
+        })
+    {
+        do_write_annotation_inline = false;
+    }
 
     // Walk backward from the end of pending: comments on their own line that
     // have no blank lines between them and the next declaration should come
@@ -1669,6 +1713,32 @@ fn process_container(context: &mut FormatterContext, node: tree_sitter::Node) {
         Some(begin_group(context.render_elements))
     };
 
+    /// Returns `true` if the annotation arguments should break to new lines
+    /// (because they are beyond the max line length).
+    fn should_annotation_arguments_break(
+        context: &FormatterContext,
+        node: tree_sitter::Node,
+    ) -> bool {
+        let Some(annotation) = node.parent() else {
+            return false;
+        };
+        if GDScriptNodeKind::get_kind_from_ast_node(annotation) != GDScriptNodeKind::Annotation {
+            return false;
+        }
+        // We counting the line length to determine breaking in the IR. Normally
+        // I let the renderer handle the break decisions But right now the
+        // renderer gets the IR and not the source AST and it's easier to count
+        // line length here.
+        let annotation_source =
+            &context.input.source[annotation.start_byte()..annotation.end_byte()];
+        annotation_source
+            .chars()
+            .filter(|character| *character != '\n' && *character != '\r' && *character != '\t')
+            .count()
+            > context.input.max_line_length
+    }
+    let should_break_annotation_arguments = should_annotation_arguments_break(context, node);
+
     if let Some(open) = node.child(0) {
         process_node(context, open);
     }
@@ -1922,6 +1992,12 @@ fn process_container(context: &mut FormatterContext, node: tree_sitter::Node) {
     }
 
     finish_indent(context.render_elements, indent_index);
+
+    if should_break_annotation_arguments {
+        context
+            .render_elements
+            .push(RenderElement::ForceBreakingParent);
+    }
 
     if has_comment {
         context.render_elements.push(RenderElement::HardLine);

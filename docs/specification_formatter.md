@@ -125,6 +125,16 @@ The following cases may stay multiline even when their text would fit as a singl
 - Code that includes an unavoidable hard line break, like a multiline string or a lambda with a multiline body.
 - Code inside a `# fmt: off` region.
 
+#### Export annotations
+
+With export annotations, when possible, we want to wrap them on the same line as the annotated variable. When an export annotation and variable declaration would be too long on a single line, we keep the annotation above the annotated variable:
+
+```gdscript
+@export_range(100.0, 5000.0, 0.1, "or_greater", "suffix:m")
+var maximum_distance_to_player: float = 200.0
+```
+
+
 ### 1.3. Existing line breaks do not force broken layout
 
 In the first pass of the formatter, source line breaks are not formatting instructions.
