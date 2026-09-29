@@ -3023,13 +3023,31 @@ fn process_lambda(context: &mut FormatterContext, node: tree_sitter::Node) {
         current_index += 1;
     }
 
-    let parent_is_paren = if let Some(parent_node) = node.parent() {
+    let is_lambda_in_parenthesized_expression = node.parent().is_some_and(|parent_node| {
         GDScriptNodeKind::get_kind_from_ast_node(parent_node)
             == GDScriptNodeKind::ParenthesizedExpression
-    } else {
-        false
-    };
-    if has_body && parent_is_paren {
+    });
+    // With lambdas wrapped in a parenthesized expression used in an attribute
+    // chain, for example, if you're calling bind on a standalone lambda, the
+    // official parser cannot properly parse the closing parenthesis. It has to
+    // be either tightly against the end of the lambda or on a next line at the
+    // same indent level as the last lambda statement. Example:
+    //
+    // ```
+    // var foo = (func(a):
+    //     return a.length()).bind("some value")
+    // ```
+    let is_parenthesized_lambda_in_attribute_chain = is_lambda_in_parenthesized_expression
+        && node
+            .parent()
+            .and_then(|parent| parent.parent())
+            .is_some_and(|grandparent| {
+                GDScriptNodeKind::get_kind_from_ast_node(grandparent) == GDScriptNodeKind::Attribute
+            });
+    if has_body
+        && is_lambda_in_parenthesized_expression
+        && !is_parenthesized_lambda_in_attribute_chain
+    {
         context.render_elements.push(RenderElement::HardLine);
     }
 
