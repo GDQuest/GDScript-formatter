@@ -80,7 +80,7 @@ fn has_error(node: &tree_sitter::Node) -> bool {
     let child_count = node.child_count();
     let mut index = 0;
     while index < child_count {
-        if let Some(child) = node.child(index as u32) {
+        if let Some(child) = node.child(index) {
             if has_error(&child) {
                 return true;
             }

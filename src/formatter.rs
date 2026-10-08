@@ -188,7 +188,7 @@ fn is_class_header(kind: GDScriptNodeKind) -> bool {
 fn has_own_annotations_child(node: tree_sitter::Node) -> bool {
     let mut child_index = 0;
     while child_index < node.child_count() {
-        if let Some(child) = node.child(child_index as u32)
+        if let Some(child) = node.child(child_index)
             && GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Annotations
         {
             return true;
@@ -206,7 +206,7 @@ fn has_own_annotations_child(node: tree_sitter::Node) -> bool {
 fn is_annotation_that_should_stay_inline(source: &str, annotation: tree_sitter::Node) -> bool {
     let mut child_index = 0;
     while child_index < annotation.child_count() {
-        if let Some(child) = annotation.child(child_index as u32)
+        if let Some(child) = annotation.child(child_index)
             && GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Identifier
         {
             let annotation_name = &source[child.start_byte()..child.end_byte()];
@@ -321,7 +321,7 @@ fn process_node(context: &mut FormatterContext, node: tree_sitter::Node) {
                     let mut child_index = 0;
                     while child_index < current.child_count() {
                         if current
-                            .child(child_index as u32)
+                            .child(child_index)
                             .is_some_and(|child| child.kind() == "as")
                         {
                             is_type_subscript = true;
@@ -381,7 +381,7 @@ fn process_variable(context: &mut FormatterContext<'_, '_, '_>, node: tree_sitte
     let mut current_child_index = 0;
     let mut found_setget_node: Option<tree_sitter::Node> = None;
     while current_child_index < node.child_count() {
-        let Some(child) = node.child(current_child_index as u32) else {
+        let Some(child) = node.child(current_child_index) else {
             current_child_index += 1;
             continue;
         };
@@ -412,10 +412,10 @@ fn process_variable(context: &mut FormatterContext<'_, '_, '_>, node: tree_sitte
 fn has_inline_annotations_child(node: tree_sitter::Node) -> bool {
     let mut child_index = 0;
     while child_index < node.child_count() {
-        if let Some(child) = node.child(child_index as u32)
+        if let Some(child) = node.child(child_index)
             && GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Annotations
         {
-            let Some(next_child) = node.child((child_index + 1) as u32) else {
+            let Some(next_child) = node.child(child_index + 1) else {
                 return false;
             };
             return child.end_position().row == next_child.start_position().row;
@@ -458,7 +458,7 @@ fn process_function(context: &mut FormatterContext, node: tree_sitter::Node) {
     let mut previous: Option<tree_sitter::Node> = None;
     let mut child_index = 0;
     while child_index < node.child_count() {
-        if let Some(child) = node.child(child_index as u32) {
+        if let Some(child) = node.child(child_index) {
             match classify_disabled_region_overlap(context, node, child, child_index) {
                 DisabledRegionOverlapKind::CoveredFully(disabled_run) => {
                     if child.start_byte() == disabled_run.region.start {
@@ -474,7 +474,7 @@ fn process_function(context: &mut FormatterContext, node: tree_sitter::Node) {
                         append_current_disabled_region_to_render_elements(context);
                     }
                     let last_covered_child = node
-                        .child(disabled_run.last_covered_index as u32)
+                        .child(disabled_run.last_covered_index)
                         .expect("last_covered_index came from this same node's children");
                     previous = Some(last_covered_child);
                     child_index = disabled_run.last_covered_index + 1;
@@ -581,12 +581,12 @@ fn format_string_literal(source: &str, quote_style: QuoteStyle) -> Option<String
 /// the declaration it annotates.
 fn next_declaration_after_annotations_needs_two_blank_lines(
     node: tree_sitter::Node,
-    start_index: usize,
+    start_index: u32,
 ) -> bool {
     let child_count = node.child_count();
     let mut lookahead_index = start_index;
     while lookahead_index < child_count {
-        let Some(next_child) = node.child(lookahead_index as u32) else {
+        let Some(next_child) = node.child(lookahead_index) else {
             lookahead_index += 1;
             continue;
         };
@@ -611,16 +611,12 @@ fn next_declaration_after_annotations_needs_two_blank_lines(
 ///
 /// Here the comment leads function x(), so we use the function's blank line
 /// configuration (e.g. 2 blank lines between functions by default).
-fn comment_block_leads_definition(
-    source: &str,
-    node: tree_sitter::Node,
-    start_index: usize,
-) -> bool {
+fn comment_block_leads_definition(source: &str, node: tree_sitter::Node, start_index: u32) -> bool {
     let child_count = node.child_count();
     let mut comment_scan_index = start_index;
     let mut last_comment_end: Option<usize> = None;
     while comment_scan_index < child_count {
-        let Some(comment_scan_child) = node.child(comment_scan_index as u32) else {
+        let Some(comment_scan_child) = node.child(comment_scan_index) else {
             comment_scan_index += 1;
             continue;
         };
@@ -665,14 +661,14 @@ fn comment_block_leads_definition(
 fn previous_comment_block_follows_definition(
     source: &str,
     node: tree_sitter::Node,
-    start_index: usize,
+    start_index: u32,
 ) -> bool {
     if start_index == 0 {
         return false;
     }
 
     let mut first_comment_index = start_index - 1;
-    let Some(mut first_comment) = node.child(first_comment_index as u32) else {
+    let Some(mut first_comment) = node.child(first_comment_index) else {
         return false;
     };
     if GDScriptNodeKind::get_kind_from_ast_node(first_comment) != GDScriptNodeKind::Comment {
@@ -680,7 +676,7 @@ fn previous_comment_block_follows_definition(
     }
 
     while first_comment_index > 0 {
-        let Some(previous_comment) = node.child((first_comment_index - 1) as u32) else {
+        let Some(previous_comment) = node.child(first_comment_index - 1) else {
             break;
         };
         if GDScriptNodeKind::get_kind_from_ast_node(previous_comment) != GDScriptNodeKind::Comment
@@ -699,7 +695,7 @@ fn previous_comment_block_follows_definition(
     if first_comment_index == 0 {
         return false;
     }
-    let Some(previous_declaration) = node.child((first_comment_index - 1) as u32) else {
+    let Some(previous_declaration) = node.child(first_comment_index - 1) else {
         return false;
     };
     needs_two_blank_lines(GDScriptNodeKind::get_kind_from_ast_node(
@@ -730,7 +726,7 @@ fn process_body(
     let mut statement_has_inline_comment = false;
 
     while current_index < child_count {
-        let Some(child) = node.child(current_index as u32) else {
+        let Some(child) = node.child(current_index) else {
             current_index += 1;
             continue;
         };
@@ -755,7 +751,7 @@ fn process_body(
                     append_current_disabled_region_to_render_elements(context);
                 }
                 let last_covered_child = node
-                    .child(disabled_run.last_covered_index as u32)
+                    .child(disabled_run.last_covered_index)
                     .expect("last_covered_index came from this same node's children");
                 last_processed_child_end_byte = Some(last_covered_child.end_byte());
                 last_processed_child_kind =
@@ -955,7 +951,7 @@ fn push_separator_for_newline_count(
 struct DisabledRegionNodeSpan {
     region: RegionWithDisabledFormatting,
     /// The index of the last sibling AST node covered by this region.
-    last_covered_index: usize,
+    last_covered_index: u32,
 }
 
 /// Describes the three ways a child can relate to a disabled region, as seen by whichever
@@ -1008,7 +1004,7 @@ fn classify_disabled_region_overlap(
     context: &mut FormatterContext,
     node: tree_sitter::Node,
     first_child: tree_sitter::Node,
-    first_child_index: usize,
+    first_child_index: u32,
 ) -> DisabledRegionOverlapKind {
     loop {
         let Some(region) = context
@@ -1047,7 +1043,7 @@ fn classify_disabled_region_overlap(
     let mut last_covered_index = first_child_index;
     let mut scan_index = first_child_index + 1;
     while scan_index < child_count {
-        let Some(next_child) = node.child(scan_index as u32) else {
+        let Some(next_child) = node.child(scan_index) else {
             scan_index += 1;
             continue;
         };
@@ -1094,7 +1090,7 @@ fn process_source(context: &mut FormatterContext, node: tree_sitter::Node) {
     let mut pending: Vec<(tree_sitter::Node, usize)> = Vec::new();
 
     while current_index < child_count {
-        let Some(child) = node.child(current_index as u32) else {
+        let Some(child) = node.child(current_index) else {
             current_index += 1;
             continue;
         };
@@ -1115,7 +1111,7 @@ fn process_source(context: &mut FormatterContext, node: tree_sitter::Node) {
                     append_current_disabled_region_to_render_elements(context);
                 }
                 let last_covered_child = node
-                    .child(disabled_run.last_covered_index as u32)
+                    .child(disabled_run.last_covered_index)
                     .expect("last_covered_index came from this same node's children");
                 spacing_context.last_output_end = Some(last_covered_child.end_byte());
                 spacing_context.last_declaration_end = Some(last_covered_child.end_byte());
@@ -1658,7 +1654,7 @@ fn process_setget(context: &mut FormatterContext, node: tree_sitter::Node) {
         let mut inner = 1;
         let mut previous: Option<tree_sitter::Node> = None;
         while inner < child_count {
-            if let Some(inner_child) = node.child(inner as u32) {
+            if let Some(inner_child) = node.child(inner) {
                 if let Some(ref previous_child) = previous {
                     process_separator_between_sibling_nodes(
                         GDScriptNodeKind::SetGet,
@@ -1762,7 +1758,7 @@ fn process_container(context: &mut FormatterContext, node: tree_sitter::Node) {
     let mut previous: Option<tree_sitter::Node> = None;
     let mut skip_next_separator = false;
     while index < child_count - 1 {
-        if let Some(child) = node.child(index as u32) {
+        if let Some(child) = node.child(index) {
             match classify_disabled_region_overlap(context, node, child, index) {
                 DisabledRegionOverlapKind::CoveredFully(disabled_run) => {
                     if child.start_byte() == disabled_run.region.start {
@@ -1780,7 +1776,7 @@ fn process_container(context: &mut FormatterContext, node: tree_sitter::Node) {
                         append_current_disabled_region_to_render_elements(context);
                     }
                     let last_covered_child = node
-                        .child(disabled_run.last_covered_index as u32)
+                        .child(disabled_run.last_covered_index)
                         .expect("last_covered_index came from this same node's children");
                     let last_covered_kind =
                         GDScriptNodeKind::get_kind_from_ast_node(last_covered_child);
@@ -1870,7 +1866,7 @@ fn process_container(context: &mut FormatterContext, node: tree_sitter::Node) {
                 let mut next_is_comment = false;
                 let mut next_same_line = false;
                 if index + 1 < child_count {
-                    if let Some(next) = node.child((index + 1) as u32) {
+                    if let Some(next) = node.child(index + 1) {
                         next_is_comment = GDScriptNodeKind::get_kind_from_ast_node(next)
                             == GDScriptNodeKind::Comment;
                         if next_is_comment {
@@ -1910,7 +1906,7 @@ fn process_container(context: &mut FormatterContext, node: tree_sitter::Node) {
         }
         let mut child_index = 0;
         while child_index < node.child_count() {
-            if let Some(child) = node.child(child_index as u32)
+            if let Some(child) = node.child(child_index)
                 && contains_lambda_node(child)
             {
                 return true;
@@ -1926,13 +1922,13 @@ fn process_container(context: &mut FormatterContext, node: tree_sitter::Node) {
     // trailing comma on a single element or more than one element. In both
     // cases we ensure there is a trailing comma in broken layout and check
     // the source for a forced line break.
-    const MIN_CHILD_COUNT_BEYOND_SINGLE_ELEMENT: usize = 4;
+    const MIN_CHILD_COUNT_BEYOND_SINGLE_ELEMENT: u32 = 4;
     let contains_more_than_one_element = child_count >= MIN_CHILD_COUNT_BEYOND_SINGLE_ELEMENT;
     let is_non_empty_enum = node_kind == GDScriptNodeKind::EnumeratorList;
     let mut contains_lambda = false;
     let mut child_index = 1;
     while child_index < child_count - 1 {
-        if let Some(child) = node.child(child_index as u32)
+        if let Some(child) = node.child(child_index)
             && contains_lambda_node(child)
         {
             contains_lambda = true;
@@ -2010,7 +2006,7 @@ fn process_container(context: &mut FormatterContext, node: tree_sitter::Node) {
             .push(RenderElement::SpaceSingleLineOnly);
     }
 
-    if let Some(close) = node.child((child_count - 1) as u32) {
+    if let Some(close) = node.child(child_count - 1) {
         process_node(context, close);
     }
 
@@ -2097,7 +2093,7 @@ fn process_expression_content(context: &mut FormatterContext, node: tree_sitter:
     context.render_elements.push(RenderElement::SoftLine);
     let indent_index = begin_indent(context.render_elements, 1);
 
-    let end = (child_count - 1) as u32;
+    let end = child_count - 1;
     let mut index: u32 = 1;
     let mut previous: Option<tree_sitter::Node> = None;
     while index < end {
@@ -2120,7 +2116,7 @@ fn process_expression_content(context: &mut FormatterContext, node: tree_sitter:
     finish_indent(context.render_elements, indent_index);
     context.render_elements.push(RenderElement::SoftLine);
 
-    if let Some(close) = node.child((child_count - 1) as u32) {
+    if let Some(close) = node.child(child_count - 1) {
         process_node(context, close);
     }
 }
@@ -2159,7 +2155,7 @@ fn binary_operator_token(node: tree_sitter::Node) -> Option<tree_sitter::Node> {
     let right = node.child_by_field_name("right")?;
     let mut child_index = 0;
     while child_index < node.child_count() {
-        if let Some(child) = node.child(child_index as u32) {
+        if let Some(child) = node.child(child_index) {
             if child.start_byte() >= left.end_byte()
                 && child.end_byte() <= right.start_byte()
                 && GDScriptNodeKind::get_kind_from_ast_node(child) != GDScriptNodeKind::Comment
@@ -2198,7 +2194,7 @@ fn process_binary_operator(context: &mut FormatterContext, node: tree_sitter::No
 
     let mut has_line_continuation = false;
     let mut current_index = 0;
-    while current_index < child_count as u32 {
+    while current_index < child_count {
         if let Some(c) = node.child(current_index) {
             if GDScriptNodeKind::get_kind_from_ast_node(c) == GDScriptNodeKind::LineContinuation {
                 has_line_continuation = true;
@@ -2243,8 +2239,8 @@ fn process_binary_operator(context: &mut FormatterContext, node: tree_sitter::No
     //
     // NOTE (Nathan): It's limited right now, maybe later we can handle mixed
     // operators somehow.
-    let mut segments = Vec::with_capacity(child_count);
-    let mut levels: Vec<tree_sitter::Node> = Vec::with_capacity(child_count);
+    let mut segments = Vec::with_capacity(child_count as usize);
+    let mut levels: Vec<tree_sitter::Node> = Vec::with_capacity(child_count as usize);
     let mut current_node = node;
     while let Some(left) = current_node.child_by_field_name("left") {
         if GDScriptNodeKind::get_kind_from_ast_node(left) == GDScriptNodeKind::BinaryOperator {
@@ -2271,7 +2267,7 @@ fn process_binary_operator(context: &mut FormatterContext, node: tree_sitter::No
     let mut has_comment = false;
     let mut child_index = 0;
     while child_index < current_node.child_count() {
-        if let Some(child) = current_node.child(child_index as u32) {
+        if let Some(child) = current_node.child(child_index) {
             if GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Comment {
                 segments.push(BinaryChainSegment {
                     operator: None,
@@ -2296,7 +2292,7 @@ fn process_binary_operator(context: &mut FormatterContext, node: tree_sitter::No
         let level = levels[level_index];
         let mut child_index = 0;
         while child_index < level.child_count() {
-            if let Some(child) = level.child(child_index as u32) {
+            if let Some(child) = level.child(child_index) {
                 if GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Comment {
                     segments.push(BinaryChainSegment {
                         operator: None,
@@ -2368,7 +2364,7 @@ fn process_binary_operator(context: &mut FormatterContext, node: tree_sitter::No
                 let mut child_index = 0;
                 let mut has_emitted_operator = false;
                 while child_index < binary_node.child_count() {
-                    if let Some(child) = binary_node.child(child_index as u32)
+                    if let Some(child) = binary_node.child(child_index)
                         && child.start_byte() >= left.end_byte()
                         && child.end_byte() <= right.start_byte()
                         && GDScriptNodeKind::get_kind_from_ast_node(child)
@@ -2476,7 +2472,7 @@ fn process_conditional_expression(context: &mut FormatterContext, node: tree_sit
 
     let mut child_index = 0;
     while child_index < child_count {
-        if let Some(child) = node.child(child_index as u32)
+        if let Some(child) = node.child(child_index)
             && GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::LineContinuation
         {
             has_line_continuation = true;
@@ -2525,7 +2521,7 @@ fn process_conditional_expression(context: &mut FormatterContext, node: tree_sit
     let mut previous_child: Option<tree_sitter::Node> = None;
     child_index = 0;
     while child_index < child_count {
-        let Some(child) = node.child(child_index as u32) else {
+        let Some(child) = node.child(child_index) else {
             child_index += 1;
             continue;
         };
@@ -2655,7 +2651,7 @@ fn process_attribute(context: &mut FormatterContext, node: tree_sitter::Node) {
     let mut dot_count = 0;
     let mut child_index = 0;
     while child_index < child_count {
-        if let Some(child) = node.child(child_index as u32)
+        if let Some(child) = node.child(child_index)
             && GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::TokenDot
         {
             dot_count += 1;
@@ -2692,7 +2688,7 @@ fn process_attribute(context: &mut FormatterContext, node: tree_sitter::Node) {
     let mut has_explicit_line_continuation = false;
     let mut child_index = 1;
     while child_index < child_count {
-        if let Some(child) = node.child(child_index as u32)
+        if let Some(child) = node.child(child_index)
             && GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::LineContinuation
         {
             has_explicit_line_continuation = true;
@@ -2712,7 +2708,7 @@ fn process_attribute(context: &mut FormatterContext, node: tree_sitter::Node) {
         context.input.continuation_indent_level
     };
     let mut attribute_index: u32 = 1;
-    while attribute_index < child_count as u32 {
+    while attribute_index < child_count {
         let child = node.child(attribute_index);
         let next = node.child(attribute_index + 1);
 
@@ -2743,7 +2739,7 @@ fn process_attribute(context: &mut FormatterContext, node: tree_sitter::Node) {
                         process_method_call_arguments(
                             context,
                             call_node,
-                            attribute_index + 2 >= child_count as u32,
+                            attribute_index + 2 >= child_count,
                         );
                     } else {
                         process_node(context, call_node);
@@ -2785,7 +2781,7 @@ fn process_attribute(context: &mut FormatterContext, node: tree_sitter::Node) {
                     process_method_call_arguments(
                         context,
                         call_node,
-                        attribute_index + 2 >= child_count as u32,
+                        attribute_index + 2 >= child_count,
                     );
                 } else {
                     process_node(context, call_node);
@@ -2812,7 +2808,7 @@ fn process_attribute(context: &mut FormatterContext, node: tree_sitter::Node) {
                 process_method_call_arguments(
                     context,
                     call_node,
-                    attribute_index + 2 >= child_count as u32,
+                    attribute_index + 2 >= child_count,
                 );
             } else {
                 process_node(context, call_node);
@@ -2870,7 +2866,7 @@ fn process_method_call_arguments(
         let mut has_lambda_argument = false;
         let mut argument_index = 1;
         while argument_index < args.child_count() - 1 {
-            if let Some(argument) = args.child(argument_index as u32)
+            if let Some(argument) = args.child(argument_index)
                 && GDScriptNodeKind::get_kind_from_ast_node(argument) == GDScriptNodeKind::Lambda
             {
                 has_lambda_argument = true;
@@ -2900,7 +2896,7 @@ fn process_method_arguments_flat(context: &mut FormatterContext, args: tree_sitt
     if let Some(open) = args.child(0) {
         process_node(context, open);
     }
-    let close_parenthesis_index = (argument_child_count - 1) as u32;
+    let close_parenthesis_index = argument_child_count - 1;
     let args_kind = GDScriptNodeKind::get_kind_from_ast_node(args);
     let has_trailing_comma = if close_parenthesis_index >= 2 {
         if let Some(node_before_close_paren) = args.child(close_parenthesis_index - 1) {
@@ -2975,7 +2971,7 @@ fn process_lambda(context: &mut FormatterContext, node: tree_sitter::Node) {
     let mut index = 0;
     let mut previous: Option<tree_sitter::Node> = None;
     while index < child_count {
-        if let Some(child) = node.child(index as u32) {
+        if let Some(child) = node.child(index) {
             let child_kind = GDScriptNodeKind::get_kind_from_ast_node(child);
             if let Some(ref previous_child) = previous {
                 let previous_kind = GDScriptNodeKind::get_kind_from_ast_node(*previous_child);
@@ -3010,7 +3006,7 @@ fn process_lambda(context: &mut FormatterContext, node: tree_sitter::Node) {
     // This also forces the surrounding collection or argument group to break.
     let mut has_body = false;
     let mut current_index: u32 = 0;
-    while current_index < child_count as u32 {
+    while current_index < child_count {
         if let Some(child) = node.child(current_index) {
             if GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Body {
                 has_body = true;
@@ -3057,11 +3053,11 @@ fn process_lambda(context: &mut FormatterContext, node: tree_sitter::Node) {
 fn is_lambda_body_ending_with_comment(lambda: tree_sitter::Node) -> bool {
     let mut child_index = 0;
     while child_index < lambda.child_count() {
-        if let Some(child) = lambda.child(child_index as u32)
+        if let Some(child) = lambda.child(child_index)
             && GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Body
         {
             return child
-                .child(child.child_count().saturating_sub(1) as u32)
+                .child(child.child_count().saturating_sub(1))
                 .is_some_and(|last_child| {
                     GDScriptNodeKind::get_kind_from_ast_node(last_child)
                         == GDScriptNodeKind::Comment
@@ -3075,7 +3071,7 @@ fn is_lambda_body_ending_with_comment(lambda: tree_sitter::Node) -> bool {
 fn lambda_ends_with_match_node(lambda: tree_sitter::Node) -> bool {
     let mut child_index = 0;
     while child_index < lambda.child_count() {
-        if let Some(child) = lambda.child(child_index as u32)
+        if let Some(child) = lambda.child(child_index)
             && GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Body
         {
             let mut last_statement = None;
@@ -3092,7 +3088,7 @@ fn lambda_ends_with_match_node(lambda: tree_sitter::Node) -> bool {
                 }
                 let mut statement_child_index = 0;
                 while statement_child_index < statement.child_count() {
-                    if let Some(statement_child) = statement.child(statement_child_index as u32)
+                    if let Some(statement_child) = statement.child(statement_child_index)
                         && GDScriptNodeKind::get_kind_from_ast_node(statement_child)
                             == GDScriptNodeKind::MatchBody
                     {
@@ -3161,7 +3157,7 @@ fn process_children_with_spacing(context: &mut FormatterContext, node: tree_sitt
     let mut index = 0;
     let mut previous: Option<tree_sitter::Node> = None;
     while index < child_count {
-        if let Some(child) = node.child(index as u32) {
+        if let Some(child) = node.child(index) {
             // This code is similar to the one in process_body(). See comments
             // there for some explanation of what this does and why it's needed.
             match classify_disabled_region_overlap(context, node, child, index) {
@@ -3180,7 +3176,7 @@ fn process_children_with_spacing(context: &mut FormatterContext, node: tree_sitt
                         append_current_disabled_region_to_render_elements(context);
                     }
                     let last_covered_child = node
-                        .child(disabled_run.last_covered_index as u32)
+                        .child(disabled_run.last_covered_index)
                         .expect("last_covered_index came from this same node's children");
                     previous = Some(last_covered_child);
                     index = disabled_run.last_covered_index + 1;
@@ -3387,7 +3383,7 @@ fn process_separator_between_sibling_nodes(
         let mut annotations_can_inline = true;
         let mut annotation_index = 0;
         while annotation_index < previous_child.child_count() {
-            if let Some(annotation) = previous_child.child(annotation_index as u32)
+            if let Some(annotation) = previous_child.child(annotation_index)
                 && !is_annotation_that_should_stay_inline(source, annotation)
             {
                 annotations_can_inline = false;
@@ -3409,7 +3405,7 @@ fn process_separator_between_sibling_nodes(
         let annotation_count = previous_child.child_count();
         let mut annotation_index = 0;
         while annotation_index < annotation_count {
-            if let Some(annotation) = previous_child.child(annotation_index as u32) {
+            if let Some(annotation) = previous_child.child(annotation_index) {
                 if annotation.child_count() > 2 {
                     render_elements.push(RenderElement::HardLine);
                     return;
@@ -3437,7 +3433,7 @@ fn process_source_reorder(context: &mut FormatterContext, node: tree_sitter::Nod
     }
     let mut previous_classification: Option<DeclarationKind> = None;
     let mut previous_is_double_spaced = false;
-    let mut previous_child_index: Option<usize> = None;
+    let mut previous_child_index: Option<u32> = None;
     let mut is_first = true;
 
     let mut item_index = 0;
@@ -3495,7 +3491,7 @@ fn process_source_reorder(context: &mut FormatterContext, node: tree_sitter::Nod
 
         // Output source children attached before the declaration.
         if item.classification != DeclarationKind::Docstring {
-            let declaration_start_byte = match node.child(item.child_index as u32) {
+            let declaration_start_byte = match node.child(item.child_index) {
                 Some(child) => child.start_byte(),
                 None => 0,
             };
@@ -3505,7 +3501,7 @@ fn process_source_reorder(context: &mut FormatterContext, node: tree_sitter::Nod
             {
                 let child_index_attached_before_declaration = item
                     .child_indices_attached_before_declaration[attached_before_declaration_index];
-                if let Some(child) = node.child(child_index_attached_before_declaration as u32) {
+                if let Some(child) = node.child(child_index_attached_before_declaration) {
                     process_node(context, child);
                     let next_child_start_byte = if attached_before_declaration_index + 1
                         < item.child_indices_attached_before_declaration.len()
@@ -3513,7 +3509,7 @@ fn process_source_reorder(context: &mut FormatterContext, node: tree_sitter::Nod
                         let next_child_index_attached_before_declaration = item
                             .child_indices_attached_before_declaration
                             [attached_before_declaration_index + 1];
-                        match node.child(next_child_index_attached_before_declaration as u32) {
+                        match node.child(next_child_index_attached_before_declaration) {
                             Some(next_child) => next_child.start_byte(),
                             None => declaration_start_byte,
                         }
@@ -3535,15 +3531,15 @@ fn process_source_reorder(context: &mut FormatterContext, node: tree_sitter::Nod
             while docstring_index < item.child_indices_attached_before_declaration.len() {
                 let docstring_child_index =
                     item.child_indices_attached_before_declaration[docstring_index];
-                if let Some(child) = node.child(docstring_child_index as u32) {
+                if let Some(child) = node.child(docstring_child_index) {
                     process_node(context, child);
                     context.render_elements.push(RenderElement::HardLine);
                 }
                 docstring_index += 1;
             }
-        } else if let Some(child) = node.child(item.child_index as u32) {
+        } else if let Some(child) = node.child(item.child_index) {
             if let Some(sub_child_index) = item.sub_child {
-                if let Some(sub) = child.child(sub_child_index as u32) {
+                if let Some(sub) = child.child(sub_child_index) {
                     process_node(context, sub);
                 }
             } else if item.split_extends {
@@ -3553,9 +3549,9 @@ fn process_source_reorder(context: &mut FormatterContext, node: tree_sitter::Nod
                 let parent_kind = GDScriptNodeKind::get_kind_from_ast_node(child);
                 let class_name_child_count = child.child_count();
                 let mut previous_node: Option<tree_sitter::Node> = None;
-                let mut child_index: usize = 0;
+                let mut child_index: u32 = 0;
                 while child_index < class_name_child_count {
-                    let Some(sub) = child.child(child_index as u32) else {
+                    let Some(sub) = child.child(child_index) else {
                         child_index += 1;
                         continue;
                     };
@@ -3582,7 +3578,7 @@ fn process_source_reorder(context: &mut FormatterContext, node: tree_sitter::Nod
             }
         }
 
-        let declaration_end_byte: usize = match node.child(item.child_index as u32) {
+        let declaration_end_byte: usize = match node.child(item.child_index) {
             Some(child) => child.end_byte(),
             None => 0,
         };
@@ -3591,7 +3587,7 @@ fn process_source_reorder(context: &mut FormatterContext, node: tree_sitter::Nod
         {
             let child_index_attached_after_declaration =
                 item.child_indices_attached_after_declaration[attached_after_declaration_index];
-            if let Some(child) = node.child(child_index_attached_after_declaration as u32) {
+            if let Some(child) = node.child(child_index_attached_after_declaration) {
                 if has_newline(source, declaration_end_byte, child.start_byte()) {
                     context.render_elements.push(RenderElement::HardLine);
                 } else {

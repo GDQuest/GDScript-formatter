@@ -18,17 +18,17 @@ pub struct ReorderPlan<'a> {
 #[derive(Debug, Clone)]
 pub struct ReorderItem<'a> {
     /// Index of this child in the parent node (for direct children).
-    pub child_index: usize,
+    pub child_index: u32,
     /// If Some(i), this item refers to the i-th child OF the node at
     /// `child_index`. Used for split inline extends: the extends_statement
     /// is a child of class_name_statement, not a sibling.
-    pub sub_child: Option<usize>,
+    pub sub_child: Option<u32>,
     /// Indices of source children that precede and move with this declaration,
     /// such as comments, annotations, and region starts.
-    pub child_indices_attached_before_declaration: Vec<usize>,
+    pub child_indices_attached_before_declaration: Vec<u32>,
     /// Indices of source children that follow and move with this declaration,
     /// such as end-of-line comments and region ends.
-    pub child_indices_attached_after_declaration: Vec<usize>,
+    pub child_indices_attached_after_declaration: Vec<u32>,
     /// Whether this declaration or its leading comments had a blank line before
     /// it in the source. This preserves blanks lines input by the user in their
     /// source code, up to 1. For example, blank lines used to separate groups
@@ -136,13 +136,13 @@ fn has_blank_line(content: &str, from: usize, to: usize) -> bool {
 /// node). `content` is the source string used for name extraction.
 pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan<'a> {
     let child_count = parent.child_count();
-    let mut items = Vec::with_capacity(child_count);
+    let mut items = Vec::with_capacity(child_count as usize);
 
     // Pass 1: classify each child.
     // These source children move with a nearby declaration. They include
     // comments, annotations, and region markers.
-    let mut is_child_attached_to_declaration = vec![false; child_count];
-    let mut is_region_end = vec![false; child_count];
+    let mut is_child_attached_to_declaration = vec![false; child_count as usize];
+    let mut is_region_end = vec![false; child_count as usize];
 
     // We use this to track if we visited a line with an annotation before
     // encountering a declaration.
@@ -161,13 +161,13 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
 
     let mut child_index = 0;
     while child_index < child_count {
-        let Some(child) = parent.child(child_index as u32) else {
+        let Some(child) = parent.child(child_index) else {
             child_index += 1;
             continue;
         };
         let kind = GDScriptNodeKind::get_kind_from_ast_node(child);
         if kind == GDScriptNodeKind::Comment || kind == GDScriptNodeKind::RegionStart {
-            is_child_attached_to_declaration[child_index] = true;
+            is_child_attached_to_declaration[child_index as usize] = true;
         } else if kind == GDScriptNodeKind::Annotation {
             // Make sure to keep tool and icon at the top of the script, above
             // class_name and extends. Otherwise it's a syntax error.
@@ -186,7 +186,7 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
                     split_extends: false,
                 });
             } else {
-                is_child_attached_to_declaration[child_index] = true;
+                is_child_attached_to_declaration[child_index as usize] = true;
                 if let Some(annotation_identifier) = get_annotation_identifier(child, content) {
                     if annotation_identifier == "onready" {
                         visited_annotations.has_onready_annotation = true;
@@ -196,8 +196,8 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
                 }
             }
         } else if kind == GDScriptNodeKind::RegionEnd {
-            is_child_attached_to_declaration[child_index] = true;
-            is_region_end[child_index] = true;
+            is_child_attached_to_declaration[child_index as usize] = true;
+            is_region_end[child_index as usize] = true;
         } else if kind == GDScriptNodeKind::SemiColon {
             // skip; handled by builder spacing
         } else {
@@ -242,7 +242,7 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
 
     // Pass 1b: find class docstring after class_name/extends/annotations, before first signal/enum/etc.
     let mut docstring_indices = Vec::new();
-    let mut last_header_child_index: Option<usize> = None;
+    let mut last_header_child_index: Option<u32> = None;
     let mut last_header_end_byte: Option<usize> = None;
     let mut item_index = 0;
     while item_index < declaration_count {
@@ -255,7 +255,7 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
         ) {
             break;
         }
-        if let Some(header_child) = parent.child(item.child_index as u32) {
+        if let Some(header_child) = parent.child(item.child_index) {
             last_header_child_index = Some(item.child_index);
             last_header_end_byte = Some(header_child.end_byte());
         }
@@ -267,11 +267,11 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
         let mut previous_end_byte = header_end_byte;
         let mut scan_index = header_child_index + 1;
         while scan_index < child_count {
-            let Some(child) = parent.child(scan_index as u32) else {
+            let Some(child) = parent.child(scan_index) else {
                 scan_index += 1;
                 continue;
             };
-            if !is_child_attached_to_declaration[scan_index]
+            if !is_child_attached_to_declaration[scan_index as usize]
                 || !get_node_text(child, content).trim_start().starts_with("##")
             {
                 break;
@@ -299,7 +299,7 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
     // Mark docstring comments as consumed.
     let mut docstring_index = 0;
     while docstring_index < docstring_indices.len() {
-        is_child_attached_to_declaration[docstring_indices[docstring_index]] = false;
+        is_child_attached_to_declaration[docstring_indices[docstring_index] as usize] = false;
         docstring_index += 1;
     }
 
@@ -319,28 +319,28 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
     }
 
     // Pass 2: assign AST nodes before and after each declaration.
-    let mut previous_declaration_child_index: Option<usize> = None;
+    let mut previous_declaration_child_index: Option<u32> = None;
     let mut declaration_index = 0;
     while declaration_index < declaration_count {
         let declaration_child_index = items[declaration_index].child_index;
-        let next_declaration_child_index: Option<usize> =
-            if declaration_index + 1 < declaration_count {
-                Some(items[declaration_index + 1].child_index)
-            } else {
-                None
-            };
+        let next_declaration_child_index: Option<u32> = if declaration_index + 1 < declaration_count
+        {
+            Some(items[declaration_index + 1].child_index)
+        } else {
+            None
+        };
 
         // Attach every relevant AST node between the previous declaration and
         // this one before the current declaration.
-        let first_possible_attachment_child_index: usize = match previous_declaration_child_index {
+        let first_possible_attachment_child_index: u32 = match previous_declaration_child_index {
             Some(previous_declaration_child_index) => previous_declaration_child_index + 1,
             None => 0,
         };
         let mut child_indices_attached_before_declaration = Vec::new();
         let mut current_child_index = first_possible_attachment_child_index;
         while current_child_index < declaration_child_index {
-            if is_child_attached_to_declaration[current_child_index]
-                && !is_region_end[current_child_index]
+            if is_child_attached_to_declaration[current_child_index as usize]
+                && !is_region_end[current_child_index as usize]
             {
                 child_indices_attached_before_declaration.push(current_child_index);
             }
@@ -352,7 +352,7 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
         // Determine if there is a blank line before the current declaration
         // that we need to preserve after reordering.
         if let Some(previous_declaration_child_index) = previous_declaration_child_index {
-            let previous_declaration = parent.child(previous_declaration_child_index as u32);
+            let previous_declaration = parent.child(previous_declaration_child_index);
             let first_item_child_index = if items[declaration_index]
                 .child_indices_attached_before_declaration
                 .is_empty()
@@ -361,7 +361,7 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
             } else {
                 items[declaration_index].child_indices_attached_before_declaration[0]
             };
-            let first_item_child = parent.child(first_item_child_index as u32);
+            let first_item_child = parent.child(first_item_child_index);
             if let (Some(previous_declaration), Some(first_item_child)) =
                 (previous_declaration, first_item_child)
             {
@@ -379,13 +379,13 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
         let mut next_child_index = declaration_child_index + 1;
         if let Some(next_declaration_child_index) = next_declaration_child_index {
             let current_declaration = parent
-                .child(declaration_child_index as u32)
+                .child(declaration_child_index)
                 .expect("declaration child index came from this parent");
             while next_child_index < next_declaration_child_index {
-                if is_region_end[next_child_index] {
+                if is_region_end[next_child_index as usize] {
                     indices_of_children_attached_after_declaration.push(next_child_index);
-                } else if is_child_attached_to_declaration[next_child_index] {
-                    if let Some(following_attached_child) = parent.child(next_child_index as u32) {
+                } else if is_child_attached_to_declaration[next_child_index as usize] {
+                    if let Some(following_attached_child) = parent.child(next_child_index) {
                         // This checks mainly for inline comments after the
                         // declaration. They appear as siblings in the AST even
                         // if on the same line so that's why we check for a
@@ -397,7 +397,7 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
                             indices_of_children_attached_after_declaration.push(next_child_index);
                             // Prevent the later declaration from also treating
                             // this source child as preceding content.
-                            is_child_attached_to_declaration[next_child_index] = false;
+                            is_child_attached_to_declaration[next_child_index as usize] = false;
                         }
                     }
                 }
@@ -406,7 +406,7 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
         } else {
             // After the last declaration, attach all remaining source children.
             while next_child_index < child_count {
-                if is_child_attached_to_declaration[next_child_index] {
+                if is_child_attached_to_declaration[next_child_index as usize] {
                     indices_of_children_attached_after_declaration.push(next_child_index);
                 }
                 next_child_index += 1;
@@ -510,7 +510,7 @@ fn classify_variable<'a>(
     let mut has_export_annotation = visited_annotations.has_export_annotation;
     let mut has_onready_annotation = visited_annotations.has_onready_annotation;
     for child_index in 0..node.child_count() {
-        let Some(child) = node.child(child_index as u32) else {
+        let Some(child) = node.child(child_index) else {
             continue;
         };
         if GDScriptNodeKind::get_kind_from_ast_node(child) != GDScriptNodeKind::Annotations {
@@ -518,7 +518,7 @@ fn classify_variable<'a>(
         }
 
         for annotation_index in 0..child.child_count() {
-            let Some(annotation) = child.child(annotation_index as u32) else {
+            let Some(annotation) = child.child(annotation_index) else {
                 continue;
             };
             if GDScriptNodeKind::get_kind_from_ast_node(annotation) != GDScriptNodeKind::Annotation
@@ -554,7 +554,7 @@ fn get_annotation_identifier<'a>(annotation: Node<'a>, content: &'a str) -> Opti
     let child_count = annotation.child_count();
     let mut child_index = 0;
     while child_index < child_count {
-        if let Some(child) = annotation.child(child_index as u32)
+        if let Some(child) = annotation.child(child_index)
             && GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Identifier
         {
             return Some(get_node_text(child, content));
@@ -568,20 +568,20 @@ fn get_annotation_identifier<'a>(annotation: Node<'a>, content: &'a str) -> Opti
 fn extract_name<'a>(node: Node<'a>, content: &'a str) -> Option<&'a str> {
     let count = node.child_count();
     for child_index in 0..count {
-        if node.field_name_for_child(child_index as u32) == Some("name") {
+        if node.field_name_for_child(child_index) == Some("name") {
             return node
-                .child(child_index as u32)
+                .child(child_index)
                 .map(|child_node| get_node_text(child_node, content));
         }
     }
     None
 }
 
-fn find_extends_child_index(node: Node) -> Option<usize> {
+fn find_extends_child_index(node: Node) -> Option<u32> {
     let count = node.child_count();
     let mut child_index = 0;
     while child_index < count {
-        if let Some(child) = node.child(child_index as u32) {
+        if let Some(child) = node.child(child_index) {
             if GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Extends {
                 return Some(child_index);
             }
@@ -599,7 +599,7 @@ fn has_static_keyword_child(node: Node) -> bool {
     let count = node.child_count();
     let mut child_index = 0;
     while child_index < count {
-        if let Some(child) = node.child(child_index as u32) {
+        if let Some(child) = node.child(child_index) {
             if GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::KeywordStatic {
                 return true;
             }
