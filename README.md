@@ -81,6 +81,19 @@ It will print the files that need to be formatted.
 
 To see other possible options, run `gdscript-formatter --help`.
 
+### Reordering code regions
+
+With `--reorder-code`, top-level `#region` and `#endregion` markers separate
+independently sorted sections. Declarations can be reordered inside a region or
+in the code around it, but they never move across a region boundary. Nested
+regions keep their boundaries too, and empty or comment-only regions are
+preserved.
+
+This lets manual groups take precedence over the usual global declaration
+order. For example, a variable below a region stays below that region instead
+of moving to the top of the file. Files containing `# fmt: off` still skip
+reordering entirely.
+
 
 ## Using editorconfig
 

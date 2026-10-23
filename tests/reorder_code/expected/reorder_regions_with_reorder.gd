@@ -8,8 +8,8 @@ func _ready():
 
 func _physics_process(delta):
 	pass
-#endregion
 
 
 func _input():
 	pass
+#endregion

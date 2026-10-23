@@ -19,14 +19,27 @@ fn test_reorder(file_path: &std::path::Path) {
     let output = format_gdscript(&input, &config)
         .unwrap_or_else(|e| panic!("Failed to format {}: {}", file_path.display(), e));
 
-    let expected_path = file_path.to_str().unwrap().replace("/input/", "/expected/");
+    let expected_path = file_path
+        .parent()
+        .unwrap()
+        .with_file_name("expected")
+        .join(file_path.file_name().unwrap());
     let expected = fs::read_to_string(&expected_path)
-        .unwrap_or_else(|e| panic!("Failed to read expected {}: {}", expected_path, e));
+        .unwrap_or_else(|e| panic!("Failed to read expected {}: {}", expected_path.display(), e));
 
     assert_eq!(
         output,
         expected,
         "reorder output differs from expected for {}",
+        file_path.display()
+    );
+
+    let second_pass = format_gdscript(&output, &config)
+        .unwrap_or_else(|e| panic!("Failed to reformat {}: {}", file_path.display(), e));
+    assert_eq!(
+        second_pass,
+        output,
+        "reordering is not idempotent for {}",
         file_path.display()
     );
 }

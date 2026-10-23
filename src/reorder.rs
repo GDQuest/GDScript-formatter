@@ -5,6 +5,7 @@
 //!
 //! Comments and annotations that precede a declaration in source order are
 //! bundled with it so they move together when reordered.
+//! Region markers stay in source order and separate independently sorted runs.
 
 use crate::node_kind::GDScriptNodeKind;
 use crate::shared_utils::should_annotation_be_inline;
@@ -17,6 +18,9 @@ pub struct ReorderPlan<'a> {
 
 #[derive(Debug, Clone)]
 pub struct ReorderItem<'a> {
+    /// Declarations cannot move across a region marker. Each marker also has
+    /// its own partition so it stays between the surrounding runs.
+    region_partition: u32,
     /// Index of this child in the parent node (for direct children).
     pub child_index: u32,
     /// If Some(i), this item refers to the i-th child OF the node at
@@ -24,10 +28,10 @@ pub struct ReorderItem<'a> {
     /// is a child of class_name_statement, not a sibling.
     pub sub_child: Option<u32>,
     /// Indices of source children that precede and move with this declaration,
-    /// such as comments, annotations, and region starts.
+    /// such as comments and annotations.
     pub child_indices_attached_before_declaration: Vec<u32>,
     /// Indices of source children that follow and move with this declaration,
-    /// such as end-of-line comments and region ends.
+    /// such as end-of-line comments.
     pub child_indices_attached_after_declaration: Vec<u32>,
     /// Whether this declaration or its leading comments had a blank line before
     /// it in the source. This preserves blanks lines input by the user in their
@@ -64,6 +68,7 @@ pub enum DeclarationKind {
     OnReadyVariable, // 10
     Method,          // 11: functions (sub-sorted by MethodType)
     InnerClass,      // 12
+    RegionBoundary,  // 13: fixed marker between independently sorted runs
     Unknown = 255,   // 255
 }
 
@@ -140,9 +145,12 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
 
     // Pass 1: classify each child.
     // These source children move with a nearby declaration. They include
-    // comments, annotations, and region markers.
+    // comments and annotations. Region markers are standalone items.
     let mut is_child_attached_to_declaration = vec![false; child_count as usize];
-    let mut is_region_end = vec![false; child_count as usize];
+    let mut region_partitions = vec![0; child_count as usize];
+    let mut region_partition = 0;
+    let mut has_pending_annotation = false;
+    let mut keep_annotated_declaration_first = false;
 
     // We use this to track if we visited a line with an annotation before
     // encountering a declaration.
@@ -166,7 +174,35 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
             continue;
         };
         let kind = GDScriptNodeKind::get_kind_from_ast_node(child);
-        if kind == GDScriptNodeKind::Comment || kind == GDScriptNodeKind::RegionStart {
+        if matches!(
+            kind,
+            GDScriptNodeKind::RegionStart | GDScriptNodeKind::RegionEnd
+        ) {
+            region_partition += 1;
+            region_partitions[child_index as usize] = region_partition;
+            items.push(ReorderItem {
+                region_partition,
+                child_index,
+                sub_child: None,
+                child_indices_attached_before_declaration: Vec::new(),
+                child_indices_attached_after_declaration: Vec::new(),
+                has_blank_line_before: false,
+                classification: DeclarationKind::RegionBoundary,
+                name: "",
+                is_pseudo_private: false,
+                method_type: None,
+                split_extends: false,
+            });
+            region_partition += 1;
+            // An annotation can precede a region marker but still apply to
+            // the first declaration inside. Do not sort a different target
+            // between that annotation and its declaration.
+            keep_annotated_declaration_first |= has_pending_annotation;
+            child_index += 1;
+            continue;
+        }
+        region_partitions[child_index as usize] = region_partition;
+        if kind == GDScriptNodeKind::Comment {
             is_child_attached_to_declaration[child_index as usize] = true;
         } else if kind == GDScriptNodeKind::Annotation {
             // Make sure to keep tool and icon at the top of the script, above
@@ -174,6 +210,7 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
             let annotation_name = get_node_text(child, content);
             if annotation_name.starts_with("@tool") || annotation_name.starts_with("@icon") {
                 items.push(ReorderItem {
+                    region_partition,
                     child_index,
                     sub_child: None,
                     child_indices_attached_before_declaration: Vec::new(),
@@ -186,6 +223,7 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
                     split_extends: false,
                 });
             } else {
+                has_pending_annotation = true;
                 is_child_attached_to_declaration[child_index as usize] = true;
                 if let Some(annotation_identifier) = get_annotation_identifier(child, content) {
                     if annotation_identifier == "onready" {
@@ -195,15 +233,13 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
                     }
                 }
             }
-        } else if kind == GDScriptNodeKind::RegionEnd {
-            is_child_attached_to_declaration[child_index as usize] = true;
-            is_region_end[child_index as usize] = true;
         } else if kind == GDScriptNodeKind::SemiColon {
             // skip; handled by builder spacing
         } else {
             let child_classification = classify_child(child, content, &visited_annotations);
             let is_private = child_classification.name.starts_with('_');
             items.push(ReorderItem {
+                region_partition,
                 child_index,
                 sub_child: None,
                 child_indices_attached_before_declaration: Vec::new(),
@@ -219,6 +255,7 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
             if child_classification.split_extends {
                 if let Some(extends_index) = find_extends_child_index(child) {
                     items.push(ReorderItem {
+                        region_partition,
                         child_index,
                         sub_child: Some(extends_index),
                         child_indices_attached_before_declaration: Vec::new(),
@@ -233,6 +270,11 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
                 }
             }
 
+            if keep_annotated_declaration_first {
+                region_partition += 1;
+                keep_annotated_declaration_first = false;
+            }
+            has_pending_annotation = false;
             visited_annotations = VisitedAnnotation::default();
         }
         child_index += 1;
@@ -247,6 +289,10 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
     let mut item_index = 0;
     while item_index < declaration_count {
         let item = &items[item_index];
+        if item.classification == DeclarationKind::RegionBoundary {
+            item_index += 1;
+            continue;
+        }
         if !matches!(
             item.classification,
             DeclarationKind::ClassAnnotation
@@ -305,6 +351,7 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
 
     if !docstring_indices.is_empty() {
         items.push(ReorderItem {
+            region_partition: region_partitions[docstring_indices[0] as usize],
             child_index: docstring_indices[0],
             sub_child: None,
             child_indices_attached_before_declaration: docstring_indices,
@@ -339,9 +386,7 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
         let mut child_indices_attached_before_declaration = Vec::new();
         let mut current_child_index = first_possible_attachment_child_index;
         while current_child_index < declaration_child_index {
-            if is_child_attached_to_declaration[current_child_index as usize]
-                && !is_region_end[current_child_index as usize]
-            {
+            if is_child_attached_to_declaration[current_child_index as usize] {
                 child_indices_attached_before_declaration.push(current_child_index);
             }
             current_child_index += 1;
@@ -373,8 +418,7 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
             }
         }
 
-        // Attach region ends and an inline comment after the declaration to
-        // that declaration.
+        // Attach an inline comment after the declaration to that declaration.
         let mut indices_of_children_attached_after_declaration = Vec::new();
         let mut next_child_index = declaration_child_index + 1;
         if let Some(next_declaration_child_index) = next_declaration_child_index {
@@ -382,9 +426,7 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
                 .child(declaration_child_index)
                 .expect("declaration child index came from this parent");
             while next_child_index < next_declaration_child_index {
-                if is_region_end[next_child_index as usize] {
-                    indices_of_children_attached_after_declaration.push(next_child_index);
-                } else if is_child_attached_to_declaration[next_child_index as usize] {
+                if is_child_attached_to_declaration[next_child_index as usize] {
                     if let Some(following_attached_child) = parent.child(next_child_index) {
                         // This checks mainly for inline comments after the
                         // declaration. They appear as siblings in the AST even
@@ -646,6 +688,11 @@ fn get_builtin_virtual_priority(method_name: &str) -> u8 {
 }
 
 fn compare_reorder_items(left: &ReorderItem, right: &ReorderItem) -> std::cmp::Ordering {
+    let ordering_partition = left.region_partition.cmp(&right.region_partition);
+    if ordering_partition != std::cmp::Ordering::Equal {
+        return ordering_partition;
+    }
+
     let ordering_declaration_kind = (left.classification as u8).cmp(&(right.classification as u8));
     if ordering_declaration_kind != std::cmp::Ordering::Equal {
         return ordering_declaration_kind;
