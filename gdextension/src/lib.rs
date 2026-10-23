@@ -18,7 +18,7 @@ unsafe impl ExtensionLibrary for FormatterExtension {}
 #[derive(GodotClass)]
 #[class(init, singleton, base=Object)]
 struct GDScriptFormatter {
-    base: Base<Object>,
+    base_object: Base<Object>,
 }
 
 #[godot_api]
@@ -61,7 +61,9 @@ macro_rules! extract_field {
         if let Some(variant) = $dict.get(stringify!($key)) {
             match variant.try_to::<$type>() {
                 Ok(val) => $target.$key = val,
-                Err(error) => godot_error!("Config '{}' is invalid: {}", stringify!($key), error),
+                Err(error) => {
+                    godot_error!("Config '{}' is invalid: {}", stringify!($key), error);
+                }
             }
         }
     };
@@ -70,7 +72,9 @@ macro_rules! extract_field {
         if let Some(variant) = $dict.get(stringify!($key)) {
             match variant.try_to::<$type>() {
                 Ok(val) => $target.$key = val as usize,
-                Err(error) => godot_error!("Config '{}' is invalid: {}", stringify!($key), error),
+                Err(error) => {
+                    godot_error!("Config '{}' is invalid: {}", stringify!($key), error);
+                }
             }
         }
     };
@@ -84,7 +88,9 @@ fn dict_to_formatter_config(dict: &Dictionary<Variant, Variant>) -> FormatterCon
     if let Some(variant) = dict.get("printer") {
         match variant.try_to::<Dictionary<Variant, Variant>>() {
             Ok(sub_dict) => result.printer = dict_to_printer_config(&sub_dict),
-            Err(error) => godot_error!("Config 'printer' is invalid: {}", error),
+            Err(error) => {
+                godot_error!("Config 'printer' is invalid: {}", error);
+            }
         }
     }
     if let Some(variant) = dict.get("quote_style") {
@@ -94,7 +100,9 @@ fn dict_to_formatter_config(dict: &Dictionary<Variant, Variant>) -> FormatterCon
             .and_then(|gstr| QuoteStyle::from_name(&gstr.to_string()))
         {
             Some(valid_style) => result.quote_style = valid_style,
-            None => godot_error!("Config 'quote_style' is invalid"),
+            None => {
+                godot_error!("Config 'quote_style' is invalid");
+            }
         }
     }
     result
@@ -125,7 +133,9 @@ fn dict_to_linter_config(dict: &Dictionary<Variant, Variant>) -> LinterConfig {
                     .map(|gd_str| gd_str.to_string())
                     .collect()
             }
-            Err(error) => godot_error!("Config 'disabled_rules' is invalid: {}", error),
+            Err(error) => {
+                godot_error!("Config 'disabled_rules' is invalid: {}", error);
+            }
         }
     }
     result
