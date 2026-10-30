@@ -15,6 +15,7 @@ This file documents the changes made to the formatter with each release.
 - Keep parenthesized lambda parentheses next to the lambda body when they are followed by an attribute call (#364)
 - Fix formatter giving parse error on a file using `$%` for getting nodes (#363)
 - Fix formatter not supporting node paths like `%node/%node` or `%node/$node` (#363)
+- Fix a long constructor definition not wrapping like other functions (#370)
 
 ## Release 0.27.0 (2026-09-25)
 

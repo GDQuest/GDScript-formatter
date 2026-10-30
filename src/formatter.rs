@@ -348,7 +348,9 @@ fn process_node(context: &mut FormatterContext, node: tree_sitter::Node) {
             process_body(context, node, false)
         }
         GDScriptNodeKind::Lambda => process_lambda(context, node),
-        GDScriptNodeKind::Function => process_function(context, node),
+        GDScriptNodeKind::Function | GDScriptNodeKind::Constructor => {
+            process_function(context, node)
+        }
         GDScriptNodeKind::Variable
         | GDScriptNodeKind::ExportVariable
         | GDScriptNodeKind::OnReadyVariable
@@ -1698,7 +1700,10 @@ fn process_container(context: &mut FormatterContext, node: tree_sitter::Node) {
 
     let is_function_parameters = node_kind == GDScriptNodeKind::Parameters
         && node.parent().is_some_and(|parent| {
-            GDScriptNodeKind::get_kind_from_ast_node(parent) == GDScriptNodeKind::Function
+            matches!(
+                GDScriptNodeKind::get_kind_from_ast_node(parent),
+                GDScriptNodeKind::Function | GDScriptNodeKind::Constructor
+            )
         });
     let group_index = if is_function_parameters
         || (node_kind == GDScriptNodeKind::Arguments
