@@ -1,11 +1,9 @@
-//! Compute a `ReorderPlan` that tells the formatter builder which order to
-//! visit top-level declarations in. The plan groups declarations by category
-//! (signals, enums, consts, vars, funcs, inner classes) and sorts within each
-//! category by name, privacy, and method type where applicable.
+//! This module creates a `ReorderPlan` that tells the formatter in which order to
+//! visit top-level declarations. The declarations are grouped to apply the
+//! sorting within each code region independently.
 //!
-//! Comments and annotations that precede a declaration in source order are
-//! bundled with it so they move together when reordered.
-
+//! Comments and annotations get attached to relevant declarations so they move
+//! together when reordered.
 use crate::node_kind::GDScriptNodeKind;
 use crate::shared_utils::should_annotation_be_inline;
 use tree_sitter::Node;
@@ -17,29 +15,33 @@ pub struct ReorderPlan<'a> {
 
 #[derive(Debug, Clone)]
 pub struct ReorderItem<'a> {
-    /// Index of this child in the parent node (for direct children).
+    /// This index represents one span of the script within which we reorder
+    /// declarations. The span is either the inside of a code region or the
+    /// outside (before/after the region). We use this index when reordering to
+    /// reorder per group.
+    group_index: u32,
+    /// Index of this child in the parent node.
     pub child_index: u32,
     /// If Some(i), this item refers to the i-th child OF the node at
     /// `child_index`. Used for split inline extends: the extends_statement
-    /// is a child of class_name_statement, not a sibling.
+    /// is a child of class_name_statement.
     pub sub_child: Option<u32>,
     /// Indices of source children that precede and move with this declaration,
-    /// such as comments, annotations, and region starts.
+    /// like comments and annotations.
     pub child_indices_attached_before_declaration: Vec<u32>,
     /// Indices of source children that follow and move with this declaration,
-    /// such as end-of-line comments and region ends.
+    /// like trailing comments.
     pub child_indices_attached_after_declaration: Vec<u32>,
     /// Whether this declaration or its leading comments had a blank line before
     /// it in the source. This preserves blanks lines input by the user in their
     /// source code, up to 1. For example, blank lines used to separate groups
     /// of variables.
     pub has_blank_line_before: bool,
-    /// Classification category (determines sort order).
-    pub classification: DeclarationKind,
-    /// Declaration name for tie-breaking within same category, borrowed from
-    /// the source string.
-    pub name: &'a str,
-    pub is_pseudo_private: bool,
+    /// This determines the sort order of this declaration relative to others.
+    pub declaration_kind: DeclarationKind,
+    /// Declaration name borrowed from the source code. We use this to detect
+    /// things like if it's a pseudo-private declaration.
+    name: &'a str,
     pub method_type: Option<MethodType>,
     /// When true, the class_name_statement node contains an inline extends
     /// child that should be skipped when building (emitted as separate item).
@@ -51,33 +53,56 @@ pub struct ReorderItem<'a> {
 /// based on the official style guide.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum DeclarationKind {
-    ClassAnnotation, // 0: @tool, @icon
-    ClassName,       // 1: class_name
-    Extends,         // 2: extends
-    Docstring,       // 3: ## class doc
-    Signal,          // 4
-    Enum,            // 5
-    Constant,        // 6
-    StaticVariable,  // 7
-    ExportVariable,  // 8
-    RegularVariable, // 9
-    OnReadyVariable, // 10
-    Method,          // 11: functions (sub-sorted by MethodType)
-    InnerClass,      // 12
-    Unknown = 255,   // 255
+    ClassAnnotation, // @tool, @icon
+    ClassName,
+    Extends,
+    ClassDocstring,
+    Signal,
+    Enum,
+    Constant,
+    StaticVariable,
+    ExportVariable,
+    RegularVariable,
+    OnReadyVariable,
+    Method,
+    InnerClass,
+    RegionStartOrEnd,
+    Unknown = 255,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum MethodType {
     StaticInit,         // _static_init()
     StaticFunction,     // static func
-    BuiltinVirtual(u8), // _ready, _process, etc. (priority from Godot lifecycle)
-    Custom,             // all other user methods
+    BuiltinVirtual(u8), // _ready, _process, etc.
+    Other,
+}
+
+impl<'a> ReorderItem<'a> {
+    fn new(
+        child_index: u32,
+        group_index: u32,
+        declaration_kind: DeclarationKind,
+        name: &'a str,
+    ) -> Self {
+        Self {
+            group_index,
+            child_index,
+            sub_child: None,
+            child_indices_attached_before_declaration: Vec::new(),
+            child_indices_attached_after_declaration: Vec::new(),
+            has_blank_line_before: false,
+            declaration_kind,
+            name,
+            method_type: None,
+            split_extends: false,
+        }
+    }
 }
 
 /// Result of classifying a single child node during reorder planning.
 struct ChildClassification<'a> {
-    classification: DeclarationKind,
+    declaration_kind: DeclarationKind,
     name: &'a str,
     method_type: Option<MethodType>,
     /// If true, the extends child of a class_name_statement should be split out during reorder.
@@ -85,11 +110,9 @@ struct ChildClassification<'a> {
 }
 
 impl<'a> ChildClassification<'a> {
-    /// Builds a classification with no method type and no split extends. This
-    /// covers the common case for non-function declarations.
-    fn new(classification: DeclarationKind, name: &'a str) -> Self {
+    fn new(declaration_kind: DeclarationKind, name: &'a str) -> Self {
         Self {
-            classification,
+            declaration_kind,
             name,
             method_type: None,
             split_extends: false,
@@ -105,44 +128,33 @@ struct VisitedAnnotation {
     has_onready_annotation: bool,
 }
 
-/// Slice the source string at a node's byte range.
-/// Tree-sitter byte offsets are always on UTF-8 char boundaries.
+/// Slices the source string at a node's byte range and returns a reference to
+/// the text.
 fn get_node_text<'a>(node: Node<'a>, content: &'a str) -> &'a str {
     &content[node.start_byte()..node.end_byte()]
 }
 
-/// Returns true when there are at least two line breaks between two byte
-/// offsets.
-fn has_blank_line(content: &str, from: usize, to: usize) -> bool {
-    if to <= from {
-        return false;
-    }
-
-    let mut newline_count = 0;
-    let mut byte_index = from;
-    while byte_index < to {
-        if content.as_bytes()[byte_index] == b'\n' {
-            newline_count += 1;
-            if newline_count == 2 {
-                return true;
-            }
-        }
-        byte_index += 1;
-    }
-    false
-}
-
-/// Builds a `ReorderPlan` for the children of `parent` (typically a `source`
-/// node). `content` is the source string used for name extraction.
-pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan<'a> {
-    let child_count = parent.child_count();
+/// Builds a `ReorderPlan` for the children of `parent` (call this on the
+/// `source` node, i.e. the root of the AST). `content` is the string of the
+/// source code, used to read AST node names.
+pub fn build_reorder_plan<'a>(
+    gdscript_source_node: Node<'a>,
+    source_code: &'a str,
+) -> ReorderPlan<'a> {
+    let child_count = gdscript_source_node.child_count();
     let mut items = Vec::with_capacity(child_count as usize);
 
-    // Pass 1: classify each child.
-    // These source children move with a nearby declaration. They include
-    // comments, annotations, and region markers.
-    let mut is_child_attached_to_declaration = vec![false; child_count as usize];
-    let mut is_region_end = vec![false; child_count as usize];
+    // Pass 1: classify each child of the parent node.
+    //
+    // We group items by a group index. The numbers work like this:
+    //
+    // - Declarations between two region markers share one number, so they
+    //   are sorted together and never move across region start and end lines.
+    // - Each region start or end line gets its own number, so a marker never
+    //   moves either.
+    //
+    // To get this result we sort the items by their group index.
+    let mut current_group_index = 0;
 
     // We use this to track if we visited a line with an annotation before
     // encountering a declaration.
@@ -161,33 +173,41 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
 
     let mut child_index = 0;
     while child_index < child_count {
-        let Some(child) = parent.child(child_index) else {
+        let Some(child) = gdscript_source_node.child(child_index) else {
             child_index += 1;
             continue;
         };
         let kind = GDScriptNodeKind::get_kind_from_ast_node(child);
-        if kind == GDScriptNodeKind::Comment || kind == GDScriptNodeKind::RegionStart {
-            is_child_attached_to_declaration[child_index as usize] = true;
-        } else if kind == GDScriptNodeKind::Annotation {
+        if matches!(
+            kind,
+            GDScriptNodeKind::RegionStart | GDScriptNodeKind::RegionEnd
+        ) {
+            // We give each region start or end a unique group number so it
+            // doesn't get moved anywhere
+            current_group_index += 1;
+            items.push(ReorderItem::new(
+                child_index,
+                current_group_index,
+                DeclarationKind::RegionStartOrEnd,
+                "",
+            ));
+            current_group_index += 1;
+            child_index += 1;
+            continue;
+        }
+        if kind == GDScriptNodeKind::Annotation {
             // Make sure to keep tool and icon at the top of the script, above
             // class_name and extends. Otherwise it's a syntax error.
-            let annotation_name = get_node_text(child, content);
+            let annotation_name = get_node_text(child, source_code);
             if annotation_name.starts_with("@tool") || annotation_name.starts_with("@icon") {
-                items.push(ReorderItem {
+                items.push(ReorderItem::new(
                     child_index,
-                    sub_child: None,
-                    child_indices_attached_before_declaration: Vec::new(),
-                    child_indices_attached_after_declaration: Vec::new(),
-                    has_blank_line_before: false,
-                    classification: DeclarationKind::ClassAnnotation,
-                    name: annotation_name,
-                    is_pseudo_private: false,
-                    method_type: None,
-                    split_extends: false,
-                });
+                    current_group_index,
+                    DeclarationKind::ClassAnnotation,
+                    annotation_name,
+                ));
             } else {
-                is_child_attached_to_declaration[child_index as usize] = true;
-                if let Some(annotation_identifier) = get_annotation_identifier(child, content) {
+                if let Some(annotation_identifier) = get_annotation_identifier(child, source_code) {
                     if annotation_identifier == "onready" {
                         visited_annotations.has_onready_annotation = true;
                     } else if should_annotation_be_inline(annotation_identifier) {
@@ -195,41 +215,36 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
                     }
                 }
             }
-        } else if kind == GDScriptNodeKind::RegionEnd {
-            is_child_attached_to_declaration[child_index as usize] = true;
-            is_region_end[child_index as usize] = true;
-        } else if kind == GDScriptNodeKind::SemiColon {
-            // skip; handled by builder spacing
+        } else if matches!(
+            kind,
+            GDScriptNodeKind::Comment | GDScriptNodeKind::SemiColon
+        ) {
+            // Skip, we handle those later on
         } else {
-            let child_classification = classify_child(child, content, &visited_annotations);
-            let is_private = child_classification.name.starts_with('_');
+            let child_classification = classify_child(child, source_code, &visited_annotations);
             items.push(ReorderItem {
-                child_index,
-                sub_child: None,
-                child_indices_attached_before_declaration: Vec::new(),
-                child_indices_attached_after_declaration: Vec::new(),
-                has_blank_line_before: false,
-                classification: child_classification.classification,
-                name: child_classification.name,
-                is_pseudo_private: is_private,
                 method_type: child_classification.method_type,
                 split_extends: child_classification.split_extends,
+                ..ReorderItem::new(
+                    child_index,
+                    current_group_index,
+                    child_classification.declaration_kind,
+                    child_classification.name,
+                )
             });
 
             if child_classification.split_extends {
-                if let Some(extends_index) = find_extends_child_index(child) {
-                    items.push(ReorderItem {
+                if let Some(extends_index) =
+                    find_child_index_of_kind(child, GDScriptNodeKind::Extends)
+                {
+                    let mut extends_item = ReorderItem::new(
                         child_index,
-                        sub_child: Some(extends_index),
-                        child_indices_attached_before_declaration: Vec::new(),
-                        child_indices_attached_after_declaration: Vec::new(),
-                        has_blank_line_before: false,
-                        classification: DeclarationKind::Extends,
-                        name: "",
-                        is_pseudo_private: false,
-                        method_type: None,
-                        split_extends: false,
-                    });
+                        current_group_index,
+                        DeclarationKind::Extends,
+                        "",
+                    );
+                    extends_item.sub_child = Some(extends_index);
+                    items.push(extends_item);
                 }
             }
 
@@ -240,183 +255,133 @@ pub fn build_reorder_plan<'a>(parent: Node<'a>, content: &'a str) -> ReorderPlan
 
     let declaration_count = items.len();
 
-    // Pass 1b: find class docstring after class_name/extends/annotations, before first signal/enum/etc.
+    // Pass 1b: find class docstring after class_name/extends/annotations,
+    // before the first signal/enum/etc.
     let mut docstring_indices = Vec::new();
     let mut last_header_child_index: Option<u32> = None;
-    let mut last_header_end_byte: Option<usize> = None;
+    let mut last_header_group_index = 0;
     let mut item_index = 0;
     while item_index < declaration_count {
         let item = &items[item_index];
+        if item.declaration_kind == DeclarationKind::RegionStartOrEnd {
+            item_index += 1;
+            continue;
+        }
         if !matches!(
-            item.classification,
+            item.declaration_kind,
             DeclarationKind::ClassAnnotation
                 | DeclarationKind::ClassName
                 | DeclarationKind::Extends
         ) {
             break;
         }
-        if let Some(header_child) = parent.child(item.child_index) {
-            last_header_child_index = Some(item.child_index);
-            last_header_end_byte = Some(header_child.end_byte());
-        }
+        last_header_child_index = Some(item.child_index);
+        last_header_group_index = item.group_index;
         item_index += 1;
     }
-    if let (Some(header_child_index), Some(header_end_byte)) =
-        (last_header_child_index, last_header_end_byte)
-    {
-        let mut previous_end_byte = header_end_byte;
+    if let Some(header_child_index) = last_header_child_index {
+        let header_child = gdscript_source_node
+            .child(header_child_index)
+            .expect("child index came from this parent");
+        let mut previous_end_row = header_child.end_position().row;
         let mut scan_index = header_child_index + 1;
         while scan_index < child_count {
-            let Some(child) = parent.child(scan_index) else {
+            let Some(child) = gdscript_source_node.child(scan_index) else {
                 scan_index += 1;
                 continue;
             };
-            if !is_child_attached_to_declaration[scan_index as usize]
-                || !get_node_text(child, content).trim_start().starts_with("##")
+            if GDScriptNodeKind::get_kind_from_ast_node(child) != GDScriptNodeKind::Comment
+                || !get_node_text(child, source_code)
+                    .trim_start()
+                    .starts_with("##")
             {
                 break;
-            }
-            let mut newline_count = 0;
-            let mut byte_index = previous_end_byte;
-            while byte_index < child.start_byte() {
-                if content.as_bytes()[byte_index] == b'\n' {
-                    newline_count += 1;
-                }
-                byte_index += 1;
             }
             // As soon as we found multiple consecutive newlines, it means the
             // next docstring belong to the first declaration in the script so
             // we stop collecting the class-level docstring.
-            if newline_count != 1 {
+            if child.start_position().row != previous_end_row + 1 {
                 break;
             }
             docstring_indices.push(scan_index);
-            previous_end_byte = child.end_byte();
+            previous_end_row = child.end_position().row;
             scan_index += 1;
         }
     }
 
-    // Mark docstring comments as consumed.
-    let mut docstring_index = 0;
-    while docstring_index < docstring_indices.len() {
-        is_child_attached_to_declaration[docstring_indices[docstring_index] as usize] = false;
-        docstring_index += 1;
-    }
+    let docstring_range = match docstring_indices.first() {
+        Some(&start) => start..start + docstring_indices.len() as u32,
+        None => 0..0,
+    };
 
     if !docstring_indices.is_empty() {
+        let docstring_child_index = docstring_indices[0];
+        // The docstring sits directly after the class header in the source,
+        // so it belongs to the header's group.
         items.push(ReorderItem {
-            child_index: docstring_indices[0],
-            sub_child: None,
             child_indices_attached_before_declaration: docstring_indices,
-            child_indices_attached_after_declaration: Vec::new(),
-            has_blank_line_before: false,
-            classification: DeclarationKind::Docstring,
-            name: "",
-            is_pseudo_private: false,
-            method_type: None,
-            split_extends: false,
+            ..ReorderItem::new(
+                docstring_child_index,
+                last_header_group_index,
+                DeclarationKind::ClassDocstring,
+                "",
+            )
         });
     }
 
-    // Pass 2: assign AST nodes before and after each declaration.
-    let mut previous_declaration_child_index: Option<u32> = None;
-    let mut declaration_index = 0;
-    while declaration_index < declaration_count {
-        let declaration_child_index = items[declaration_index].child_index;
-        let next_declaration_child_index: Option<u32> = if declaration_index + 1 < declaration_count
-        {
-            Some(items[declaration_index + 1].child_index)
+    // Pass 2: We go through all the AST nodes between declarations and attach
+    // them to the preceding or following declaration. This is so that when
+    // formatting the output, things like inline comments, doc strings, or
+    // annotations stay attached to the correct declaration.
+    let mut gap_start = 0;
+    for declaration_index in 0..=declaration_count {
+        let gap_end = if declaration_index < declaration_count {
+            items[declaration_index].child_index
+        } else {
+            child_count
+        };
+        let previous_declaration = if declaration_index > 0 {
+            gdscript_source_node.child(items[declaration_index - 1].child_index)
         } else {
             None
         };
-
-        // Attach every relevant AST node between the previous declaration and
-        // this one before the current declaration.
-        let first_possible_attachment_child_index: u32 = match previous_declaration_child_index {
-            Some(previous_declaration_child_index) => previous_declaration_child_index + 1,
-            None => 0,
-        };
-        let mut child_indices_attached_before_declaration = Vec::new();
-        let mut current_child_index = first_possible_attachment_child_index;
-        while current_child_index < declaration_child_index {
-            if is_child_attached_to_declaration[current_child_index as usize]
-                && !is_region_end[current_child_index as usize]
+        for child_index in gap_start..gap_end {
+            let child = gdscript_source_node
+                .child(child_index)
+                .expect("child index came from this parent");
+            if docstring_range.contains(&child_index)
+                || GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::SemiColon
             {
-                child_indices_attached_before_declaration.push(current_child_index);
+                continue;
             }
-            current_child_index += 1;
+            if let Some(previous) = previous_declaration
+                && (declaration_index == declaration_count
+                    || previous.end_position().row == child.start_position().row)
+            {
+                items[declaration_index - 1]
+                    .child_indices_attached_after_declaration
+                    .push(child_index);
+            } else if declaration_index < declaration_count {
+                items[declaration_index]
+                    .child_indices_attached_before_declaration
+                    .push(child_index);
+            }
         }
-        items[declaration_index].child_indices_attached_before_declaration =
-            child_indices_attached_before_declaration;
-
-        // Determine if there is a blank line before the current declaration
-        // that we need to preserve after reordering.
-        if let Some(previous_declaration_child_index) = previous_declaration_child_index {
-            let previous_declaration = parent.child(previous_declaration_child_index);
-            let first_item_child_index = if items[declaration_index]
+        if let Some(previous) = previous_declaration
+            && declaration_index < declaration_count
+        {
+            let first_child_index = items[declaration_index]
                 .child_indices_attached_before_declaration
-                .is_empty()
-            {
-                declaration_child_index
-            } else {
-                items[declaration_index].child_indices_attached_before_declaration[0]
-            };
-            let first_item_child = parent.child(first_item_child_index);
-            if let (Some(previous_declaration), Some(first_item_child)) =
-                (previous_declaration, first_item_child)
-            {
-                items[declaration_index].has_blank_line_before = has_blank_line(
-                    content,
-                    previous_declaration.end_byte(),
-                    first_item_child.start_byte(),
-                );
-            }
+                .first()
+                .copied()
+                .unwrap_or(gap_end);
+            let first_child = gdscript_source_node
+                .child(first_child_index)
+                .expect("child index came from this parent");
+            items[declaration_index].has_blank_line_before =
+                first_child.start_position().row > previous.end_position().row + 1;
         }
-
-        // Attach region ends and an inline comment after the declaration to
-        // that declaration.
-        let mut indices_of_children_attached_after_declaration = Vec::new();
-        let mut next_child_index = declaration_child_index + 1;
-        if let Some(next_declaration_child_index) = next_declaration_child_index {
-            let current_declaration = parent
-                .child(declaration_child_index)
-                .expect("declaration child index came from this parent");
-            while next_child_index < next_declaration_child_index {
-                if is_region_end[next_child_index as usize] {
-                    indices_of_children_attached_after_declaration.push(next_child_index);
-                } else if is_child_attached_to_declaration[next_child_index as usize] {
-                    if let Some(following_attached_child) = parent.child(next_child_index) {
-                        // This checks mainly for inline comments after the
-                        // declaration. They appear as siblings in the AST even
-                        // if on the same line so that's why we check for a
-                        // newline.
-                        let has_newline_before_following_child = content
-                            [current_declaration.end_byte()..following_attached_child.start_byte()]
-                            .contains('\n');
-                        if !has_newline_before_following_child {
-                            indices_of_children_attached_after_declaration.push(next_child_index);
-                            // Prevent the later declaration from also treating
-                            // this source child as preceding content.
-                            is_child_attached_to_declaration[next_child_index as usize] = false;
-                        }
-                    }
-                }
-                next_child_index += 1;
-            }
-        } else {
-            // After the last declaration, attach all remaining source children.
-            while next_child_index < child_count {
-                if is_child_attached_to_declaration[next_child_index as usize] {
-                    indices_of_children_attached_after_declaration.push(next_child_index);
-                }
-                next_child_index += 1;
-            }
-        }
-        items[declaration_index].child_indices_attached_after_declaration =
-            indices_of_children_attached_after_declaration;
-
-        previous_declaration_child_index = Some(declaration_child_index);
-        declaration_index += 1;
+        gap_start = gap_end + 1;
     }
 
     items.sort_by(compare_reorder_items);
@@ -431,14 +396,11 @@ fn classify_child<'a>(
     let kind = GDScriptNodeKind::get_kind_from_ast_node(node);
     match kind {
         GDScriptNodeKind::ClassName => {
-            let extends_index = find_extends_child_index(node);
             let name = extract_name(node, content).unwrap_or("unknown_class");
-            ChildClassification {
-                classification: DeclarationKind::ClassName,
-                name,
-                method_type: None,
-                split_extends: extends_index.is_some(),
-            }
+            let mut classification = ChildClassification::new(DeclarationKind::ClassName, name);
+            classification.split_extends =
+                find_child_index_of_kind(node, GDScriptNodeKind::Extends).is_some();
+            classification
         }
         GDScriptNodeKind::Extends => {
             let text = get_node_text(node, content).trim();
@@ -474,22 +436,19 @@ fn classify_child<'a>(
             };
             let method_type = if name == "_static_init" {
                 MethodType::StaticInit
-            } else if has_static_keyword_child(node) {
+            } else if find_child_index_of_kind(node, GDScriptNodeKind::KeywordStatic).is_some() {
                 MethodType::StaticFunction
             } else {
                 let priority = get_builtin_virtual_priority(name);
                 if priority != 0 {
                     MethodType::BuiltinVirtual(priority)
                 } else {
-                    MethodType::Custom
+                    MethodType::Other
                 }
             };
-            ChildClassification {
-                classification: DeclarationKind::Method,
-                name,
-                method_type: Some(method_type),
-                split_extends: false,
-            }
+            let mut classification = ChildClassification::new(DeclarationKind::Method, name);
+            classification.method_type = Some(method_type);
+            classification
         }
         GDScriptNodeKind::ClassDefinition | GDScriptNodeKind::InnerClass => {
             let name = extract_name(node, content).unwrap_or("unknown_class");
@@ -541,7 +500,7 @@ fn classify_variable<'a>(
         ChildClassification::new(DeclarationKind::ExportVariable, name)
     } else if has_onready_annotation {
         ChildClassification::new(DeclarationKind::OnReadyVariable, name)
-    } else if has_static_keyword_child(node) {
+    } else if find_child_index_of_kind(node, GDScriptNodeKind::KeywordStatic).is_some() {
         ChildClassification::new(DeclarationKind::StaticVariable, name)
     } else {
         ChildClassification::new(DeclarationKind::RegularVariable, name)
@@ -551,17 +510,9 @@ fn classify_variable<'a>(
 /// Returns the identifier name of an annotation node, e.g. `export_range` for
 /// `@export_range(0, 100)`.
 fn get_annotation_identifier<'a>(annotation: Node<'a>, content: &'a str) -> Option<&'a str> {
-    let child_count = annotation.child_count();
-    let mut child_index = 0;
-    while child_index < child_count {
-        if let Some(child) = annotation.child(child_index)
-            && GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Identifier
-        {
-            return Some(get_node_text(child, content));
-        }
-        child_index += 1;
-    }
-    None
+    let identifier_index = find_child_index_of_kind(annotation, GDScriptNodeKind::Identifier)?;
+    let identifier = annotation.child(identifier_index)?;
+    Some(get_node_text(identifier, content))
 }
 
 /// Extract the "name" field child from a declaration node.
@@ -577,36 +528,21 @@ fn extract_name<'a>(node: Node<'a>, content: &'a str) -> Option<&'a str> {
     None
 }
 
-fn find_extends_child_index(node: Node) -> Option<u32> {
+/// Returns the index of the first direct child of the given node kind, if
+/// any. Walking the AST is preferred over matching source text, which is
+/// fragile against comments and strings.
+fn find_child_index_of_kind(node: Node, kind: GDScriptNodeKind) -> Option<u32> {
     let count = node.child_count();
     let mut child_index = 0;
     while child_index < count {
         if let Some(child) = node.child(child_index) {
-            if GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::Extends {
+            if GDScriptNodeKind::get_kind_from_ast_node(child) == kind {
                 return Some(child_index);
             }
         }
         child_index += 1;
     }
     None
-}
-
-/// Returns true if `node` has a direct child with kind `KeywordStatic`.
-/// Used to detect `static var` and `static func` declarations by walking
-/// the AST instead of matching source text (which is fragile against
-/// comments and strings).
-fn has_static_keyword_child(node: Node) -> bool {
-    let count = node.child_count();
-    let mut child_index = 0;
-    while child_index < count {
-        if let Some(child) = node.child(child_index) {
-            if GDScriptNodeKind::get_kind_from_ast_node(child) == GDScriptNodeKind::KeywordStatic {
-                return true;
-            }
-        }
-        child_index += 1;
-    }
-    false
 }
 
 /// Maps built-in virtual method names to Godot lifecycle priority.
@@ -646,7 +582,14 @@ fn get_builtin_virtual_priority(method_name: &str) -> u8 {
 }
 
 fn compare_reorder_items(left: &ReorderItem, right: &ReorderItem) -> std::cmp::Ordering {
-    let ordering_declaration_kind = (left.classification as u8).cmp(&(right.classification as u8));
+    // This group index ensures that the code gets reordered by region.
+    let ordering_group_index = left.group_index.cmp(&right.group_index);
+    if ordering_group_index != std::cmp::Ordering::Equal {
+        return ordering_group_index;
+    }
+
+    let ordering_declaration_kind =
+        (left.declaration_kind as u8).cmp(&(right.declaration_kind as u8));
     if ordering_declaration_kind != std::cmp::Ordering::Equal {
         return ordering_declaration_kind;
     }
@@ -659,15 +602,15 @@ fn compare_reorder_items(left: &ReorderItem, right: &ReorderItem) -> std::cmp::O
         }
     }
 
-    let ordering_pseudo_private = left.is_pseudo_private.cmp(&right.is_pseudo_private);
+    let ordering_pseudo_private = left.name.starts_with('_').cmp(&right.name.starts_with('_'));
     if ordering_pseudo_private != std::cmp::Ordering::Equal {
         return ordering_pseudo_private;
     }
 
     // Class annotations have a specific order: @tool < @icon < other potential
     // annotations
-    if left.classification == DeclarationKind::ClassAnnotation
-        && right.classification == DeclarationKind::ClassAnnotation
+    if left.declaration_kind == DeclarationKind::ClassAnnotation
+        && right.declaration_kind == DeclarationKind::ClassAnnotation
     {
         fn get_annotation_priority(text: &str) -> u8 {
             match text {

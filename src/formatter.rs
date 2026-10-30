@@ -3431,25 +3431,49 @@ fn process_source_reorder(context: &mut FormatterContext, node: tree_sitter::Nod
         process_children_with_spacing(context, node);
         return;
     }
-    let mut previous_classification: Option<DeclarationKind> = None;
+    let mut previous_declaration_kind: Option<DeclarationKind> = None;
     let mut previous_is_double_spaced = false;
     let mut previous_child_index: Option<u32> = None;
+    let mut previous_was_region_start = false;
     let mut is_first = true;
 
     let mut item_index = 0;
     while item_index < plan.items.len() {
         let item = &plan.items[item_index];
+        let child_kind = node
+            .child(item.child_index)
+            .map(GDScriptNodeKind::get_kind_from_ast_node);
+        let is_region_start = child_kind == Some(GDScriptNodeKind::RegionStart);
+        let is_region_end = child_kind == Some(GDScriptNodeKind::RegionEnd);
+
+        // If we are at the beginning of a region, we need to look at the next
+        // declaration to know how much spacing to use. E.g. if a region
+        // starts with a function, we need to add two lines
+        let mut declaration_kind_used_for_spacing = item.declaration_kind;
+        if is_region_start {
+            let mut next_item_index = item_index + 1;
+            while next_item_index < plan.items.len() {
+                let next_item = &plan.items[next_item_index];
+                if next_item.declaration_kind != DeclarationKind::RegionStartOrEnd {
+                    declaration_kind_used_for_spacing = next_item.declaration_kind;
+                    break;
+                }
+                next_item_index += 1;
+            }
+        }
         let current_needs_two_blank = matches!(
-            item.classification,
+            declaration_kind_used_for_spacing,
             DeclarationKind::Method | DeclarationKind::InnerClass
         );
         let is_in_source_order = match previous_child_index {
             Some(index) => index < item.child_index,
             None => false,
         };
-        if !is_first {
-            if let Some(ref previous_child) = previous_classification {
-                if previous_child == &item.classification
+        if !is_first && (is_region_end || previous_was_region_start) {
+            context.render_elements.push(RenderElement::HardLine);
+        } else if !is_first {
+            if let Some(ref previous_child) = previous_declaration_kind {
+                if previous_child == &declaration_kind_used_for_spacing
                     && !previous_is_double_spaced
                     && !current_needs_two_blank
                 {
@@ -3469,13 +3493,13 @@ fn process_source_reorder(context: &mut FormatterContext, node: tree_sitter::Nod
                     DeclarationKind::ClassAnnotation
                         | DeclarationKind::ClassName
                         | DeclarationKind::Extends
-                        | DeclarationKind::Docstring
+                        | DeclarationKind::ClassDocstring
                 ) && matches!(
-                    item.classification,
+                    declaration_kind_used_for_spacing,
                     DeclarationKind::ClassAnnotation
                         | DeclarationKind::ClassName
                         | DeclarationKind::Extends
-                        | DeclarationKind::Docstring
+                        | DeclarationKind::ClassDocstring
                 ) {
                     context.render_elements.push(RenderElement::HardLine);
                 } else {
@@ -3485,12 +3509,17 @@ fn process_source_reorder(context: &mut FormatterContext, node: tree_sitter::Nod
             }
         }
         is_first = false;
-        previous_classification = Some(item.classification);
-        previous_is_double_spaced = current_needs_two_blank;
+        if item.declaration_kind != DeclarationKind::RegionStartOrEnd
+            || previous_declaration_kind.is_none()
+        {
+            previous_declaration_kind = Some(item.declaration_kind);
+            previous_is_double_spaced = current_needs_two_blank;
+        }
+        previous_was_region_start = is_region_start;
         previous_child_index = Some(item.child_index);
 
         // Output source children attached before the declaration.
-        if item.classification != DeclarationKind::Docstring {
+        if item.declaration_kind != DeclarationKind::ClassDocstring {
             let declaration_start_byte = match node.child(item.child_index) {
                 Some(child) => child.start_byte(),
                 None => 0,
@@ -3526,7 +3555,7 @@ fn process_source_reorder(context: &mut FormatterContext, node: tree_sitter::Nod
             }
         }
 
-        if item.classification == DeclarationKind::Docstring {
+        if item.declaration_kind == DeclarationKind::ClassDocstring {
             let mut docstring_index = 0;
             while docstring_index < item.child_indices_attached_before_declaration.len() {
                 let docstring_child_index =

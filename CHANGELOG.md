@@ -7,6 +7,7 @@ This file documents the changes made to the formatter with each release.
 ### Added
 
 - Linter: add support for stdin (#327)
+- The reorder code option now preserves code regions and reorders within each region separately. This gives you more control over your code structure if you want different things grouped together. If you don't use code regions, the option works like before (#149)
 
 ### Fixed
 
