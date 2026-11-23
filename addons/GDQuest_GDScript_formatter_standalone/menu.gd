@@ -61,14 +61,16 @@ func update_menu() -> void:
 ## Searches for and returns the last menu node in the script editor top menu bar,
 ## or null if not found.
 func _find_last_menu_button(script_editor: Control) -> MenuButton:
-	# The first child of the script editor should be a VBoxContainer (main container for the script editor main screen)
-	# Then the first child of that container should be an HBoxContainer (the menu bar)
-	# This is based on the current structure of Godot's script editor as of Godot 4.5
-	# Note: We add multiple checks in there with null returns mainly in case something changes in a future
 	if script_editor.get_child_count() == 0:
 		return null
 
 	var main_container := script_editor.get_child(0)
+	# Godot 4.8 wraps the existing layout in a DocumentEditorContainer.
+	if main_container.is_class("DocumentEditorContainer"):
+		if main_container.get_child_count() == 0:
+			return null
+		main_container = main_container.get_child(0)
+
 	if not is_instance_valid(main_container) or not main_container is VBoxContainer:
 		return null
 
