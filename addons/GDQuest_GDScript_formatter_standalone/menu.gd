@@ -61,29 +61,32 @@ func update_menu() -> void:
 ## Searches for and returns the last menu node in the script editor top menu bar,
 ## or null if not found.
 func _find_last_menu_button(script_editor: Control) -> MenuButton:
-	# The first child of the script editor should be a VBoxContainer (main container for the script editor main screen)
-	# Then the first child of that container should be an HBoxContainer (the menu bar)
-	# This is based on the current structure of Godot's script editor as of Godot 4.5
-	# Note: We add multiple checks in there with null returns mainly in case something changes in a future
 	if script_editor.get_child_count() == 0:
 		return null
 
-	var main_container := script_editor.get_child(0)
-	if not is_instance_valid(main_container) or not main_container is VBoxContainer:
+	var version := Engine.get_version_info()
+	var main_container: Control = null
+	# In 4.8 onward, the script editor looks like this:
+	# ScriptEditor -> DocumentEditorContainer -> VBoxContainer -> HBoxContainer (menu bar)
+	if version.major == 4 and version.minor >= 8:
+		main_container = script_editor.get_child(0).get_child(0)
+	else:
+		main_container = script_editor.get_child(0)
+
+	if main_container == null or not main_container is VBoxContainer:
+		printerr("GDScript formatter: main_container is null or not a VBoxContainer")
 		return null
 
-	if main_container.get_child_count() == 0:
-		return null
-
-	var menu_bar := main_container.get_child(0)
-	if not is_instance_valid(menu_bar) or not menu_bar is HBoxContainer:
+	var menu_bar := main_container.get_child(0) as HBoxContainer
+	if menu_bar == null:
+		printerr("GDScript formatter: menu_bar not found")
 		return null
 
 	# We reached the menu bar. So now we loop through all the children look for
 	# the last menu button, which would be the last menu in the menu list.
 	# Note: Here the goal is to insert the menu after the debug menu, but we
-	# don't check for the button text because "debug" would only work in English
-	# this should work in any language.
+	# don't check for the button text because "debug" would only work in English.
+	# This should work in any language.
 	var last_menu_button: MenuButton = null
 	for child in menu_bar.get_children():
 		if child is MenuButton:
