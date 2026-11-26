@@ -64,28 +64,29 @@ func _find_last_menu_button(script_editor: Control) -> MenuButton:
 	if script_editor.get_child_count() == 0:
 		return null
 
-	var main_container := script_editor.get_child(0)
-	# Godot 4.8 wraps the existing layout in a DocumentEditorContainer.
-	if main_container.is_class("DocumentEditorContainer"):
-		if main_container.get_child_count() == 0:
-			return null
-		main_container = main_container.get_child(0)
+	var version := Engine.get_version_info()
+	var main_container: Control = null
+	# In 4.8 onward, the script editor looks like this:
+	# ScriptEditor -> DocumentEditorContainer -> VBoxContainer -> HBoxContainer (menu bar)
+	if version.major == 4 and version.minor >= 8:
+		main_container = script_editor.get_child(0).get_child(0)
+	else:
+		main_container = script_editor.get_child(0)
 
-	if not is_instance_valid(main_container) or not main_container is VBoxContainer:
+	if main_container == null or not main_container is VBoxContainer:
+		printerr("GDScript formatter: main_container is null or not a VBoxContainer")
 		return null
 
-	if main_container.get_child_count() == 0:
-		return null
-
-	var menu_bar := main_container.get_child(0)
-	if not is_instance_valid(menu_bar) or not menu_bar is HBoxContainer:
+	var menu_bar := main_container.get_child(0) as HBoxContainer
+	if menu_bar == null:
+		printerr("GDScript formatter: menu_bar not found")
 		return null
 
 	# We reached the menu bar. So now we loop through all the children look for
 	# the last menu button, which would be the last menu in the menu list.
 	# Note: Here the goal is to insert the menu after the debug menu, but we
-	# don't check for the button text because "debug" would only work in English
-	# this should work in any language.
+	# don't check for the button text because "debug" would only work in English.
+	# This should work in any language.
 	var last_menu_button: MenuButton = null
 	for child in menu_bar.get_children():
 		if child is MenuButton:
